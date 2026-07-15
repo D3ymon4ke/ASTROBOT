@@ -4,14 +4,23 @@ import { join } from 'path';
 
 // Initialize Firebase Admin SDK safely
 let db;
+let initError = null;
 try {
   if (!admin.apps.length) {
     let serviceAccount;
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      try {
+        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      } catch (parseErr) {
+        throw new Error("Falha ao analisar o JSON de FIREBASE_SERVICE_ACCOUNT: " + parseErr.message);
+      }
     } else {
       const serviceAccountPath = join(process.cwd(), 'astrobot-d9382-firebase-adminsdk-fbsvc-cbe709be1b.json');
-      serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
+      try {
+        serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
+      } catch (readErr) {
+        throw new Error("Arquivo JSON local ausente ou inválido: " + readErr.message);
+      }
     }
 
     admin.initializeApp({
@@ -21,6 +30,7 @@ try {
   db = admin.firestore();
 } catch (err) {
   console.error("Firebase admin init error:", err);
+  initError = err.message || String(err);
 }
 
 export default async function handler(req, res) {
@@ -41,7 +51,8 @@ export default async function handler(req, res) {
   if (!db) {
     return res.status(500).json({ 
       valid: false,
-      message: 'Configuração do Firebase ausente ou incorreta. Por favor, adicione a variável de ambiente FIREBASE_SERVICE_ACCOUNT nas configurações da Vercel.' 
+      message: 'Configuração do Firebase ausente ou incorreta.',
+      details: initError
     });
   }
 
