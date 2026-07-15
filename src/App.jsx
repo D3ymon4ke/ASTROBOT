@@ -1428,10 +1428,7 @@ export default function App() {
           background: 'rgba(10, 13, 22, 0.7)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
-            <span style={{ fontSize: '1.4rem', fontWeight: '900', letterSpacing: '1px', background: 'linear-gradient(to right, #ffffff, var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              ASTROBOT
-            </span>
+            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '45px', width: 'auto', objectFit: 'contain' }} />
             <span style={{ fontSize: '0.65rem', background: 'var(--primary-glow)', border: '1px solid var(--primary-light)', padding: '2px 6px', borderRadius: '20px', fontWeight: 'bold', color: 'var(--primary-light)' }}>
               v2.5
             </span>
@@ -2183,14 +2180,13 @@ export default function App() {
           }} />
 
           {/* Decorative elements over the cover */}
-          <div style={{ position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '600px' }} className="login-container-animate">
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid var(--border-active)', padding: '6px 14px', borderRadius: '20px', width: 'fit-content' }}>
-              <img src={logoImg} alt="Logo" style={{ height: '16px', width: 'auto', objectFit: 'contain' }} />
-              <span style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--primary-light)', letterSpacing: '1.5px' }}>V2.5 INTELIGENTE</span>
+          <div style={{ position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '600px' }} className="login-container-animate">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <img src={logoImg} alt="ASTROBOT Logo" style={{ width: '280px', height: 'auto', objectFit: 'contain', marginBottom: '0.25rem' }} />
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid var(--border-active)', padding: '4px 12px', borderRadius: '20px', width: 'fit-content' }}>
+                <span style={{ fontSize: '0.65rem', fontWeight: '850', color: 'var(--primary-light)', letterSpacing: '1px' }}>V2.5 INTELIGENTE</span>
+              </div>
             </div>
-            <h1 style={{ fontSize: '3.5rem', fontWeight: '800', lineHeight: '1.1', color: '#ffffff', textShadow: '0 2px 15px rgba(0,0,0,0.6)' }}>
-              ASTROBOT
-            </h1>
             <p style={{ fontSize: '1rem', color: 'rgba(255, 255, 255, 0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.5)', lineHeight: '1.5' }}>
               Negociações Automatizadas de Opções Binárias no mercado Deriv com análises probabilísticas e algoritmos MHI avançados.
             </p>
@@ -2824,15 +2820,10 @@ export default function App() {
       }}>
         {/* Title logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ padding: '0.2rem', display: 'flex', alignItems: 'center' }}>
-            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '30px', width: 'auto', objectFit: 'contain' }} />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '1.25rem', margin: '0', fontWeight: '800', letterSpacing: '-0.02em', background: 'linear-gradient(to right, var(--text-primary), var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              ASTROBOT v2.5
-            </h1>
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', fontWeight: 'bold' }}>AUTOMATED BINARY OPTIONS BOT</span>
-          </div>
+          <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '38px', width: 'auto', objectFit: 'contain' }} />
+          <span style={{ fontSize: '0.65rem', background: 'var(--primary-glow)', border: '1px solid var(--primary-light)', padding: '2px 6px', borderRadius: '20px', fontWeight: 'bold', color: 'var(--primary-light)' }}>
+            v2.5
+          </span>
         </div>
 
         {/* Live connections status badges */}
