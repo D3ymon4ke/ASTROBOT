@@ -1428,7 +1428,7 @@ export default function App() {
           background: 'rgba(10, 13, 22, 0.7)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '45px', width: 'auto', objectFit: 'contain' }} />
+            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '120px', width: 'auto', objectFit: 'contain' }} />
             <span style={{ fontSize: '0.65rem', background: 'var(--primary-glow)', border: '1px solid var(--primary-light)', padding: '2px 6px', borderRadius: '20px', fontWeight: 'bold', color: 'var(--primary-light)' }}>
               v2.5
             </span>
@@ -2820,7 +2820,7 @@ export default function App() {
       }}>
         {/* Title logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '38px', width: 'auto', objectFit: 'contain' }} />
+          <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '90px', width: 'auto', objectFit: 'contain' }} />
           <span style={{ fontSize: '0.65rem', background: 'var(--primary-glow)', border: '1px solid var(--primary-light)', padding: '2px 6px', borderRadius: '20px', fontWeight: 'bold', color: 'var(--primary-light)' }}>
             v2.5
           </span>
