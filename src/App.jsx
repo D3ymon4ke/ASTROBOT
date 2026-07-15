@@ -1415,68 +1415,57 @@ export default function App() {
         }} />
 
         {/* Navigation Bar */}
-        <header style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '1.25rem 3rem',
-          borderBottom: '1px solid var(--border-color)',
-          backdropFilter: 'blur(12px)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 100,
-          background: 'rgba(10, 13, 22, 0.7)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '120px', width: 'auto', objectFit: 'contain' }} />
-            <span style={{ fontSize: '0.65rem', background: 'var(--primary-glow)', border: '1px solid var(--primary-light)', padding: '2px 6px', borderRadius: '20px', fontWeight: 'bold', color: 'var(--primary-light)' }}>
+        <header className="premium-navbar">
+          {/* Brand Block */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '240px', justifyContent: 'flex-start' }}>
+            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
+            <span style={{
+              fontFamily: "'Outfit', sans-serif",
+              fontSize: '1.45rem',
+              fontWeight: '800',
+              letterSpacing: '0.5px',
+              color: '#ffffff',
+              textShadow: '0 0 15px rgba(139, 92, 246, 0.4)',
+              background: 'linear-gradient(to right, #ffffff 60%, var(--primary-light) 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              display: 'inline-flex',
+              alignItems: 'center'
+            }}>
+              ASTROBOT
+            </span>
+            <span style={{
+              fontSize: '0.62rem',
+              fontWeight: '800',
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(217, 70, 239, 0.1) 100%)',
+              border: '1px solid rgba(139, 92, 246, 0.4)',
+              padding: '2px 8px',
+              borderRadius: '20px',
+              color: 'var(--primary-light)',
+              textShadow: '0 0 5px rgba(139, 92, 246, 0.3)',
+              marginLeft: '4px'
+            }}>
               v2.5
             </span>
           </div>
 
-          <nav style={{ display: 'flex', gap: '2.5rem' }}>
+          {/* Menu Items (Centered perfectly) */}
+          <nav style={{ display: 'flex', alignItems: 'center', gap: '2rem', flex: 2, justifyContent: 'center' }}>
             <button 
               onClick={() => setLandingTab('home')}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: landingTab === 'home' ? 'var(--primary-light)' : 'var(--text-secondary)',
-                fontWeight: 'bold',
-                fontSize: '0.9rem',
-                cursor: 'pointer',
-                transition: 'color 0.2s',
-                outline: 'none'
-              }}
+              className={`nav-link ${landingTab === 'home' ? 'nav-link-active' : ''}`}
             >
               Início
             </button>
             <button 
               onClick={() => setLandingTab('strategies')}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: landingTab === 'strategies' ? 'var(--primary-light)' : 'var(--text-secondary)',
-                fontWeight: 'bold',
-                fontSize: '0.9rem',
-                cursor: 'pointer',
-                transition: 'color 0.2s',
-                outline: 'none'
-              }}
+              className={`nav-link ${landingTab === 'strategies' ? 'nav-link-active' : ''}`}
             >
               Estratégias
             </button>
             <button 
               onClick={() => setLandingTab('pricing')}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: landingTab === 'pricing' ? 'var(--primary-light)' : 'var(--text-secondary)',
-                fontWeight: 'bold',
-                fontSize: '0.9rem',
-                cursor: 'pointer',
-                transition: 'color 0.2s',
-                outline: 'none'
-              }}
+              className={`nav-link ${landingTab === 'pricing' ? 'nav-link-active' : ''}`}
             >
               Valores & Planos
             </button>
@@ -1484,94 +1473,49 @@ export default function App() {
               href="https://t.me/lucassmachado9" 
               target="_blank" 
               rel="noopener noreferrer"
-              style={{
-                color: 'var(--text-secondary)',
-                fontWeight: 'bold',
-                fontSize: '0.9rem',
-                textDecoration: 'none',
-                transition: 'color 0.2s'
-              }}
+              className="nav-link"
             >
               Suporte ADM
             </a>
             {isAdminLoggedIn && (
               <button 
                 onClick={() => setLandingTab('admin')}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: landingTab === 'admin' ? 'var(--primary-light)' : 'var(--text-secondary)',
-                  fontWeight: 'bold',
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  transition: 'color 0.2s',
-                  outline: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
+                className={`nav-link ${landingTab === 'admin' ? 'nav-link-active' : ''}`}
               >
-                <Lock size={14} /> Área Admin
+                <Lock size={13} /> Área Admin
               </button>
             )}
           </nav>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <button 
-              className="primary" 
-              onClick={() => setShowLanding(false)}
-              style={{
-                padding: '0.6rem 1.5rem',
-                fontSize: '0.85rem',
-                fontWeight: 'bold',
-                borderRadius: '10px'
-              }}
-            >
-              CONECTAR AO ROBÔ
-            </button>
-
+          {/* Call-to-Actions (Aligned right) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, justifyContent: 'flex-end', minWidth: '240px' }}>
             {isAdminLoggedIn ? (
               <button 
+                className="btn-admin-logout"
                 onClick={() => {
                   localStorage.removeItem('astrobot_admin_token');
                   setIsAdminLoggedIn(false);
                   setLandingTab('home');
-                }}
-                style={{
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
-                  color: 'var(--danger)',
-                  padding: '0.6rem 1rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 'bold',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
                 }}
               >
                 <LogOut size={14} /> Sair Admin
               </button>
             ) : (
               <button 
+                className="btn-admin-toggle"
                 onClick={() => setShowAdminLoginModal(true)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  padding: '0.5rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  outline: 'none'
-                }}
                 title="Área do Administrador"
               >
-                <Lock size={14} />
+                <Lock size={15} />
               </button>
             )}
+
+            <button 
+              className="cta-connect"
+              onClick={() => setShowLanding(false)}
+            >
+              CONECTAR AO ROBÔ
+            </button>
           </div>
         </header>
 
