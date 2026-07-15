@@ -71,6 +71,8 @@ export default function App() {
   const [dbTrades, setDbTrades] = useState([]);
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeName, setWelcomeName] = useState('');
+  const [showLanding, setShowLanding] = useState(true);
+  const [landingTab, setLandingTab] = useState('home');
   const [overlayActive, setOverlayActive] = useState(false);
   const [bottomTab, setBottomTab] = useState('logs');
 
@@ -958,6 +960,7 @@ export default function App() {
     setIsRunning(false);
     stateRef.current.isRunning = false;
     setCandles([]);
+    setShowLanding(true);
   };
 
   // Start / Stop Bot handlers
@@ -1192,6 +1195,423 @@ export default function App() {
     );
   }
 
+  if (showLanding) {
+    return (
+      <div style={{
+        width: '100vw',
+        height: '100vh',
+        background: 'var(--bg-main)',
+        color: '#ffffff',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'auto',
+        position: 'relative'
+      }}>
+        {/* Decorative background gradients */}
+        <div style={{
+          position: 'absolute',
+          top: '-20%',
+          left: '-10%',
+          width: '600px',
+          height: '600px',
+          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(0,0,0,0) 70%)',
+          zIndex: 0,
+          pointerEvents: 'none'
+        }} />
+        <div style={{
+          position: 'absolute',
+          bottom: '-10%',
+          right: '-10%',
+          width: '600px',
+          height: '600px',
+          background: 'radial-gradient(circle, rgba(236, 72, 153, 0.08) 0%, rgba(0,0,0,0) 70%)',
+          zIndex: 0,
+          pointerEvents: 'none'
+        }} />
+
+        {/* Navigation Bar */}
+        <header style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '1.25rem 3rem',
+          borderBottom: '1px solid var(--border-color)',
+          backdropFilter: 'blur(12px)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+          background: 'rgba(10, 13, 22, 0.7)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <Cpu size={28} className="pulse-primary" style={{ color: 'var(--primary-light)' }} />
+            <span style={{ fontSize: '1.4rem', fontWeight: '900', letterSpacing: '1px', background: 'linear-gradient(to right, #ffffff, var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              ASTROBOT
+            </span>
+            <span style={{ fontSize: '0.65rem', background: 'var(--primary-glow)', border: '1px solid var(--primary-light)', padding: '2px 6px', borderRadius: '20px', fontWeight: 'bold', color: 'var(--primary-light)' }}>
+              v2.5
+            </span>
+          </div>
+
+          <nav style={{ display: 'flex', gap: '2.5rem' }}>
+            <button 
+              onClick={() => setLandingTab('home')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: landingTab === 'home' ? 'var(--primary-light)' : 'var(--text-secondary)',
+                fontWeight: 'bold',
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+                transition: 'color 0.2s',
+                outline: 'none'
+              }}
+            >
+              Início
+            </button>
+            <button 
+              onClick={() => setLandingTab('strategies')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: landingTab === 'strategies' ? 'var(--primary-light)' : 'var(--text-secondary)',
+                fontWeight: 'bold',
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+                transition: 'color 0.2s',
+                outline: 'none'
+              }}
+            >
+              Estratégias
+            </button>
+            <button 
+              onClick={() => setLandingTab('pricing')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: landingTab === 'pricing' ? 'var(--primary-light)' : 'var(--text-secondary)',
+                fontWeight: 'bold',
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+                transition: 'color 0.2s',
+                outline: 'none'
+              }}
+            >
+              Valores & Planos
+            </button>
+            <a 
+              href="https://t.me/lucassmachado9" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{
+                color: 'var(--text-secondary)',
+                fontWeight: 'bold',
+                fontSize: '0.9rem',
+                textDecoration: 'none',
+                transition: 'color 0.2s'
+              }}
+            >
+              Suporte ADM
+            </a>
+          </nav>
+
+          <button 
+            className="primary" 
+            onClick={() => setShowLanding(false)}
+            style={{
+              padding: '0.6rem 1.5rem',
+              fontSize: '0.85rem',
+              fontWeight: 'bold',
+              borderRadius: '10px'
+            }}
+          >
+            CONECTAR AO ROBÔ
+          </button>
+        </header>
+
+        {/* Main Content Area */}
+        <main style={{ flex: 1, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 2rem' }}>
+          
+          {/* HOME TAB */}
+          {landingTab === 'home' && (
+            <div style={{ maxWidth: '900px', width: '100%', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '3rem', alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }} className="welcome-text-animate">
+                <div style={{
+                  background: 'rgba(139, 92, 246, 0.06)',
+                  border: '1px solid rgba(139, 92, 246, 0.2)',
+                  borderRadius: '20px',
+                  padding: '4px 14px',
+                  fontSize: '0.72rem',
+                  fontWeight: '800',
+                  color: 'var(--primary-light)',
+                  letterSpacing: '1px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  marginBottom: '0.5rem'
+                }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 8px #10b981' }} />
+                  AGORA INTEGRADO COM VERCEL SERVERLESS
+                </div>
+                <h1 style={{ fontSize: '3.8rem', fontWeight: '900', lineHeight: '1.1', margin: 0, background: 'linear-gradient(to right, #ffffff 40%, var(--primary-light) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-1px' }}>
+                  A Revolução na Automação de Opções Binárias
+                </h1>
+                <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', maxWidth: '650px', margin: '0.5rem 0 0 0', lineHeight: '1.6' }}>
+                  Opere de forma autônoma na Deriv com o ASTROBOT. Análises probabilísticas em tempo real, piloto automático inteligente, agendamento de horários e gestão de banca completa.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button 
+                  className="primary" 
+                  onClick={() => setShowLanding(false)}
+                  style={{
+                    padding: '0.9rem 2.25rem',
+                    fontSize: '1rem',
+                    fontWeight: 'bold',
+                    borderRadius: '12px',
+                    boxShadow: 'var(--shadow-neon)'
+                  }}
+                >
+                  ACESSAR PAINEL DO ROBÔ
+                </button>
+                <button 
+                  className="secondary" 
+                  onClick={() => setLandingTab('pricing')}
+                  style={{
+                    padding: '0.9rem 2.25rem',
+                    fontSize: '1rem',
+                    fontWeight: 'bold',
+                    borderRadius: '12px'
+                  }}
+                >
+                  VER PLANOS & VALORES
+                </button>
+              </div>
+
+              {/* Features Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '1.25rem',
+                width: '100%',
+                marginTop: '1rem'
+              }}>
+                <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderRadius: '16px' }}>
+                  <h3 style={{ fontSize: '1.05rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    📅 Ciclos de Horários Independentes
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
+                    Agende múltiplos ciclos de operação automática (ex: Ciclo Manhã às 09:00 e Ciclo Noite às 21:00) com metas de lucro, stops e stakes 100% autônomos.
+                  </p>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderRadius: '16px' }}>
+                  <h3 style={{ fontSize: '1.05rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    🤖 Piloto Automático Inteligente
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
+                    O robô calcula dinamicamente a taxa de assertividade histórica de mais de 15 estratégias probabilísticas e seleciona o melhor setup para entrar.
+                  </p>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderRadius: '16px' }}>
+                  <h3 style={{ fontSize: '1.05rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    🛡️ Gestão e Recuperação de Risco
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
+                    Configurações flexíveis de Martingale (Tradicional ou Inteligente) e Soros. Travas de segurança integradas para respeitar seu Stop Loss.
+                  </p>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderRadius: '16px' }}>
+                  <h3 style={{ fontSize: '1.05rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    ⚡ Painel de Estatísticas Avançadas
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
+                    Acompanhamento visual completo dos seus resultados com gráficos, histórico de contratos Deriv detalhado, winrate e contador de vitórias consecutivas.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STRATEGIES TAB */}
+          {landingTab === 'strategies' && (
+            <div style={{ maxWidth: '900px', width: '100%', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <h2 style={{ fontSize: '2.2rem', fontWeight: '800', margin: 0 }}>Catálogo de Estratégias</h2>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  O ASTROBOT vem equipado de fábrica com mais de 15 algoritmos matemáticos e probabilísticos testados.
+                </p>
+              </div>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '1rem'
+              }}>
+                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>PROBABILÍSTICA (5 MIN)</span>
+                  <strong style={{ color: 'white', fontSize: '0.95rem' }}>MHI Minoria</strong>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+                    Analisa as 3 últimas velas de um quadrante de 5 minutos e realiza a entrada a favor da cor minoritária no início do próximo quadrante.
+                  </p>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>PROBABILÍSTICA (5 MIN)</span>
+                  <strong style={{ color: 'white', fontSize: '0.95rem' }}>MHI Maioria</strong>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+                    Seguindo o mesmo quadrante MHI, realiza a entrada a favor da cor majoritária das últimas 3 velas, ideal para mercados em forte tendência.
+                  </p>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>REVERSÃO E CONTROLE</span>
+                  <strong style={{ color: 'white', fontSize: '0.95rem' }}>Torres Gêmeas</strong>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+                    Compara a cor da 1ª vela e da 5ª vela do quadrante de 5 minutos, prevendo a reversão da tendência de fechamento no ciclo probabilístico.
+                  </p>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>CONTINUAÇÃO DE FLUXO</span>
+                  <strong style={{ color: 'white', fontSize: '0.95rem' }}>Três Mosqueteiros</strong>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+                    Busca o alinhamento de 3 velas consecutivas da mesma cor. A entrada é efetuada na 4ª vela apostando na continuidade do movimento.
+                  </p>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>ANÁLISE ESTATÍSTICA</span>
+                  <strong style={{ color: 'white', fontSize: '0.95rem' }}>Padrão 23</strong>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+                    Estratégia baseada na probabilidade do fechamento da 2ª e 3ª vela do quadrante. Ideal para mercados em canais laterais (consolidação).
+                  </p>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>RATING E MATEMÁTICA</span>
+                  <strong style={{ color: 'white', fontSize: '0.95rem' }}>Recomendador IA</strong>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+                    Nosso módulo de recomendação vasculha todas as estratégias probabilisticamente e chaveia para o melhor setup de forma autônoma.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+                <button className="primary" onClick={() => setShowLanding(false)} style={{ padding: '0.8rem 2rem', borderRadius: '10px' }}>
+                  VER TODAS AS ESTRATÉGIAS EM OPERAÇÃO
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* PRICING TAB */}
+          {landingTab === 'pricing' && (
+            <div style={{ maxWidth: '900px', width: '100%', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <h2 style={{ fontSize: '2.2rem', fontWeight: '800', margin: 0 }}>Planos & Assinaturas</h2>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  Escolha o plano ideal para a sua banca. Licenças flexíveis com acesso ilimitado a todos os recursos.
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                {/* Monthly */}
+                <div className="glass-panel" style={{ padding: '2rem 1.5rem', borderRadius: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid var(--border-color)' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>LICENÇA MENSAL</span>
+                  <div style={{ margin: '0.5rem 0' }}>
+                    <strong style={{ fontSize: '2rem', color: 'white' }}>R$ 97</strong>
+                    <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/mês</span>
+                  </div>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Acesso total por 30 dias</span>
+                  <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
+                  <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px', margin: 0, flexGrow: 1 }}>
+                    <li>Painel completo do ASTROBOT</li>
+                    <li>Todas as estratégias inclusas</li>
+                    <li>Agendador de Horários (Ciclos)</li>
+                    <li>Suporte prioritário via Telegram</li>
+                  </ul>
+                  <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" className="secondary" style={{ padding: '0.75rem', fontSize: '0.8rem', fontWeight: 'bold', width: '100%', textDecoration: 'none', display: 'block', borderRadius: '10px' }}>
+                    ASSINAR COM ADM
+                  </a>
+                </div>
+
+                {/* Quarterly */}
+                <div className="glass-panel" style={{ padding: '2.5rem 1.5rem', borderRadius: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem', border: '2px solid var(--primary-light)', position: 'relative', transform: 'scale(1.03)', background: 'rgba(139, 92, 246, 0.03)' }}>
+                  <div style={{ position: 'absolute', top: '-12px', left: '50%', transform: 'translateX(-50%)', background: 'var(--primary)', color: 'white', fontSize: '0.65rem', fontWeight: 'bold', padding: '3px 12px', borderRadius: '20px', letterSpacing: '0.5px' }}>
+                    RECOMENDADO
+                  </div>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>LICENÇA TRIMESTRAL</span>
+                  <div style={{ margin: '0.5rem 0' }}>
+                    <strong style={{ fontSize: '2rem', color: 'white' }}>R$ 247</strong>
+                    <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/90 dias</span>
+                  </div>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Economia de 15% em relação ao mensal</span>
+                  <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
+                  <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px', margin: 0, flexGrow: 1 }}>
+                    <li><strong>Tudo do plano mensal</strong></li>
+                    <li>Recomendador inteligente ativo</li>
+                    <li>Atualizações garantidas</li>
+                    <li>Suporte prioritário do ADM</li>
+                  </ul>
+                  <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" className="primary" style={{ padding: '0.75rem', fontSize: '0.8rem', fontWeight: 'bold', width: '100%', textDecoration: 'none', display: 'block', borderRadius: '10px' }}>
+                    ASSINAR COM ADM
+                  </a>
+                </div>
+
+                {/* Annual */}
+                <div className="glass-panel" style={{ padding: '2rem 1.5rem', borderRadius: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid var(--border-color)' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>LICENÇA ANUAL</span>
+                  <div style={{ margin: '0.5rem 0' }}>
+                    <strong style={{ fontSize: '2rem', color: 'white' }}>R$ 697</strong>
+                    <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/ano</span>
+                  </div>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Melhor custo-benefício (Economia 40%)</span>
+                  <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
+                  <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px', margin: 0, flexGrow: 1 }}>
+                    <li><strong>Acesso total por 365 dias</strong></li>
+                    <li>Suporte individual VIP do ADM</li>
+                    <li>Mapeamento de estratégias exclusivas</li>
+                    <li>Acesso antecipado a novas versões</li>
+                  </ul>
+                  <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" className="secondary" style={{ padding: '0.75rem', fontSize: '0.8rem', fontWeight: 'bold', width: '100%', textDecoration: 'none', display: 'block', borderRadius: '10px' }}>
+                    ASSINAR COM ADM
+                  </a>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '1rem' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Após efetuar o pagamento com o administrador Lucas Machado, você receberá a sua chave CDKEY para ativação imediata.</span>
+              </div>
+            </div>
+          )}
+
+        </main>
+
+        {/* Footer */}
+        <footer style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '1.5rem 3rem',
+          borderTop: '1px solid var(--border-color)',
+          fontSize: '0.75rem',
+          color: 'var(--text-muted)',
+          background: 'rgba(5, 7, 12, 0.4)'
+        }}>
+          <div>
+            &copy; 2026 ASTROBOT. Todos os direitos reservados.
+          </div>
+          <div style={{ display: 'flex', gap: '1.5rem' }}>
+            <span>Aviso de Risco: Opções binárias envolvem alto risco financeiro. Nunca invista capital que não possa perder.</span>
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
   if (!authorized) {
     return (
       /* Full Screen Authentication Screen */
@@ -1262,6 +1682,26 @@ export default function App() {
           borderLeft: '1px solid var(--border-color)',
           overflowY: 'auto'
         }} className="login-container-animate">
+          <button
+            onClick={() => setShowLanding(true)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-muted)',
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+              alignSelf: 'flex-start',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: 0,
+              marginBottom: '0.5rem',
+              fontWeight: 'bold',
+              outline: 'none'
+            }}
+          >
+            ← Voltar para Página Inicial
+          </button>
           <div>
             <h2 style={{ fontSize: '1.8rem', fontWeight: '800', marginBottom: '0.35rem', color: '#ffffff' }}>Autenticação Deriv</h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Conecte-se com seu API Token ou PAT com total segurança.</p>
