@@ -1,4 +1,5 @@
-import admin from 'firebase-admin';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -6,7 +7,7 @@ import { join } from 'path';
 let db;
 let initError = null;
 try {
-  if (!admin.apps.length) {
+  if (getApps().length === 0) {
     let serviceAccount;
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       try {
@@ -23,11 +24,11 @@ try {
       }
     }
 
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+    initializeApp({
+      credential: cert(serviceAccount)
     });
   }
-  db = admin.firestore();
+  db = getFirestore();
 } catch (err) {
   console.error("Firebase admin init error:", err);
   initError = err.message || String(err);
