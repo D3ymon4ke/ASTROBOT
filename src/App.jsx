@@ -94,6 +94,27 @@ export default function App() {
   const [activating, setActivating] = useState(false);
   const [showPricingModal, setShowPricingModal] = useState(false);
 
+  // Administrative Panel States
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => {
+    return localStorage.getItem('astrobot_admin_token') === 'lucas_astro_admin';
+  });
+  const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminLoginError, setAdminLoginError] = useState('');
+  const [adminLoggingIn, setAdminLoggingIn] = useState(false);
+
+  const [adminKeysList, setAdminKeysList] = useState([]);
+  const [loadingAdminKeys, setLoadingAdminKeys] = useState(false);
+  const [keysError, setKeysError] = useState('');
+
+  const [generateDays, setGenerateDays] = useState('30');
+  const [generateCount, setGenerateCount] = useState('1');
+  const [generatingKeys, setGeneratingKeys] = useState(false);
+
+  const [showActivationSuccessModal, setShowActivationSuccessModal] = useState(false);
+  const [activationRemainingDays, setActivationRemainingDays] = useState(0);
+
   // Validate license on mount and periodically
   useEffect(() => {
     const checkLicense = () => {
@@ -149,8 +170,14 @@ export default function App() {
         
         setCdKey(cdKeyInput.trim().toUpperCase());
         setKeyExpiresAt(result.expiresAt);
-        setIsKeyValid(true);
+        
+        const remainingMs = result.expiresAt - Date.now();
+        const remainingDays = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
+        setActivationRemainingDays(remainingDays);
+        setShowActivationSuccessModal(true);
+        
         setActivationSuccess(result.message || 'Licença ativada com sucesso!');
+        setCdKeyInput('');
         
         addLog({
           message: `[Licença] CDKEY ativada com sucesso! Válida até ${new Date(result.expiresAt).toLocaleDateString()}`,
@@ -167,6 +194,133 @@ export default function App() {
       setActivating(false);
     }
   };
+
+  const loadAdminKeys = async () => {
+    setLoadingAdminKeys(true);
+    setKeysError('');
+    try {
+      const isLocalOrElectron = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1' || 
+                                window.location.protocol === 'file:' ||
+                                (window.process && window.process.type === 'renderer');
+
+      const url = isLocalOrElectron 
+        ? 'https://astrobot-seven.vercel.app/api/list-keys?admin_token=lucas_astro_admin'
+        : '/api/list-keys?admin_token=lucas_astro_admin';
+
+      const res = await fetch(url);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAdminKeysList(data.keys);
+      } else {
+        setKeysError(data.error || 'Falha ao carregar as chaves.');
+      }
+    } catch (err) {
+      setKeysError('Erro ao se conectar ao servidor.');
+    } finally {
+      setLoadingAdminKeys(false);
+    }
+  };
+
+  const handleGenerateKeysAdmin = async (e) => {
+    if (e) e.preventDefault();
+    setGeneratingKeys(true);
+    try {
+      const isLocalOrElectron = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1' || 
+                                window.location.protocol === 'file:' ||
+                                (window.process && window.process.type === 'renderer');
+
+      const url = isLocalOrElectron 
+        ? `https://astrobot-seven.vercel.app/api/generate-key?admin_token=lucas_astro_admin&days=${generateDays}&count=${generateCount}`
+        : `/api/generate-key?admin_token=lucas_astro_admin&days=${generateDays}&count=${generateCount}`;
+
+      const res = await fetch(url);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`${data.keys.length} chave(s) gerada(s) com sucesso!`);
+        loadAdminKeys();
+      } else {
+        alert(data.error || 'Falha ao gerar chaves.');
+      }
+    } catch (err) {
+      alert('Erro ao se conectar ao servidor para gerar chaves.');
+    } finally {
+      setGeneratingKeys(false);
+    }
+  };
+
+  const handleDeleteKeyAdmin = async (keyToDelete) => {
+    if (!confirm(`Tem certeza de que deseja excluir e revogar a chave ${keyToDelete}?`)) return;
+    try {
+      const isLocalOrElectron = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1' || 
+                                window.location.protocol === 'file:' ||
+                                (window.process && window.process.type === 'renderer');
+
+      const url = isLocalOrElectron 
+        ? 'https://astrobot-seven.vercel.app/api/delete-key'
+        : '/api/delete-key';
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admin_token: 'lucas_astro_admin', cdkey: keyToDelete })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        loadAdminKeys();
+      } else {
+        alert(data.error || 'Falha ao excluir chave.');
+      }
+    } catch (err) {
+      alert('Erro ao se conectar ao servidor para excluir chave.');
+    }
+  };
+
+  const handleAdminLogin = async (e) => {
+    if (e) e.preventDefault();
+    setAdminLoginError('');
+    setAdminLoggingIn(true);
+    try {
+      const isLocalOrElectron = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1' || 
+                                window.location.protocol === 'file:' ||
+                                (window.process && window.process.type === 'renderer');
+
+      const url = isLocalOrElectron 
+        ? 'https://astrobot-seven.vercel.app/api/admin-login'
+        : '/api/admin-login';
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: adminEmail, password: adminPassword })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        localStorage.setItem('astrobot_admin_token', data.token);
+        setIsAdminLoggedIn(true);
+        setShowAdminLoginModal(false);
+        setLandingTab('admin');
+        setAdminEmail('');
+        setAdminPassword('');
+        loadAdminKeys();
+      } else {
+        setAdminLoginError(data.message || 'Credenciais inválidas.');
+      }
+    } catch (err) {
+      setAdminLoginError('Erro ao se conectar ao servidor de login.');
+    } finally {
+      setAdminLoggingIn(false);
+    }
+  };
+
+  useEffect(() => {
+    if (landingTab === 'admin' && isAdminLoggedIn) {
+      loadAdminKeys();
+    }
+  }, [landingTab, isAdminLoggedIn]);
 
   // Scheduler / Automation States
   const [schedulerState, setSchedulerState] = useState(() => {
@@ -1310,20 +1464,85 @@ export default function App() {
             >
               Suporte ADM
             </a>
+            {isAdminLoggedIn && (
+              <button 
+                onClick={() => setLandingTab('admin')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: landingTab === 'admin' ? 'var(--primary-light)' : 'var(--text-secondary)',
+                  fontWeight: 'bold',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s',
+                  outline: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <Lock size={14} /> Área Admin
+              </button>
+            )}
           </nav>
 
-          <button 
-            className="primary" 
-            onClick={() => setShowLanding(false)}
-            style={{
-              padding: '0.6rem 1.5rem',
-              fontSize: '0.85rem',
-              fontWeight: 'bold',
-              borderRadius: '10px'
-            }}
-          >
-            CONECTAR AO ROBÔ
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button 
+              className="primary" 
+              onClick={() => setShowLanding(false)}
+              style={{
+                padding: '0.6rem 1.5rem',
+                fontSize: '0.85rem',
+                fontWeight: 'bold',
+                borderRadius: '10px'
+              }}
+            >
+              CONECTAR AO ROBÔ
+            </button>
+
+            {isAdminLoggedIn ? (
+              <button 
+                onClick={() => {
+                  localStorage.removeItem('astrobot_admin_token');
+                  setIsAdminLoggedIn(false);
+                  setLandingTab('home');
+                }}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  color: 'var(--danger)',
+                  padding: '0.6rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 'bold',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <LogOut size={14} /> Sair Admin
+              </button>
+            ) : (
+              <button 
+                onClick={() => setShowAdminLoginModal(true)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '0.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  outline: 'none'
+                }}
+                title="Área do Administrador"
+              >
+                <Lock size={14} />
+              </button>
+            )}
+          </div>
         </header>
 
         {/* Main Content Area */}
@@ -1586,6 +1805,191 @@ export default function App() {
             </div>
           )}
 
+          {/* ADMIN TAB */}
+          {landingTab === 'admin' && isAdminLoggedIn && (
+            <div style={{ maxWidth: '1000px', width: '100%', display: 'flex', flexDirection: 'column', gap: '2rem' }} className="login-container-animate">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <h2 style={{ fontSize: '2.2rem', fontWeight: '800', margin: 0, background: 'linear-gradient(to right, white, var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                    Painel do Administrador
+                  </h2>
+                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    Gerencie licenças, crie novas chaves e controle acessos.
+                  </p>
+                </div>
+                <button 
+                  onClick={loadAdminKeys}
+                  disabled={loadingAdminKeys}
+                  style={{
+                    padding: '0.6rem 1.25rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 'bold',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid var(--border-color)',
+                    color: 'white'
+                  }}
+                >
+                  <RefreshCw size={14} className={loadingAdminKeys ? 'spin' : ''} />
+                  Atualizar Lista
+                </button>
+              </div>
+
+              {/* Generate Key Row */}
+              <div className="glass-panel" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid rgba(139, 92, 246, 0.25)', boxShadow: '0 0 25px rgba(139, 92, 246, 0.05)' }}>
+                <h3 style={{ fontSize: '1.15rem', color: 'white', margin: '0 0 1.25rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <KeyRound size={18} style={{ color: 'var(--primary-light)' }} /> Gerador de Novas Licenças (CDKEY)
+                </h3>
+                
+                <form onSubmit={handleGenerateKeysAdmin} style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <label style={{ fontSize: '0.72rem', fontWeight: 'bold', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
+                      VALIDADE EM DIAS
+                    </label>
+                    <select 
+                      value={generateDays} 
+                      onChange={(e) => setGenerateDays(e.target.value)}
+                      style={{ padding: '0.75rem', fontSize: '0.9rem', width: '100%', height: '42px', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'white', outline: 'none' }}
+                    >
+                      <option value="30">30 dias (Mensal)</option>
+                      <option value="90">90 dias (Trimestral)</option>
+                      <option value="365">365 dias (Anual)</option>
+                      <option value="7">7 dias (Teste)</option>
+                      <option value="1">1 dia (Demo VIP)</option>
+                    </select>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <label style={{ fontSize: '0.72rem', fontWeight: 'bold', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
+                      QUANTIDADE DE CHAVES
+                    </label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="50" 
+                      value={generateCount} 
+                      onChange={(e) => setGenerateCount(e.target.value)}
+                      style={{ padding: '0.75rem', fontSize: '0.9rem', width: '100%', height: '42px', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'white', outline: 'none' }}
+                      required
+                    />
+                  </div>
+
+                  <button 
+                    type="submit" 
+                    className="primary" 
+                    disabled={generatingKeys}
+                    style={{ padding: '0.75rem 2rem', fontSize: '0.9rem', fontWeight: 'bold', height: '42px', borderRadius: '10px' }}
+                  >
+                    {generatingKeys ? 'GERANDO...' : 'GERAR CHAVES'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Keys List */}
+              <div className="glass-panel" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <h3 style={{ fontSize: '1.15rem', color: 'white', margin: 0 }}>
+                  Licenças Cadastradas ({adminKeysList.length})
+                </h3>
+
+                {keysError && (
+                  <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', color: 'var(--danger)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                    ⚠️ {keysError}
+                  </div>
+                )}
+
+                {loadingAdminKeys ? (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                    Carregando chaves...
+                  </div>
+                ) : adminKeysList.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    Nenhuma chave de ativação encontrada no Firebase.
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                          <th style={{ padding: '0.75rem 0.5rem' }}>CDKEY</th>
+                          <th style={{ padding: '0.75rem 0.5rem' }}>DURAÇÃO</th>
+                          <th style={{ padding: '0.75rem 0.5rem' }}>CRIADO EM</th>
+                          <th style={{ padding: '0.75rem 0.5rem' }}>STATUS</th>
+                          <th style={{ padding: '0.75rem 0.5rem' }}>ATIVADO EM</th>
+                          <th style={{ padding: '0.75rem 0.5rem' }}>EXPIRA EM</th>
+                          <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>AÇÕES</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adminKeysList.map((k) => {
+                          let statusBadgeColor = 'rgba(245, 158, 11, 0.1)';
+                          let statusBorderColor = 'rgba(245, 158, 11, 0.3)';
+                          let statusTextColor = 'var(--warning)';
+                          let statusText = 'Pendente';
+
+                          if (k.status === 'active') {
+                            statusBadgeColor = 'rgba(16, 185, 129, 0.1)';
+                            statusBorderColor = 'rgba(16, 185, 129, 0.3)';
+                            statusTextColor = 'var(--success)';
+                            statusText = 'Ativa';
+                          } else if (k.status === 'expired') {
+                            statusBadgeColor = 'rgba(239, 68, 68, 0.1)';
+                            statusBorderColor = 'rgba(239, 68, 68, 0.3)';
+                            statusTextColor = 'var(--danger)';
+                            statusText = 'Expirada';
+                          }
+
+                          return (
+                            <tr key={k.key} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.03)', color: 'var(--text-secondary)' }}>
+                              <td style={{ padding: '0.75rem 0.5rem', fontFamily: 'var(--font-mono)', color: 'white', fontWeight: 'bold' }}>
+                                <span style={{ background: 'rgba(255,255,255,0.03)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>{k.key}</span>
+                              </td>
+                              <td style={{ padding: '0.75rem 0.5rem' }}>{k.durationDays} dias</td>
+                              <td style={{ padding: '0.75rem 0.5rem' }}>
+                                {k.createdAt ? new Date(k.createdAt).toLocaleDateString() : '-'}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.5rem' }}>
+                                <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '12px', fontSize: '0.68rem', fontWeight: 'bold', background: statusBadgeColor, border: `1px solid ${statusBorderColor}`, color: statusTextColor }}>
+                                  {statusText}
+                                </span>
+                              </td>
+                              <td style={{ padding: '0.75rem 0.5rem' }}>
+                                {k.activatedAt ? new Date(k.activatedAt).toLocaleDateString() : '-'}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.5rem' }}>
+                                {k.expiresAt ? new Date(k.expiresAt).toLocaleDateString() : '-'}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                                <button 
+                                  onClick={() => handleDeleteKeyAdmin(k.key)}
+                                  style={{
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                                    color: 'var(--danger)',
+                                    padding: '3px 8px',
+                                    borderRadius: '6px',
+                                    fontSize: '0.7rem',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold'
+                                  }}
+                                >
+                                  Excluir
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
         </main>
 
         {/* Footer */}
@@ -1606,6 +2010,98 @@ export default function App() {
             <span>Aviso de Risco: Opções binárias envolvem alto risco financeiro. Nunca invista capital que não possa perder.</span>
           </div>
         </footer>
+
+        {/* Admin Login Modal */}
+        {showAdminLoginModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(5, 7, 12, 0.9)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 10000,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '2rem'
+          }}>
+            <div className="glass-panel" style={{
+              maxWidth: '400px',
+              width: '100%',
+              padding: '2.5rem 2rem',
+              borderRadius: '20px',
+              border: '1px solid var(--border-active)',
+              boxShadow: 'var(--shadow-neon)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+              position: 'relative'
+            }}>
+              {/* Modal Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Lock size={16} style={{ color: 'var(--primary-light)' }} /> Admin Login
+                </h3>
+                <button 
+                  onClick={() => {
+                    setShowAdminLoginModal(false);
+                    setAdminLoginError('');
+                  }}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer', fontWeight: 'bold', outline: 'none', padding: 0 }}
+                >
+                  &times;
+                </button>
+              </div>
+
+              {adminLoginError && (
+                <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', color: 'var(--danger)', padding: '0.6rem', borderRadius: '8px', fontSize: '0.78rem', textAlign: 'center', fontWeight: 'bold' }}>
+                  ⚠️ {adminLoginError}
+                </div>
+              )}
+
+              <form onSubmit={handleAdminLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
+                    E-MAIL DO ADMINISTRADOR
+                  </label>
+                  <input 
+                    type="email" 
+                    placeholder="admin@exemplo.com"
+                    value={adminEmail} 
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    style={{ padding: '0.75rem', fontSize: '0.9rem', width: '100%', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'white', outline: 'none' }}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
+                    SENHA DO ADMINISTRADOR
+                  </label>
+                  <input 
+                    type="password" 
+                    placeholder="••••••••"
+                    value={adminPassword} 
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    style={{ padding: '0.75rem', fontSize: '0.9rem', width: '100%', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'white', outline: 'none' }}
+                    required
+                  />
+                </div>
+
+                <button 
+                  type="submit" 
+                  className="primary" 
+                  disabled={adminLoggingIn}
+                  style={{ padding: '0.75rem', fontSize: '0.9rem', fontWeight: 'bold', borderRadius: '10px', marginTop: '0.5rem', width: '100%' }}
+                >
+                  {adminLoggingIn ? 'AUTENTICANDO...' : 'ENTRAR COMO ADMIN'}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -2155,6 +2651,109 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* Success Modal */}
+        {showActivationSuccessModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(5, 7, 12, 0.95)',
+            backdropFilter: 'blur(12px)',
+            zIndex: 10000,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '2rem'
+          }}>
+            <div className="glass-panel" style={{
+              maxWidth: '420px',
+              width: '100%',
+              padding: '3rem 2rem',
+              borderRadius: '24px',
+              textAlign: 'center',
+              border: '1px solid var(--success)',
+              boxShadow: '0 0 30px rgba(16, 185, 129, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '1.5rem',
+              position: 'relative'
+            }}>
+              {/* Confetti / Success Circle */}
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.08)',
+                width: '80px',
+                height: '80px',
+                borderRadius: '50%',
+                display: 'inline-flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                border: '2px solid var(--success)',
+                boxShadow: '0 0 15px rgba(16, 185, 129, 0.2)'
+              }}>
+                <ShieldCheck size={40} style={{ color: 'var(--success)' }} />
+              </div>
+
+              <div>
+                <h3 style={{ fontSize: '1.6rem', fontWeight: '800', color: 'white', margin: '0 0 0.5rem 0' }}>
+                  Ativado com Sucesso!
+                </h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0 }}>
+                  Sua chave CDKEY foi validada e vinculada à sua conta Deriv.
+                </p>
+              </div>
+
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '16px',
+                padding: '1.25rem',
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Chave Utilizada:</span>
+                  <span style={{ color: 'white', fontWeight: 'bold', fontFamily: 'var(--font-mono)' }}>{cdKey}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Expiração:</span>
+                  <span style={{ color: 'white', fontWeight: 'bold' }}>{keyExpiresAt ? new Date(keyExpiresAt).toLocaleDateString() : '-'}</span>
+                </div>
+                <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: '600' }}>Tempo de Acesso:</span>
+                  <span style={{ 
+                    background: 'rgba(16, 185, 129, 0.15)', 
+                    color: 'var(--success)', 
+                    fontSize: '0.72rem', 
+                    fontWeight: 'bold', 
+                    padding: '4px 10px', 
+                    borderRadius: '20px',
+                    border: '1px solid rgba(16, 185, 129, 0.3)'
+                  }}>
+                    {activationRemainingDays} dias restantes
+                  </span>
+                </div>
+              </div>
+
+              <button 
+                className="primary" 
+                onClick={() => {
+                  setShowActivationSuccessModal(false);
+                  setIsKeyValid(true);
+                }}
+                style={{ padding: '0.9rem', fontSize: '0.92rem', fontWeight: 'bold', width: '100%', borderRadius: '12px', marginTop: '0.5rem' }}
+              >
+                ACESSAR PAINEL DO ROBÔ
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -2187,6 +2786,25 @@ export default function App() {
 
         {/* Live connections status badges */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          {keyExpiresAt && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '0.4rem 0.8rem',
+              borderRadius: '8px',
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              background: 'rgba(139, 92, 246, 0.05)',
+              fontSize: '0.75rem',
+              color: 'white',
+              fontWeight: 'bold',
+              boxShadow: '0 0 10px rgba(139, 92, 246, 0.1)',
+              backdropFilter: 'blur(4px)'
+            }}>
+              <KeyRound size={14} style={{ color: 'var(--primary-light)' }} />
+              <span>Licença: {Math.max(0, Math.ceil((keyExpiresAt - Date.now()) / (1000 * 60 * 60 * 24)))} dias restantes</span>
+            </div>
+          )}
           {connected ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               {/* Account Profile info */}
