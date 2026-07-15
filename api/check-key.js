@@ -2,9 +2,10 @@ import admin from 'firebase-admin';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-// Initialize Firebase Admin SDK
-if (!admin.apps.length) {
-  try {
+// Initialize Firebase Admin SDK safely
+let db;
+try {
+  if (!admin.apps.length) {
     let serviceAccount;
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -16,12 +17,11 @@ if (!admin.apps.length) {
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount)
     });
-  } catch (err) {
-    console.error("Firebase admin init error:", err);
   }
+  db = admin.firestore();
+} catch (err) {
+  console.error("Firebase admin init error:", err);
 }
-
-const db = admin.firestore();
 
 export default async function handler(req, res) {
   // Support CORS
@@ -36,6 +36,13 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
+  }
+
+  if (!db) {
+    return res.status(500).json({ 
+      valid: false,
+      message: 'Configuração do Firebase ausente ou incorreta. Por favor, adicione a variável de ambiente FIREBASE_SERVICE_ACCOUNT nas configurações da Vercel.' 
+    });
   }
 
   if (req.method !== 'POST') {
