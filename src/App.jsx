@@ -10,7 +10,7 @@ import IntelligenceRecommender from './components/IntelligenceRecommender';
 import Overlay from './components/Overlay';
 import Scanner from './components/Scanner';
 import Scheduler from './components/Scheduler';
-import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock } from 'lucide-react';
 import { loadDbTrades, saveDbTrade, clearDbTrades } from './utils/db';
 import moonImg from './assets/moon.avif';
 
@@ -73,6 +73,100 @@ export default function App() {
   const [welcomeName, setWelcomeName] = useState('');
   const [overlayActive, setOverlayActive] = useState(false);
   const [bottomTab, setBottomTab] = useState('logs');
+
+  // License / CDKey States
+  const [cdKey, setCdKey] = useState(() => {
+    return localStorage.getItem('astrobot_cdkey') || '';
+  });
+  const [keyExpiresAt, setKeyExpiresAt] = useState(() => {
+    const saved = localStorage.getItem('astrobot_expires_at');
+    return saved ? parseInt(saved) : null;
+  });
+  const [isKeyValid, setIsKeyValid] = useState(() => {
+    const expires = localStorage.getItem('astrobot_expires_at');
+    return expires ? parseInt(expires) > Date.now() : false;
+  });
+  const [cdKeyInput, setCdKeyInput] = useState('');
+  const [activationError, setActivationError] = useState('');
+  const [activationSuccess, setActivationSuccess] = useState('');
+  const [activating, setActivating] = useState(false);
+  const [showPricingModal, setShowPricingModal] = useState(false);
+
+  // Validate license on mount and periodically
+  useEffect(() => {
+    const checkLicense = () => {
+      const expires = localStorage.getItem('astrobot_expires_at');
+      if (expires) {
+        const expiresMs = parseInt(expires);
+        if (Date.now() > expiresMs) {
+          setIsKeyValid(false);
+        } else {
+          setIsKeyValid(true);
+        }
+      } else {
+        setIsKeyValid(false);
+      }
+    };
+
+    checkLicense();
+    const interval = setInterval(checkLicense, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleActivateKey = async (e) => {
+    if (e) e.preventDefault();
+    if (!cdKeyInput.trim()) return;
+
+    setActivating(true);
+    setActivationError('');
+    setActivationSuccess('');
+
+    try {
+      let response;
+      const payload = { cdkey: cdKeyInput.trim().toUpperCase() };
+      
+      try {
+        response = await fetch('/api/check-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (err) {
+        // Fallback to absolute URL for local/Electron testing
+        const fallbackUrl = 'https://astrobot-d9382.vercel.app/api/check-key';
+        response = await fetch(fallbackUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      const result = await response.json();
+
+      if (response.ok && result.valid) {
+        localStorage.setItem('astrobot_cdkey', cdKeyInput.trim().toUpperCase());
+        localStorage.setItem('astrobot_expires_at', result.expiresAt.toString());
+        
+        setCdKey(cdKeyInput.trim().toUpperCase());
+        setKeyExpiresAt(result.expiresAt);
+        setIsKeyValid(true);
+        setActivationSuccess(result.message || 'Licença ativada com sucesso!');
+        
+        addLog({
+          message: `[Licença] CDKEY ativada com sucesso! Válida até ${new Date(result.expiresAt).toLocaleDateString()}`,
+          type: 'success',
+          time: new Date().toLocaleTimeString()
+        });
+      } else {
+        setActivationError(result.message || 'Chave inválida ou já utilizada.');
+      }
+    } catch (err) {
+      console.error(err);
+      setActivationError('Erro ao se conectar ao servidor de validação.');
+    } finally {
+      setActivating(false);
+    }
+  };
 
   // Scheduler / Automation States
   const [schedulerState, setSchedulerState] = useState(() => {
@@ -1257,6 +1351,372 @@ export default function App() {
             Conexão nativa via aplicativo desktop. Seus dados de acesso ficam salvos localmente de forma segura.
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (!isKeyValid) {
+    const expiredDate = keyExpiresAt ? new Date(keyExpiresAt).toLocaleDateString() : null;
+
+    return (
+      <div style={{
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        background: 'var(--bg-main)',
+        padding: '2rem',
+        overflow: 'auto'
+      }}>
+        <div className="login-container-animate" style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '1.5rem',
+          padding: '3rem',
+          borderRadius: '24px',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-active)',
+          boxShadow: 'var(--shadow-neon)',
+          maxWidth: '520px',
+          width: '100%',
+          position: 'relative'
+        }}>
+          {/* Header */}
+          <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+            <div style={{ 
+              background: 'rgba(139, 92, 246, 0.08)', 
+              width: '64px', 
+              height: '64px', 
+              borderRadius: '50%', 
+              display: 'inline-flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              border: '2px solid var(--primary-light)',
+              marginBottom: '1rem'
+            }}>
+              <Lock size={28} style={{ color: 'var(--primary-light)' }} />
+            </div>
+            <h2 style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff', margin: '0 0 0.5rem 0' }}>
+              Ativação de Licença
+            </h2>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0 }}>
+              Sua conta está conectada à Deriv, mas você precisa de uma chave de acesso (CDKEY) ativa para operar o ASTROBOT.
+            </p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleActivateKey} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div>
+              <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.5px' }}>
+                INSIRA SUA CHAVE (CDKEY)
+              </label>
+              <input
+                type="text"
+                placeholder="ASTRO-XXXX-XXXX-XXXX"
+                value={cdKeyInput}
+                onChange={(e) => setCdKeyInput(e.target.value.toUpperCase())}
+                style={{ 
+                  textAlign: 'center', 
+                  padding: '0.8rem', 
+                  fontSize: '1rem', 
+                  fontFamily: 'var(--font-mono)', 
+                  letterSpacing: '1px',
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '10px',
+                  color: 'white',
+                  width: '100%',
+                  outline: 'none'
+                }}
+                required
+              />
+            </div>
+
+            {activationError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                color: 'var(--danger)',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.78rem',
+                textAlign: 'center',
+                fontWeight: 'bold'
+              }}>
+                ⚠️ {activationError}
+              </div>
+            )}
+
+            {activationSuccess && (
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+                color: 'var(--success)',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.78rem',
+                textAlign: 'center',
+                fontWeight: 'bold'
+              }}>
+                ✓ {activationSuccess}
+              </div>
+            )}
+
+            {expiredDate && !activationError && !activationSuccess && (
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                color: 'var(--warning)',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.78rem',
+                textAlign: 'center',
+                fontWeight: 'bold'
+              }}>
+                Sua licença anterior expirou em {expiredDate}.
+              </div>
+            )}
+
+            <button 
+              type="submit" 
+              className="primary" 
+              disabled={activating}
+              style={{ padding: '0.9rem', fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}
+            >
+              {activating ? 'VALIDANDO CHAVE...' : 'ATIVAR CHAVE AGORA'}
+            </button>
+          </form>
+
+          {/* Pricing & Support Links */}
+          <div style={{ 
+            width: '100%', 
+            borderTop: '1px solid var(--border-color)', 
+            paddingTop: '1.25rem', 
+            marginTop: '0.5rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.8rem',
+            alignItems: 'center'
+          }}>
+            <button 
+              onClick={() => setShowPricingModal(true)}
+              style={{ 
+                background: 'transparent', 
+                border: 'none', 
+                color: 'var(--primary-light)', 
+                fontSize: '0.82rem', 
+                fontWeight: 'bold', 
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <Info size={14} /> Consultar Planos e Apresentação do Bot
+            </button>
+
+            <a 
+              href="https://t.me/lucassmachado9" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="glass-panel"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                padding: '0.6rem 1.25rem',
+                borderRadius: '10px',
+                fontSize: '0.82rem',
+                color: 'white',
+                textDecoration: 'none',
+                fontWeight: 'bold',
+                background: 'rgba(139, 92, 246, 0.05)',
+                border: '1px solid rgba(139, 92, 246, 0.15)',
+                width: '100%',
+                textAlign: 'center'
+              }}
+            >
+              Adquirir Licença com o ADM no Telegram <ExternalLink size={13} />
+            </a>
+
+            <button
+              onClick={() => {
+                derivAPI.disconnect();
+                setAuthorized(false);
+                setAccountInfo(null);
+                setWelcomeName('');
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                marginTop: '0.5rem',
+                textDecoration: 'underline'
+              }}
+            >
+              Voltar para Login / Desconectar
+            </button>
+          </div>
+        </div>
+
+        {/* Pricing Modal */}
+        {showPricingModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 9999,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '2rem'
+          }}>
+            <div className="glass-panel" style={{
+              maxWidth: '750px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '2rem',
+              position: 'relative',
+              border: '1px solid var(--border-active)',
+              boxShadow: 'var(--shadow-neon)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+              borderRadius: '20px'
+            }}>
+              {/* Modal Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: '800', background: 'linear-gradient(to right, white, var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 }}>
+                  Apresentação & Planos ASTROBOT
+                </h3>
+                <button 
+                  onClick={() => setShowPricingModal(false)}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  &times;
+                </button>
+              </div>
+
+              {/* Presentational Features */}
+              <div>
+                <h4 style={{ fontSize: '0.9rem', color: 'var(--primary-light)', fontWeight: 'bold', marginBottom: '0.75rem', letterSpacing: '0.5px' }}>RECURSOS EXCLUSIVOS DO ASTROBOT</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.8rem' }}>
+                  <div style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
+                    <strong style={{ color: 'white', display: 'block', marginBottom: '4px' }}>🤖 Piloto Automático Inteligente</strong>
+                    O robô calcula em tempo real a winrate histórica de mais de 15 estratégias e chaveia instantaneamente para a mais rentável do momento.
+                  </div>
+                  <div style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
+                    <strong style={{ color: 'white', display: 'block', marginBottom: '4px' }}>📅 Agendador de Horários Autônomos</strong>
+                    Programe ciclos (ex: Manhã e Noite) com stakes, metas e stop loss independentes. O bot abre, opera e encerra as operações sozinho.
+                  </div>
+                  <div style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
+                    <strong style={{ color: 'white', display: 'block', marginBottom: '4px' }}>📊 Análises Probabilísticas MHI</strong>
+                    Algoritmos baseados em MHI Minoria/Maioria, Torres Gêmeas, Três Mosqueteiros, Padrão 23 e muitos outros para máxima precisão.
+                  </div>
+                  <div style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
+                    <strong style={{ color: 'white', display: 'block', marginBottom: '4px' }}>🛡️ Gestão de Banca Avançada</strong>
+                    Controle inteligente de Martingale e Soros configuráveis para proteger o saldo contra sequências de perdas.
+                  </div>
+                </div>
+              </div>
+
+              {/* Pricing Cards */}
+              <div>
+                <h4 style={{ fontSize: '0.9rem', color: 'var(--primary-light)', fontWeight: 'bold', marginBottom: '0.75rem', letterSpacing: '0.5px' }}>NOSSOS PLANOS DE LICENÇA</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                  
+                  {/* Monthly */}
+                  <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '12px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>LICENÇA MENSAL</span>
+                    <strong style={{ fontSize: '1.25rem', color: 'white' }}>R$ 97,00</strong>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Validade de 30 dias</span>
+                    <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
+                    <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '3px', margin: 0 }}>
+                      <li>Acesso total ao robô</li>
+                      <li>Atualizações gratuitas</li>
+                      <li>Suporte por email/Telegram</li>
+                    </ul>
+                  </div>
+
+                  {/* Quarterly */}
+                  <div style={{ padding: '1rem', background: 'rgba(139, 92, 246, 0.03)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '12px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem', position: 'relative' }}>
+                    <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', background: 'var(--primary)', color: 'white', fontSize: '0.55rem', fontWeight: 'bold', padding: '2px 8px', borderRadius: '10px' }}>POPULAR</div>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>LICENÇA TRIMESTRAL</span>
+                    <strong style={{ fontSize: '1.25rem', color: 'white' }}>R$ 247,00</strong>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Validade de 90 dias (Economia 15%)</span>
+                    <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
+                    <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '3px', margin: 0 }}>
+                      <li>Acesso total ao robô</li>
+                      <li>Atualizações gratuitas</li>
+                      <li>Suporte prioritário</li>
+                      <li>Recomendador Inteligente</li>
+                    </ul>
+                  </div>
+
+                  {/* Annual */}
+                  <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '12px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>LICENÇA ANUAL</span>
+                    <strong style={{ fontSize: '1.25rem', color: 'white' }}>R$ 697,00</strong>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Validade de 365 dias (Melhor Valor)</span>
+                    <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
+                    <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '3px', margin: 0 }}>
+                      <li>Acesso total por 1 ano</li>
+                      <li>Atualizações gratuitas</li>
+                      <li>Suporte VIP Individual</li>
+                      <li>Acesso a novos módulos</li>
+                    </ul>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* Buy action */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Para assinar, renovar ou tirar dúvidas, entre em contato direto:</span>
+                <a 
+                  href="https://t.me/lucassmachado9" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="primary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '0.6rem 2rem',
+                    borderRadius: '10px',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold',
+                    color: 'white',
+                    textDecoration: 'none'
+                  }}
+                >
+                  Falar com Lucas Machado no Telegram <ExternalLink size={14} />
+                </a>
+              </div>
+
+              {/* Close Button */}
+              <button 
+                className="secondary" 
+                onClick={() => setShowPricingModal(false)}
+                style={{ padding: '0.5rem', fontSize: '0.8rem', fontWeight: 'bold', marginTop: '0.5rem', alignSelf: 'center', width: '120px' }}
+              >
+                FECHAR
+              </button>
+
+            </div>
+          </div>
+        )}
       </div>
     );
   }
