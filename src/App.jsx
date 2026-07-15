@@ -13,6 +13,7 @@ import Scheduler from './components/Scheduler';
 import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, TrendingUp, Zap, CheckCircle } from 'lucide-react';
 import { loadDbTrades, saveDbTrade, clearDbTrades } from './utils/db';
 import moonImg from './assets/moon.avif';
+import logoImg from './assets/logo.png';
 
 export default function App() {
   const isOverlayMode = window.location.search.includes('overlay=true');
@@ -1427,7 +1428,7 @@ export default function App() {
           background: 'rgba(10, 13, 22, 0.7)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Cpu size={28} className="pulse-primary" style={{ color: 'var(--primary-light)' }} />
+            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
             <span style={{ fontSize: '1.4rem', fontWeight: '900', letterSpacing: '1px', background: 'linear-gradient(to right, #ffffff, var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               ASTROBOT
             </span>
@@ -2183,8 +2184,8 @@ export default function App() {
 
           {/* Decorative elements over the cover */}
           <div style={{ position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '600px' }} className="login-container-animate">
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(139, 92, 246, 0.2)', border: '1px solid var(--border-active)', padding: '5px 14px', borderRadius: '20px', width: 'fit-content' }}>
-              <Cpu size={14} style={{ color: 'var(--primary-light)' }} />
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid var(--border-active)', padding: '6px 14px', borderRadius: '20px', width: 'fit-content' }}>
+              <img src={logoImg} alt="Logo" style={{ height: '16px', width: 'auto', objectFit: 'contain' }} />
               <span style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--primary-light)', letterSpacing: '1.5px' }}>V2.5 INTELIGENTE</span>
             </div>
             <h1 style={{ fontSize: '3.5rem', fontWeight: '800', lineHeight: '1.1', color: '#ffffff', textShadow: '0 2px 15px rgba(0,0,0,0.6)' }}>
@@ -2823,8 +2824,8 @@ export default function App() {
       }}>
         {/* Title logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ background: 'var(--primary-glow)', padding: '0.4rem', borderRadius: '8px', border: '1px solid var(--border-active)' }}>
-            <Cpu size={24} style={{ color: 'var(--primary-light)' }} />
+          <div style={{ padding: '0.2rem', display: 'flex', alignItems: 'center' }}>
+            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '30px', width: 'auto', objectFit: 'contain' }} />
           </div>
           <div>
             <h1 style={{ fontSize: '1.25rem', margin: '0', fontWeight: '800', letterSpacing: '-0.02em', background: 'linear-gradient(to right, var(--text-primary), var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
