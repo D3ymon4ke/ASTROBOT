@@ -10,7 +10,7 @@ import IntelligenceRecommender from './components/IntelligenceRecommender';
 import Overlay from './components/Overlay';
 import Scanner from './components/Scanner';
 import Scheduler from './components/Scheduler';
-import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, TrendingUp, Zap, CheckCircle } from 'lucide-react';
 import { loadDbTrades, saveDbTrade, clearDbTrades } from './utils/db';
 import moonImg from './assets/moon.avif';
 
@@ -18,9 +18,25 @@ export default function App() {
   const isOverlayMode = window.location.search.includes('overlay=true');
 
   // Connection states
-  const [token, setToken] = useState(() => localStorage.getItem('deriv_token') || '');
-  const [appId, setAppId] = useState(() => localStorage.getItem('deriv_app_id') || '1098');
-  const [isDemo, setIsDemo] = useState(true);
+  const [rememberMe, setRememberMe] = useState(() => {
+    return localStorage.getItem('astrobot_remember_me') !== 'false';
+  });
+
+  const [token, setToken] = useState(() => {
+    const savedRemember = localStorage.getItem('astrobot_remember_me') !== 'false';
+    return savedRemember ? (localStorage.getItem('deriv_token') || '') : '';
+  });
+  const [appId, setAppId] = useState(() => {
+    const savedRemember = localStorage.getItem('astrobot_remember_me') !== 'false';
+    return savedRemember ? (localStorage.getItem('deriv_app_id') || '1098') : '1098';
+  });
+  const [isDemo, setIsDemo] = useState(() => {
+    const savedRemember = localStorage.getItem('astrobot_remember_me') !== 'false';
+    if (savedRemember) {
+      return localStorage.getItem('deriv_is_demo') !== 'false';
+    }
+    return true;
+  });
   
   const [connected, setConnected] = useState(false);
   const [authorized, setAuthorized] = useState(false);
@@ -1095,8 +1111,17 @@ export default function App() {
     }
 
     setAuthError('');
-    localStorage.setItem('deriv_token', token);
-    localStorage.setItem('deriv_app_id', appId);
+    if (rememberMe) {
+      localStorage.setItem('deriv_token', token);
+      localStorage.setItem('deriv_app_id', appId);
+      localStorage.setItem('deriv_is_demo', isDemo ? 'true' : 'false');
+      localStorage.setItem('astrobot_remember_me', 'true');
+    } else {
+      localStorage.removeItem('deriv_token');
+      localStorage.removeItem('deriv_app_id');
+      localStorage.removeItem('deriv_is_demo');
+      localStorage.setItem('astrobot_remember_me', 'false');
+    }
 
     try {
       await derivAPI.connect(token, appId, isDemo);
@@ -1353,6 +1378,13 @@ export default function App() {
         width: '100vw',
         height: '100vh',
         background: 'var(--bg-main)',
+        backgroundImage: `
+          radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.12) 0px, transparent 50%),
+          radial-gradient(at 100% 100%, rgba(217, 70, 239, 0.08) 0px, transparent 50%),
+          linear-gradient(rgba(255, 255, 255, 0.007) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.007) 1px, transparent 1px)
+        `,
+        backgroundSize: '100vw 100vh, 100vw 100vh, 45px 45px, 45px 45px',
         color: '#ffffff',
         display: 'flex',
         flexDirection: 'column',
@@ -1609,42 +1641,42 @@ export default function App() {
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: '1.25rem',
+                gap: '1.5rem',
                 width: '100%',
-                marginTop: '1rem'
+                marginTop: '1.5rem'
               }}>
-                <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderRadius: '16px' }}>
-                  <h3 style={{ fontSize: '1.05rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                    📅 Ciclos de Horários Independentes
+                <div className="glass-panel glass-panel-interactive" style={{ padding: '1.75rem 1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderRadius: '20px', borderLeft: '3px solid var(--primary-light)' }}>
+                  <h3 style={{ fontSize: '1.12rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                    <Calendar size={18} style={{ color: 'var(--primary-light)' }} /> Ciclos de Horários Independentes
                   </h3>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
                     Agende múltiplos ciclos de operação automática (ex: Ciclo Manhã às 09:00 e Ciclo Noite às 21:00) com metas de lucro, stops e stakes 100% autônomos.
                   </p>
                 </div>
 
-                <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderRadius: '16px' }}>
-                  <h3 style={{ fontSize: '1.05rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                    🤖 Piloto Automático Inteligente
+                <div className="glass-panel glass-panel-interactive" style={{ padding: '1.75rem 1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderRadius: '20px', borderLeft: '3px solid var(--accent)' }}>
+                  <h3 style={{ fontSize: '1.12rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                    <Brain size={18} style={{ color: 'var(--accent)' }} /> Piloto Automático Inteligente
                   </h3>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
                     O robô calcula dinamicamente a taxa de assertividade histórica de mais de 15 estratégias probabilísticas e seleciona o melhor setup para entrar.
                   </p>
                 </div>
 
-                <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderRadius: '16px' }}>
-                  <h3 style={{ fontSize: '1.05rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                    🛡️ Gestão e Recuperação de Risco
+                <div className="glass-panel glass-panel-interactive" style={{ padding: '1.75rem 1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderRadius: '20px', borderLeft: '3px solid var(--success)' }}>
+                  <h3 style={{ fontSize: '1.12rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                    <Shield size={18} style={{ color: 'var(--success)' }} /> Gestão e Recuperação de Risco
                   </h3>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
                     Configurações flexíveis de Martingale (Tradicional ou Inteligente) e Soros. Travas de segurança integradas para respeitar seu Stop Loss.
                   </p>
                 </div>
 
-                <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderRadius: '16px' }}>
-                  <h3 style={{ fontSize: '1.05rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                    ⚡ Painel de Estatísticas Avançadas
+                <div className="glass-panel glass-panel-interactive" style={{ padding: '1.75rem 1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderRadius: '20px', borderLeft: '3px solid #60a5fa' }}>
+                  <h3 style={{ fontSize: '1.12rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                    <TrendingUp size={18} style={{ color: '#60a5fa' }} /> Painel de Estatísticas Avançadas
                   </h3>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
                     Acompanhamento visual completo dos seus resultados com gráficos, histórico de contratos Deriv detalhado, winrate e contador de vitórias consecutivas.
                   </p>
                 </div>
@@ -2231,6 +2263,24 @@ export default function App() {
                   <option value="real">Real</option>
                 </select>
               </div>
+            </div>
+
+            {/* Remember Me Checkbox */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none', marginTop: '0.25rem' }} onClick={() => setRememberMe(!rememberMe)}>
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={() => {}} // handled by parent div click
+                style={{
+                  width: '15px',
+                  height: '15px',
+                  accentColor: 'var(--primary-light)',
+                  cursor: 'pointer'
+                }}
+              />
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: '600' }}>
+                Salvar credenciais para futuros acessos
+              </span>
             </div>
           </div>
 
