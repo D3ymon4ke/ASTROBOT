@@ -124,24 +124,22 @@ export default function App() {
     setActivationSuccess('');
 
     try {
-      let response;
+      const isLocalOrElectron = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1' || 
+                                window.location.protocol === 'file:' ||
+                                (window.process && window.process.type === 'renderer');
+
+      const apiUrl = isLocalOrElectron 
+        ? 'https://astrobot-seven.vercel.app/api/check-key'
+        : '/api/check-key';
+
       const payload = { cdkey: cdKeyInput.trim().toUpperCase() };
       
-      try {
-        response = await fetch('/api/check-key', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      } catch (err) {
-        // Fallback to absolute URL for local/Electron testing
-        const fallbackUrl = 'https://astrobot-seven.vercel.app/api/check-key';
-        response = await fetch(fallbackUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      }
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
       const result = await response.json();
 
