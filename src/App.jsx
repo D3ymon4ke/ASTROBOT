@@ -135,7 +135,7 @@ export default function App() {
         });
       } catch (err) {
         // Fallback to absolute URL for local/Electron testing
-        const fallbackUrl = 'https://astrobot-d9382.vercel.app/api/check-key';
+        const fallbackUrl = 'https://astrobot-seven.vercel.app/api/check-key';
         response = await fetch(fallbackUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
