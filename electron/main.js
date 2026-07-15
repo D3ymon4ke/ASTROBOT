@@ -8,7 +8,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    title: "DERIBOT v2.5",
+    title: "ASTROBOT v2.5",
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,

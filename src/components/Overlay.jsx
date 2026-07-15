@@ -140,7 +140,7 @@ export default function Overlay() {
             boxShadow: state.isRunning ? '0 0 8px #10b981' : '0 0 8px #f59e0b'
           }} />
           <span style={{ fontSize: '0.68rem', fontWeight: '800', letterSpacing: '1px', color: 'rgba(255,255,255,0.7)' }}>
-            DERIBOT OVERLAY
+            ASTROBOT OVERLAY
           </span>
         </div>
         

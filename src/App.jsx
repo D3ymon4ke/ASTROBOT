@@ -76,11 +76,11 @@ export default function App() {
 
   // Scheduler / Automation States
   const [schedulerState, setSchedulerState] = useState(() => {
-    return localStorage.getItem('deribot_scheduler_active') === 'true';
+    return localStorage.getItem('astrobot_scheduler_active') === 'true';
   });
 
   const [cycles, setCycles] = useState(() => {
-    const saved = localStorage.getItem('deribot_scheduler_cycles');
+    const saved = localStorage.getItem('astrobot_scheduler_cycles');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -120,33 +120,33 @@ export default function App() {
   });
 
   const [activeCycleId, setActiveCycleId] = useState(() => {
-    return localStorage.getItem('deribot_scheduler_active_cycle_id') || null;
+    return localStorage.getItem('astrobot_scheduler_active_cycle_id') || null;
   });
 
   const [schedulerLogs, setSchedulerLogs] = useState(() => {
-    const saved = localStorage.getItem('deribot_scheduler_logs');
+    const saved = localStorage.getItem('astrobot_scheduler_logs');
     return saved ? JSON.parse(saved) : [];
   });
 
   // Persist scheduler settings
   useEffect(() => {
-    localStorage.setItem('deribot_scheduler_active', schedulerState);
+    localStorage.setItem('astrobot_scheduler_active', schedulerState);
   }, [schedulerState]);
 
   useEffect(() => {
-    localStorage.setItem('deribot_scheduler_cycles', JSON.stringify(cycles));
+    localStorage.setItem('astrobot_scheduler_cycles', JSON.stringify(cycles));
   }, [cycles]);
 
   useEffect(() => {
     if (activeCycleId) {
-      localStorage.setItem('deribot_scheduler_active_cycle_id', activeCycleId);
+      localStorage.setItem('astrobot_scheduler_active_cycle_id', activeCycleId);
     } else {
-      localStorage.removeItem('deribot_scheduler_active_cycle_id');
+      localStorage.removeItem('astrobot_scheduler_active_cycle_id');
     }
   }, [activeCycleId]);
 
   useEffect(() => {
-    localStorage.setItem('deribot_scheduler_logs', JSON.stringify(schedulerLogs));
+    localStorage.setItem('astrobot_scheduler_logs', JSON.stringify(schedulerLogs));
   }, [schedulerLogs]);
 
   const addSchedulerLog = (message, type = 'info') => {
@@ -1066,7 +1066,7 @@ export default function App() {
 
           <div className="welcome-text-animate" style={{ textAlign: 'center' }}>
             <h2 style={{ fontSize: '1.75rem', fontWeight: '800', marginBottom: '0.35rem', color: '#ffffff' }}>
-              Bem-vindo ao DERIBOT
+              Bem-vindo ao ASTROBOT
             </h2>
             <span style={{ fontSize: '1.2rem', color: 'var(--primary-light)', fontWeight: '700' }}>
               {welcomeName}
@@ -1148,7 +1148,7 @@ export default function App() {
               <span style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--primary-light)', letterSpacing: '1.5px' }}>V2.5 INTELIGENTE</span>
             </div>
             <h1 style={{ fontSize: '3.5rem', fontWeight: '800', lineHeight: '1.1', color: '#ffffff', textShadow: '0 2px 15px rgba(0,0,0,0.6)' }}>
-              DERIBOT
+              ASTROBOT
             </h1>
             <p style={{ fontSize: '1rem', color: 'rgba(255, 255, 255, 0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.5)', lineHeight: '1.5' }}>
               Negociações Automatizadas de Opções Binárias no mercado Deriv com análises probabilísticas e algoritmos MHI avançados.
@@ -1281,7 +1281,7 @@ export default function App() {
           </div>
           <div>
             <h1 style={{ fontSize: '1.25rem', margin: '0', fontWeight: '800', letterSpacing: '-0.02em', background: 'linear-gradient(to right, var(--text-primary), var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              DERIBOT v2.5
+              ASTROBOT v2.5
             </h1>
             <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', fontWeight: 'bold' }}>AUTOMATED BINARY OPTIONS BOT</span>
           </div>

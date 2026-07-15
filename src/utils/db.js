@@ -23,7 +23,7 @@ export const loadDbTrades = () => {
         return JSON.parse(data);
       }
     } else {
-      const data = localStorage.getItem('deribot_trades_db');
+      const data = localStorage.getItem('astrobot_trades_db');
       if (data) {
         return JSON.parse(data);
       }
@@ -48,7 +48,7 @@ export const saveDbTrade = (trade) => {
     if (fs && dbPath) {
       fs.writeFileSync(dbPath, JSON.stringify(trades, null, 2), 'utf-8');
     } else {
-      localStorage.setItem('deribot_trades_db', JSON.stringify(trades));
+      localStorage.setItem('astrobot_trades_db', JSON.stringify(trades));
     }
     return trades;
   } catch (err) {
@@ -62,7 +62,7 @@ export const clearDbTrades = () => {
     if (fs && dbPath) {
       fs.writeFileSync(dbPath, JSON.stringify([], null, 2), 'utf-8');
     } else {
-      localStorage.setItem('deribot_trades_db', JSON.stringify([]));
+      localStorage.setItem('astrobot_trades_db', JSON.stringify([]));
     }
   } catch (err) {
     console.error("Error clearing database:", err);
