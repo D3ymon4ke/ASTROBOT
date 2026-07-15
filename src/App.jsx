@@ -10,10 +10,10 @@ import IntelligenceRecommender from './components/IntelligenceRecommender';
 import Overlay from './components/Overlay';
 import Scanner from './components/Scanner';
 import Scheduler from './components/Scheduler';
-import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, TrendingUp, Zap, CheckCircle } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, TrendingUp, Zap, CheckCircle, Menu, X } from 'lucide-react';
 import { loadDbTrades, saveDbTrade, clearDbTrades } from './utils/db';
 import moonImg from './assets/moon.avif';
-import logoImg from './assets/logo.png';
+import logoImg from './assets/newlogo.png';
 
 export default function App() {
   const isOverlayMode = window.location.search.includes('overlay=true');
@@ -90,6 +90,7 @@ export default function App() {
   const [welcomeName, setWelcomeName] = useState('');
   const [showLanding, setShowLanding] = useState(true);
   const [landingTab, setLandingTab] = useState('home');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [overlayActive, setOverlayActive] = useState(false);
   const [bottomTab, setBottomTab] = useState('logs');
 
@@ -1417,33 +1418,19 @@ export default function App() {
         {/* Navigation Bar */}
         <header className="premium-navbar">
           {/* Brand Block */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '240px', justifyContent: 'flex-start' }}>
-            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
-            <span style={{
-              fontFamily: "'Outfit', sans-serif",
-              fontSize: '1.45rem',
-              fontWeight: '800',
-              letterSpacing: '0.5px',
-              color: '#ffffff',
-              textShadow: '0 0 15px rgba(139, 92, 246, 0.4)',
-              background: 'linear-gradient(to right, #ffffff 60%, var(--primary-light) 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              display: 'inline-flex',
-              alignItems: 'center'
-            }}>
-              ASTROBOT
-            </span>
+          <div className="navbar-brand-container">
+            <img src={logoImg} alt="ASTROBOT Logo" className="navbar-logo-img" />
             <span style={{
               fontSize: '0.62rem',
               fontWeight: '800',
               background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(217, 70, 239, 0.1) 100%)',
-              border: '1px solid rgba(139, 92, 246, 0.4)',
+              border: '1px solid rgba(139, 92, 246, 0.45)',
               padding: '2px 8px',
               borderRadius: '20px',
               color: 'var(--primary-light)',
               textShadow: '0 0 5px rgba(139, 92, 246, 0.3)',
-              marginLeft: '4px'
+              marginLeft: '4px',
+              flexShrink: 0
             }}>
               v2.5
             </span>
@@ -1488,7 +1475,7 @@ export default function App() {
           </nav>
 
           {/* Call-to-Actions (Aligned right) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, justifyContent: 'flex-end', minWidth: '240px' }}>
+          <div className="navbar-right-ctas" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, justifyContent: 'flex-end', minWidth: '240px' }}>
             {isAdminLoggedIn ? (
               <button 
                 className="btn-admin-logout"
@@ -1517,6 +1504,111 @@ export default function App() {
               CONECTAR AO ROBÔ
             </button>
           </div>
+
+          {/* Mobile hamburger menu toggle */}
+          <button 
+            className="mobile-menu-toggle"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+
+          {/* Mobile Menu Panel Dropdown */}
+          {mobileMenuOpen && (
+            <div className="mobile-menu-panel">
+              <button 
+                onClick={() => {
+                  setLandingTab('home');
+                  setMobileMenuOpen(false);
+                }}
+                className={`nav-link ${landingTab === 'home' ? 'nav-link-active' : ''}`}
+                style={{ width: '100%', justifyContent: 'flex-start' }}
+              >
+                Início
+              </button>
+              <button 
+                onClick={() => {
+                  setLandingTab('strategies');
+                  setMobileMenuOpen(false);
+                }}
+                className={`nav-link ${landingTab === 'strategies' ? 'nav-link-active' : ''}`}
+                style={{ width: '100%', justifyContent: 'flex-start' }}
+              >
+                Estratégias
+              </button>
+              <button 
+                onClick={() => {
+                  setLandingTab('pricing');
+                  setMobileMenuOpen(false);
+                }}
+                className={`nav-link ${landingTab === 'pricing' ? 'nav-link-active' : ''}`}
+                style={{ width: '100%', justifyContent: 'flex-start' }}
+              >
+                Valores & Planos
+              </button>
+              <a 
+                href="https://t.me/lucassmachado9" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="nav-link"
+                style={{ width: '100%', justifyContent: 'flex-start' }}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Suporte ADM
+              </a>
+              {isAdminLoggedIn && (
+                <button 
+                  onClick={() => {
+                    setLandingTab('admin');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`nav-link ${landingTab === 'admin' ? 'nav-link-active' : ''}`}
+                  style={{ width: '100%', justifyContent: 'flex-start' }}
+                >
+                  <Lock size={13} /> Área Admin
+                </button>
+              )}
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem', width: '100%' }}>
+                {isAdminLoggedIn ? (
+                  <button 
+                    className="btn-admin-logout"
+                    onClick={() => {
+                      localStorage.removeItem('astrobot_admin_token');
+                      setIsAdminLoggedIn(false);
+                      setLandingTab('home');
+                      setMobileMenuOpen(false);
+                    }}
+                    style={{ width: '100%', justifyContent: 'center' }}
+                  >
+                    <LogOut size={14} /> Sair Admin
+                  </button>
+                ) : (
+                  <button 
+                    className="btn-admin-logout"
+                    onClick={() => {
+                      setShowAdminLoginModal(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    style={{ width: '100%', justifyContent: 'center', borderColor: 'rgba(139, 92, 246, 0.35)', color: 'var(--primary-light)' }}
+                  >
+                    <Lock size={14} /> Acesso Admin
+                  </button>
+                )}
+
+                <button 
+                  className="cta-connect"
+                  onClick={() => {
+                    setShowLanding(false);
+                    setMobileMenuOpen(false);
+                  }}
+                  style={{ width: '100%' }}
+                >
+                  CONECTAR AO ROBÔ
+                </button>
+              </div>
+            </div>
+          )}
         </header>
 
         {/* Main Content Area */}
@@ -2764,7 +2856,7 @@ export default function App() {
       }}>
         {/* Title logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '90px', width: 'auto', objectFit: 'contain' }} />
+          <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '56px', width: 'auto', objectFit: 'contain' }} />
           <span style={{ fontSize: '0.65rem', background: 'var(--primary-glow)', border: '1px solid var(--primary-light)', padding: '2px 6px', borderRadius: '20px', fontWeight: 'bold', color: 'var(--primary-light)' }}>
             v2.5
           </span>
