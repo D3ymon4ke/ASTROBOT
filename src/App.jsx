@@ -255,17 +255,9 @@ export default function App() {
   }, [showLanding, landingTab]);
 
   // License / CDKey States
-  const [cdKey, setCdKey] = useState(() => {
-    return localStorage.getItem('astrobot_cdkey') || '';
-  });
-  const [keyExpiresAt, setKeyExpiresAt] = useState(() => {
-    const saved = localStorage.getItem('astrobot_expires_at');
-    return saved ? parseInt(saved) : null;
-  });
-  const [isKeyValid, setIsKeyValid] = useState(() => {
-    const expires = localStorage.getItem('astrobot_expires_at');
-    return expires ? parseInt(expires) > Date.now() : false;
-  });
+  const [cdKey, setCdKey] = useState('');
+  const [keyExpiresAt, setKeyExpiresAt] = useState(null);
+  const [isKeyValid, setIsKeyValid] = useState(false);
   const [cdKeyInput, setCdKeyInput] = useState('');
   const [activationError, setActivationError] = useState('');
   const [activationSuccess, setActivationSuccess] = useState('');
@@ -273,18 +265,14 @@ export default function App() {
   const [showPricingModal, setShowPricingModal] = useState(false);
 
   // User Authentication States
-  const [userEmail, setUserEmail] = useState(() => {
-    return localStorage.getItem('astrobot_user_email') || '';
-  });
+  const [userEmail, setUserEmail] = useState('');
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
   const [userEmailInput, setUserEmailInput] = useState('');
   const [userPasswordInput, setUserPasswordInput] = useState('');
   const [userRegisterKeyInput, setUserRegisterKeyInput] = useState('');
 
   // Administrative Panel States
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => {
-    return localStorage.getItem('astrobot_admin_token') === 'lucas_astro_admin';
-  });
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
@@ -384,11 +372,6 @@ export default function App() {
       if (response.ok && result.success) {
         const user = result.user;
         
-        // Save auth details
-        localStorage.setItem('astrobot_user_email', user.email);
-        localStorage.setItem('astrobot_cdkey', user.cdkey);
-        localStorage.setItem('astrobot_expires_at', user.expiresAt.toString());
-
         setUserEmail(user.email);
         setCdKey(user.cdkey);
         setKeyExpiresAt(user.expiresAt);
@@ -396,7 +379,6 @@ export default function App() {
 
         if (user.email === 'deymonmachado@gmail.com') {
           setIsAdminLoggedIn(true);
-          localStorage.setItem('astrobot_admin_token', 'lucas_astro_admin');
         }
 
         // Apply loaded settings if present
@@ -518,94 +500,7 @@ export default function App() {
     }
   };
 
-  // Load user profile on mount
-  useEffect(() => {
-    const loadUserProfile = async () => {
-      const savedEmail = localStorage.getItem('astrobot_user_email');
-      if (!savedEmail) return;
 
-      try {
-        const isLocalOrElectron = window.location.hostname === 'localhost' || 
-                                  window.location.hostname === '127.0.0.1' || 
-                                  window.location.protocol === 'file:' ||
-                                  (window.process && window.process.type === 'renderer');
-
-        const apiUrl = isLocalOrElectron 
-          ? 'https://astrobot-seven.vercel.app/api/get-profile'
-          : '/api/get-profile';
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: savedEmail })
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-          const user = result.user;
-          
-          localStorage.setItem('astrobot_cdkey', user.cdkey);
-          localStorage.setItem('astrobot_expires_at', user.expiresAt.toString());
-
-          setCdKey(user.cdkey);
-          setKeyExpiresAt(user.expiresAt);
-          setIsKeyValid(user.licenseStatus === 'active');
-
-          if (user.email === 'deymonmachado@gmail.com') {
-            setIsAdminLoggedIn(true);
-            localStorage.setItem('astrobot_admin_token', 'lucas_astro_admin');
-          }
-
-          if (user.settings && Object.keys(user.settings).length > 0) {
-            setSettings(prev => ({ ...prev, ...user.settings }));
-            localStorage.setItem('astrobot_settings', JSON.stringify(user.settings));
-            
-            if (user.settings.token) {
-              localStorage.setItem('deriv_token', user.settings.token);
-            }
-            if (user.settings.appId) {
-              localStorage.setItem('deriv_app_id', user.settings.appId);
-            }
-            if (user.settings.isDemo !== undefined) {
-              localStorage.setItem('deriv_is_demo', user.settings.isDemo.toString());
-              setIsDemo(user.settings.isDemo);
-            }
-          }
-
-          if (user.telegramConfig && Object.keys(user.telegramConfig).length > 0) {
-            localStorage.setItem('astrobot_telegram_config', JSON.stringify(user.telegramConfig));
-          }
-
-          if (user.cycles && user.cycles.length > 0) {
-            setCycles(user.cycles);
-            localStorage.setItem('astrobot_scheduler_cycles', JSON.stringify(user.cycles));
-          }
-
-          if (user.profile) {
-            if (user.profile.fullname) {
-              setWelcomeName(user.profile.fullname);
-              localStorage.setItem('astrobot_custom_name', user.profile.fullname);
-            }
-            if (user.profile.profileImage) {
-              setProfileImage(user.profile.profileImage);
-              localStorage.setItem('astrobot_profile_image', user.profile.profileImage);
-            }
-            if (user.profile.fullname || user.profile.profileImage) {
-              setIsProfileConfigured(true);
-              localStorage.setItem('astrobot_profile_configured', 'true');
-            }
-          }
-        } else {
-          handleLogout();
-        }
-      } catch (err) {
-        console.error("Erro ao carregar perfil do banco:", err);
-      }
-    };
-
-    loadUserProfile();
-  }, []);
 
   // Poll for remote Telegram commands in Web mode
   useEffect(() => {
