@@ -171,6 +171,14 @@ export default function App() {
     setProfileImage(tempProfileImage);
     setIsProfileConfigured(true);
 
+    // Sync to DB
+    syncSettingsToDb({
+      profile: {
+        fullname: tempProfileName,
+        profileImage: tempProfileImage
+      }
+    });
+
     setIsProfileSaving(true);
     setTimeout(() => {
       setIsProfileSaving(false);
@@ -264,6 +272,15 @@ export default function App() {
   const [activating, setActivating] = useState(false);
   const [showPricingModal, setShowPricingModal] = useState(false);
 
+  // User Authentication States
+  const [userEmail, setUserEmail] = useState(() => {
+    return localStorage.getItem('astrobot_user_email') || '';
+  });
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
+  const [userEmailInput, setUserEmailInput] = useState('');
+  const [userPasswordInput, setUserPasswordInput] = useState('');
+  const [userRegisterKeyInput, setUserRegisterKeyInput] = useState('');
+
   // Administrative Panel States
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => {
     return localStorage.getItem('astrobot_admin_token') === 'lucas_astro_admin';
@@ -285,6 +302,336 @@ export default function App() {
 
   const [showActivationSuccessModal, setShowActivationSuccessModal] = useState(false);
   const [activationRemainingDays, setActivationRemainingDays] = useState(0);
+
+  // Synchronize settings / profile helper
+  const syncSettingsToDb = async (updatedFields = {}) => {
+    const email = localStorage.getItem('astrobot_user_email') || userEmail;
+    if (!email) return;
+
+    try {
+      const isLocalOrElectron = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1' || 
+                                window.location.protocol === 'file:' ||
+                                (window.process && window.process.type === 'renderer');
+
+      const apiUrl = isLocalOrElectron 
+        ? 'https://astrobot-seven.vercel.app/api/save-settings'
+        : '/api/save-settings';
+
+      await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          ...updatedFields
+        })
+      });
+    } catch (err) {
+      console.error("Erro ao sincronizar configurações no banco:", err);
+    }
+  };
+
+  // Auth logout handler
+  const handleLogout = () => {
+    localStorage.removeItem('astrobot_user_email');
+    localStorage.removeItem('astrobot_cdkey');
+    localStorage.removeItem('astrobot_expires_at');
+    
+    // Disconnect and clear states
+    derivAPI.disconnect();
+    setUserEmail('');
+    setCdKey('');
+    setKeyExpiresAt(null);
+    setIsKeyValid(false);
+    setAuthorized(false);
+    setAccountInfo(null);
+    setWelcomeName('');
+  };
+
+  // Auth login handler
+  const handleLogin = async (e) => {
+    if (e) e.preventDefault();
+    if (!userEmailInput.trim() || !userPasswordInput.trim()) return;
+
+    setActivating(true);
+    setActivationError('');
+    setActivationSuccess('');
+
+    try {
+      const isLocalOrElectron = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1' || 
+                                window.location.protocol === 'file:' ||
+                                (window.process && window.process.type === 'renderer');
+
+      const apiUrl = isLocalOrElectron 
+        ? 'https://astrobot-seven.vercel.app/api/login'
+        : '/api/login';
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmailInput.trim().toLowerCase(),
+          password: userPasswordInput.trim()
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        const user = result.user;
+        
+        // Save auth details
+        localStorage.setItem('astrobot_user_email', user.email);
+        localStorage.setItem('astrobot_cdkey', user.cdkey);
+        localStorage.setItem('astrobot_expires_at', user.expiresAt.toString());
+
+        setUserEmail(user.email);
+        setCdKey(user.cdkey);
+        setKeyExpiresAt(user.expiresAt);
+        setIsKeyValid(user.licenseStatus === 'active');
+
+        // Apply loaded settings if present
+        if (user.settings && Object.keys(user.settings).length > 0) {
+          setSettings(prev => ({ ...prev, ...user.settings }));
+          localStorage.setItem('astrobot_settings', JSON.stringify(user.settings));
+          
+          if (user.settings.token) {
+            localStorage.setItem('deriv_token', user.settings.token);
+          }
+          if (user.settings.appId) {
+            localStorage.setItem('deriv_app_id', user.settings.appId);
+          }
+          if (user.settings.isDemo !== undefined) {
+            localStorage.setItem('deriv_is_demo', user.settings.isDemo.toString());
+            setIsDemo(user.settings.isDemo);
+          }
+        }
+
+        if (user.telegramConfig && Object.keys(user.telegramConfig).length > 0) {
+          localStorage.setItem('astrobot_telegram_config', JSON.stringify(user.telegramConfig));
+        }
+
+        if (user.cycles && user.cycles.length > 0) {
+          setCycles(user.cycles);
+          localStorage.setItem('astrobot_scheduler_cycles', JSON.stringify(user.cycles));
+        }
+
+        if (user.profile) {
+          if (user.profile.fullname) {
+            setWelcomeName(user.profile.fullname);
+            localStorage.setItem('astrobot_custom_name', user.profile.fullname);
+          }
+          if (user.profile.profileImage) {
+            setProfileImage(user.profile.profileImage);
+            localStorage.setItem('astrobot_profile_image', user.profile.profileImage);
+          }
+          if (user.profile.fullname || user.profile.profileImage) {
+            setIsProfileConfigured(true);
+            localStorage.setItem('astrobot_profile_configured', 'true');
+          }
+        }
+
+        addLog({
+          message: `[Sistema] Bem-vindo! Login realizado com sucesso.`,
+          type: 'success',
+          time: new Date().toLocaleTimeString()
+        });
+
+        // Trigger automatic connection to Deriv if token is present
+        const savedToken = user.settings?.token || localStorage.getItem('deriv_token');
+        const savedAppId = user.settings?.appId || localStorage.getItem('deriv_app_id') || '1098';
+        const savedIsDemo = user.settings?.isDemo !== undefined ? user.settings.isDemo : (localStorage.getItem('deriv_is_demo') !== 'false');
+
+        if (savedToken && user.licenseStatus === 'active') {
+          setTimeout(() => {
+            derivAPI.connect(savedToken, savedAppId, savedIsDemo);
+          }, 1000);
+        }
+
+      } else {
+        setActivationError(result.message || 'E-mail ou senha incorretos.');
+      }
+    } catch (err) {
+      console.error(err);
+      setActivationError('Erro ao se conectar ao servidor de autenticação.');
+    } finally {
+      setActivating(false);
+    }
+  };
+
+  // Auth register handler
+  const handleRegister = async (e) => {
+    if (e) e.preventDefault();
+    if (!userEmailInput.trim() || !userPasswordInput.trim() || !userRegisterKeyInput.trim()) return;
+
+    setActivating(true);
+    setActivationError('');
+    setActivationSuccess('');
+
+    try {
+      const isLocalOrElectron = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1' || 
+                                window.location.protocol === 'file:' ||
+                                (window.process && window.process.type === 'renderer');
+
+      const apiUrl = isLocalOrElectron 
+        ? 'https://astrobot-seven.vercel.app/api/register'
+        : '/api/register';
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmailInput.trim().toLowerCase(),
+          password: userPasswordInput.trim(),
+          cdkey: userRegisterKeyInput.trim().toUpperCase()
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        setActivationSuccess('Cadastro realizado com sucesso! Redirecionando...');
+        
+        setTimeout(() => {
+          setAuthMode('login');
+          setActivationSuccess('');
+          setActivationError('');
+        }, 2000);
+      } else {
+        setActivationError(result.message || 'Erro ao realizar cadastro.');
+      }
+    } catch (err) {
+      console.error(err);
+      setActivationError('Erro ao se conectar ao servidor de cadastro.');
+    } finally {
+      setActivating(false);
+    }
+  };
+
+  // Load user profile on mount
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      const savedEmail = localStorage.getItem('astrobot_user_email');
+      if (!savedEmail) return;
+
+      try {
+        const isLocalOrElectron = window.location.hostname === 'localhost' || 
+                                  window.location.hostname === '127.0.0.1' || 
+                                  window.location.protocol === 'file:' ||
+                                  (window.process && window.process.type === 'renderer');
+
+        const apiUrl = isLocalOrElectron 
+          ? 'https://astrobot-seven.vercel.app/api/get-profile'
+          : '/api/get-profile';
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: savedEmail })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          const user = result.user;
+          
+          localStorage.setItem('astrobot_cdkey', user.cdkey);
+          localStorage.setItem('astrobot_expires_at', user.expiresAt.toString());
+
+          setCdKey(user.cdkey);
+          setKeyExpiresAt(user.expiresAt);
+          setIsKeyValid(user.licenseStatus === 'active');
+
+          if (user.settings && Object.keys(user.settings).length > 0) {
+            setSettings(prev => ({ ...prev, ...user.settings }));
+            localStorage.setItem('astrobot_settings', JSON.stringify(user.settings));
+            
+            if (user.settings.token) {
+              localStorage.setItem('deriv_token', user.settings.token);
+            }
+            if (user.settings.appId) {
+              localStorage.setItem('deriv_app_id', user.settings.appId);
+            }
+            if (user.settings.isDemo !== undefined) {
+              localStorage.setItem('deriv_is_demo', user.settings.isDemo.toString());
+              setIsDemo(user.settings.isDemo);
+            }
+          }
+
+          if (user.telegramConfig && Object.keys(user.telegramConfig).length > 0) {
+            localStorage.setItem('astrobot_telegram_config', JSON.stringify(user.telegramConfig));
+          }
+
+          if (user.cycles && user.cycles.length > 0) {
+            setCycles(user.cycles);
+            localStorage.setItem('astrobot_scheduler_cycles', JSON.stringify(user.cycles));
+          }
+
+          if (user.profile) {
+            if (user.profile.fullname) {
+              setWelcomeName(user.profile.fullname);
+              localStorage.setItem('astrobot_custom_name', user.profile.fullname);
+            }
+            if (user.profile.profileImage) {
+              setProfileImage(user.profile.profileImage);
+              localStorage.setItem('astrobot_profile_image', user.profile.profileImage);
+            }
+            if (user.profile.fullname || user.profile.profileImage) {
+              setIsProfileConfigured(true);
+              localStorage.setItem('astrobot_profile_configured', 'true');
+            }
+          }
+        } else {
+          handleLogout();
+        }
+      } catch (err) {
+        console.error("Erro ao carregar perfil do banco:", err);
+      }
+    };
+
+    loadUserProfile();
+  }, []);
+
+  // Poll for remote Telegram commands in Web mode
+  useEffect(() => {
+    const isElectron = window && window.process && window.process.type === 'renderer';
+    if (isElectron || !userEmail) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const isLocalOrElectron = window.location.hostname === 'localhost' || 
+                                  window.location.hostname === '127.0.0.1' || 
+                                  window.location.protocol === 'file:' ||
+                                  (window.process && window.process.type === 'renderer');
+
+        const apiUrl = isLocalOrElectron 
+          ? 'https://astrobot-seven.vercel.app/api/get-pending-command'
+          : '/api/get-pending-command';
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: userEmail })
+        });
+
+        const result = await response.json();
+        if (response.ok && result.success && result.command) {
+          addLog({
+            message: `[Telegram] Comando remoto recebido: ${result.command.text}`,
+            type: 'info',
+            time: new Date().toLocaleTimeString()
+          });
+          executeTelegramCommand(result.command.text);
+        }
+      } catch (err) {
+        // Silently ignore network errors during background polling
+      }
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [userEmail]);
 
   // Validate license on mount and periodically
   useEffect(() => {
@@ -1701,8 +2048,22 @@ export default function App() {
 
   const handleSaveSettings = () => {
     localStorage.setItem('astrobot_settings', JSON.stringify(settings));
+    
+    const savedToken = localStorage.getItem('deriv_token') || '';
+    const savedAppId = localStorage.getItem('deriv_app_id') || '1098';
+    const savedIsDemo = localStorage.getItem('deriv_is_demo') !== 'false';
+
+    syncSettingsToDb({
+      settings: {
+        ...settings,
+        token: savedToken,
+        appId: savedAppId,
+        isDemo: savedIsDemo
+      }
+    });
+
     addLog({
-      message: '[Configurações] Painel de Módulos Salvo com Sucesso!',
+      message: '[Configurações] Painel de Módulos Salvo com Sucesso e Sincronizado na Nuvem!',
       type: 'success',
       time: new Date().toLocaleTimeString()
     });
@@ -3473,6 +3834,217 @@ export default function App() {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  if (!userEmail) {
+    return (
+      <div style={{
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        background: 'var(--bg-main)',
+        padding: '2rem',
+        overflow: 'auto',
+        position: 'relative'
+      }}>
+        {/* Sleek animated background elements */}
+        <div style={{
+          position: 'absolute',
+          width: '400px',
+          height: '400px',
+          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
+          top: '10%',
+          left: '10%',
+          filter: 'blur(50px)',
+          zIndex: 0
+        }} />
+        <div style={{
+          position: 'absolute',
+          width: '500px',
+          height: '500px',
+          background: 'radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, transparent 70%)',
+          bottom: '10%',
+          right: '10%',
+          filter: 'blur(60px)',
+          zIndex: 0
+        }} />
+
+        <div className="login-container-animate" style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '1.5rem',
+          padding: '3rem 2.5rem',
+          borderRadius: '24px',
+          background: 'rgba(14, 11, 24, 0.75)',
+          border: '1px solid var(--border-active)',
+          boxShadow: 'var(--shadow-neon)',
+          backdropFilter: 'blur(20px)',
+          maxWidth: '480px',
+          width: '100%',
+          position: 'relative',
+          zIndex: 1
+        }}>
+          {/* Header */}
+          <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '48px', marginBottom: '1rem' }} />
+            <h2 style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff', margin: '0 0 0.25rem 0' }}>
+              {authMode === 'login' ? 'Bem-vindo ao ASTROBOT' : 'Crie sua Conta'}
+            </h2>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0 }}>
+              {authMode === 'login' 
+                ? 'Conecte-se para gerenciar suas operações em tempo real.' 
+                : 'Registre-se usando sua chave de licença ativa (CDKEY).'}
+            </p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div>
+              <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.5px' }}>
+                E-MAIL
+              </label>
+              <input
+                type="email"
+                placeholder="seuemail@exemplo.com"
+                value={userEmailInput}
+                onChange={(e) => setUserEmailInput(e.target.value)}
+                style={{ 
+                  padding: '0.8rem', 
+                  fontSize: '0.92rem', 
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '10px',
+                  color: 'white',
+                  width: '100%',
+                  outline: 'none'
+                }}
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.5px' }}>
+                SENHA
+              </label>
+              <input
+                type="password"
+                placeholder={authMode === 'login' ? 'Insira sua senha' : 'Crie uma senha segura'}
+                value={userPasswordInput}
+                onChange={(e) => setUserPasswordInput(e.target.value)}
+                style={{ 
+                  padding: '0.8rem', 
+                  fontSize: '0.92rem', 
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '10px',
+                  color: 'white',
+                  width: '100%',
+                  outline: 'none'
+                }}
+                required
+              />
+            </div>
+
+            {authMode === 'register' && (
+              <div>
+                <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.5px' }}>
+                  CHAVE DE LICENÇA (CDKEY)
+                </label>
+                <input
+                  type="text"
+                  placeholder="ASTRO-XXXX-XXXX-XXXX"
+                  value={userRegisterKeyInput}
+                  onChange={(e) => setUserRegisterKeyInput(e.target.value.toUpperCase())}
+                  style={{ 
+                    padding: '0.8rem', 
+                    fontSize: '0.92rem', 
+                    fontFamily: 'var(--font-mono)', 
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    color: 'white',
+                    width: '100%',
+                    outline: 'none',
+                    textAlign: 'center',
+                    letterSpacing: '1px'
+                  }}
+                  required
+                />
+              </div>
+            )}
+
+            {activationError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                color: 'var(--danger)',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.78rem',
+                textAlign: 'center',
+                fontWeight: 'bold'
+              }}>
+                ⚠️ {activationError}
+              </div>
+            )}
+
+            {activationSuccess && (
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+                color: 'var(--success)',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.78rem',
+                textAlign: 'center',
+                fontWeight: 'bold'
+              }}>
+                ✓ {activationSuccess}
+              </div>
+            )}
+
+            <button 
+              type="submit" 
+              className="primary" 
+              disabled={activating}
+              style={{ padding: '0.9rem', fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', width: '100%', borderRadius: '10px' }}
+            >
+              {activating 
+                ? (authMode === 'login' ? 'ENTRANDO...' : 'REGISTRANDO...') 
+                : (authMode === 'login' ? 'ACESSAR CONTA' : 'REGISTRAR E ATIVAR')}
+            </button>
+          </form>
+
+          {/* Toggle Tab */}
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+            {authMode === 'login' ? (
+              <>
+                Não tem uma conta?{' '}
+                <span 
+                  onClick={() => { setAuthMode('register'); setActivationError(''); }}
+                  style={{ color: 'var(--primary-light)', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Registre-se aqui
+                </span>
+              </>
+            ) : (
+              <>
+                Já possui uma conta?{' '}
+                <span 
+                  onClick={() => { setAuthMode('login'); setActivationError(''); }}
+                  style={{ color: 'var(--primary-light)', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Faça login
+                </span>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
