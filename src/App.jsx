@@ -6412,6 +6412,9 @@ export default function App() {
                   settings={settings}
                   onSaveTelegramSettings={(cfg) => {
                     // Config is saved to localStorage inside TelegramConfig;
+                    // Sincronizar com o banco de dados no Vercel/Firestore
+                    syncSettingsToDb({ telegramConfig: cfg });
+
                     // notify Electron main process if running
                     const isElectron = window && window.process && window.process.type === 'renderer';
                     if (isElectron) {
