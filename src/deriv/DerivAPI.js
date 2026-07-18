@@ -155,9 +155,20 @@ export class DerivAPI {
       throw new Error('Nenhuma conta Deriv encontrada vinculada a este token.');
     }
 
-    const account = accountsData.data.find(a => a.account_type === accountType);
-    if (!account) {
+    const matchingAccounts = accountsData.data.filter(a => a.account_type === accountType);
+    if (matchingAccounts.length === 0) {
       throw new Error(`Nenhuma conta do tipo "${accountType}" encontrada.`);
+    }
+
+    this.log(`Contas ${accountType} disponíveis: ` + matchingAccounts.map(a => `${a.account_id} (${a.currency}: $${a.balance || 0})`).join(', '), 'info');
+
+    // Prioritize USD account since trading uses USD, fallback to other fiat currencies, then fallback to first available
+    let account = matchingAccounts.find(a => a.currency === 'USD');
+    if (!account) {
+      account = matchingAccounts.find(a => ['EUR', 'GBP', 'AUD'].includes(a.currency));
+    }
+    if (!account) {
+      account = matchingAccounts[0];
     }
 
     const accId = account.account_id;
@@ -165,7 +176,7 @@ export class DerivAPI {
     const currency = account.currency || 'USD';
     const email = account.email || 'pat@deriv.com';
     const fullname = account.account_id;
-    this.log(`Conta selecionada: ${accId} (${account.currency}) | Saldo: $${balance}`, 'info');
+    this.log(`Conta selecionada: ${accId} (${currency}) | Saldo: $${balance}`, 'info');
 
     // Step 2: Get OTP URL
     this.log('Gerando OTP para autenticação WebSocket...', 'info');

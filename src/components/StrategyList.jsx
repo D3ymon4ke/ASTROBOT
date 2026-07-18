@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, TrendingUp, HelpCircle, BellRing, Target } from 'lucide-react';
+import { Target, Award, ShieldCheck, Activity, Bell } from 'lucide-react';
 
 export default function StrategyList({
   strategies,
@@ -8,143 +8,160 @@ export default function StrategyList({
   liveSignals,
   autoPilot
 }) {
-  // Sort strategies by win rate to recommend the best
-  const sorted = [...strategies].sort((a, b) => b.winRate - a.winRate);
-  const bestId = sorted.length > 0 && sorted[0].winRate > 0 ? sorted[0].id : null;
+  // Sort strategies by winRate desc, take top 5
+  const ranked = [...strategies]
+    .sort((a, b) => b.winRate - a.winRate)
+    .slice(0, 5);
+
+  const getStatusBadge = (strategyId, signal) => {
+    if (signal) {
+      const isCall = signal.direction === 'CALL';
+      return (
+        <span style={{
+          fontSize: '0.68rem',
+          background: isCall ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+          color: isCall ? '#22c55e' : '#ef4444',
+          border: `1px solid ${isCall ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+          padding: '2px 8px',
+          borderRadius: '12px',
+          fontWeight: 'bold',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px'
+        }}>
+          <span style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            background: isCall ? '#22c55e' : '#ef4444',
+            boxShadow: isCall ? '0 0 6px #22c55e' : '0 0 6px #ef4444'
+          }} />
+          {isCall ? 'COMPRA' : 'VENDA'}
+        </span>
+      );
+    }
+    return (
+      <span style={{
+        fontSize: '0.68rem',
+        background: 'rgba(255,255,255,0.03)',
+        color: '#64748b',
+        border: '1px solid rgba(255,255,255,0.06)',
+        padding: '2px 8px',
+        borderRadius: '12px'
+      }}>
+        AGUARDANDO
+      </span>
+    );
+  };
 
   return (
-    <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+    <div className="glass-panel" style={{
+      padding: '1rem',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.75rem',
+      height: '100%',
+      background: 'rgba(14, 11, 24, 0.55)',
+      overflow: 'hidden'
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Target size={20} style={{ color: 'var(--accent)' }} />
-          <h2 style={{ fontSize: '1.1rem', fontWeight: '700' }}>ANÁLISE DE ESTRATÉGIAS</h2>
+          <Target size={16} style={{ color: 'var(--accent)' }} className="pulse-primary" />
+          <h2 style={{ fontSize: '0.85rem', fontWeight: '800', letterSpacing: '0.5px', color: 'white' }}>RANKING IA (TOP 5)</h2>
         </div>
         {autoPilot && (
-          <span style={{ fontSize: '0.7rem', background: 'var(--success-glow)', color: 'var(--success)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '2px 8px', borderRadius: '20px', fontWeight: 'bold' }}>
-            AUTO-SELEÇÃO ATIVA
+          <span style={{ fontSize: '0.6rem', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+            AUTO-SELEÇÃO
           </span>
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', overflowY: 'auto', flex: 1, paddingRight: '2px' }}>
-        {strategies.map((strategy) => {
-          const isBest = strategy.id === bestId;
-          const isSelected = strategy.id === selectedStrategyId;
-          const signal = liveSignals[strategy.id];
-          const hasSignal = !!signal;
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+              <th style={{ fontSize: '0.62rem', fontWeight: '800', color: '#64748b', padding: '6px 4px', textTransform: 'uppercase' }}>Rank & Estratégia</th>
+              <th style={{ fontSize: '0.62rem', fontWeight: '800', color: '#64748b', padding: '6px 4px', textTransform: 'uppercase', textAlign: 'right' }}>Assertividade</th>
+              <th style={{ fontSize: '0.62rem', fontWeight: '800', color: '#64748b', padding: '6px 4px', textTransform: 'uppercase', textAlign: 'center' }}>Histórico</th>
+              <th style={{ fontSize: '0.62rem', fontWeight: '800', color: '#64748b', padding: '6px 4px', textTransform: 'uppercase', textAlign: 'right' }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ranked.map((strategy, index) => {
+              const isSelected = strategy.id === selectedStrategyId;
+              const signal = liveSignals[strategy.id];
+              const isTop = index === 0;
 
-          // Determine circular chart dash offset
-          const radius = 24;
-          const circumference = 2 * Math.PI * radius;
-          const strokeDashoffset = circumference - (strategy.winRate / 100) * circumference;
+              return (
+                <tr 
+                  key={strategy.id}
+                  onClick={() => !autoPilot && onSelectStrategy(strategy.id)}
+                  style={{
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.02)',
+                    cursor: autoPilot ? 'default' : 'pointer',
+                    background: isSelected ? 'rgba(139, 92, 246, 0.04)' : 'transparent',
+                    transition: 'all 0.2s ease',
+                    opacity: autoPilot && !isTop ? 0.7 : 1
+                  }}
+                  className={!autoPilot ? 'strategy-row-hover' : ''}
+                >
+                  {/* Rank & Name */}
+                  <td style={{ padding: '8px 4px', verticalAlign: 'middle' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{
+                        fontSize: '0.68rem',
+                        fontWeight: 'bold',
+                        color: isTop ? 'var(--accent)' : '#94a3b8',
+                        background: isTop ? 'rgba(217, 70, 239, 0.15)' : 'rgba(255,255,255,0.03)',
+                        width: '18px',
+                        height: '18px',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: isTop ? '1px solid rgba(217, 70, 239, 0.3)' : '1px solid rgba(255,255,255,0.05)'
+                      }}>
+                        #{index + 1}
+                      </span>
+                      <div>
+                        <strong style={{ fontSize: '0.74rem', color: isSelected ? 'white' : '#cbd5e1', display: 'block' }}>
+                          {strategy.name}
+                        </strong>
+                        <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block' }}>
+                          {strategy.description.substring(0, 32)}...
+                        </span>
+                      </div>
+                    </div>
+                  </td>
 
-          // Win rate color
-          let wrColor = 'var(--text-muted)';
-          if (strategy.winRate >= 65) wrColor = 'var(--success)';
-          else if (strategy.winRate >= 50) wrColor = 'var(--warning)';
-          else if (strategy.winRate > 0) wrColor = 'var(--danger)';
-
-          return (
-            <div
-              key={strategy.id}
-              onClick={() => !autoPilot && onSelectStrategy(strategy.id)}
-              className={`glass-panel ${!autoPilot ? 'glass-panel-interactive' : ''}`}
-              style={{
-                padding: '1rem',
-                border: isSelected && !autoPilot ? '1px solid var(--primary)' : '1px solid var(--border-color)',
-                background: isSelected && !autoPilot ? 'rgba(139, 92, 246, 0.08)' : '',
-                opacity: autoPilot && !isBest ? 0.75 : 1,
-                position: 'relative',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                gap: '0.75rem'
-              }}
-            >
-              {/* Top Row: Info & Recommendation Badge */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <h3 style={{ fontSize: '0.95rem', fontWeight: '700', color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                    {strategy.name}
-                  </h3>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    {strategy.description.substring(0, 75)}...
-                  </p>
-                </div>
-
-                {isBest && (
-                  <span style={{ fontSize: '0.65rem', background: 'var(--success-glow)', color: 'var(--success)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '2px', whiteSpace: 'nowrap' }}>
-                    <ShieldCheck size={10} /> RECOMENDADA
-                  </span>
-                )}
-              </div>
-
-              {/* Middle Row: Win Rate & Trades details */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', margin: '0.25rem 0' }}>
-                {/* Circular Gauge */}
-                <div style={{ position: 'relative', width: '56px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="56" height="56" style={{ transform: 'rotate(-90deg)' }}>
-                    {/* Background Circle */}
-                    <circle cx="28" cy="28" r={radius} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="4" />
-                    {/* Progress Circle */}
-                    <circle
-                      cx="28"
-                      cy="28"
-                      r={radius}
-                      fill="transparent"
-                      stroke={wrColor}
-                      strokeWidth="4"
-                      strokeDasharray={circumference}
-                      strokeDashoffset={strokeDashoffset}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: '700', fontFamily: 'var(--font-mono)' }}>
-                      {strategy.winRate.toFixed(0)}%
+                  {/* Win rate probability */}
+                  <td style={{ padding: '8px 4px', textAlign: 'right', verticalAlign: 'middle' }}>
+                    <span style={{
+                      fontSize: '0.78rem',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 'bold',
+                      color: strategy.winRate >= 65 ? '#22c55e' : (strategy.winRate >= 50 ? 'var(--warning)' : '#ef4444')
+                    }}>
+                      {strategy.winRate.toFixed(1)}%
                     </span>
-                  </div>
-                </div>
+                  </td>
 
-                {/* Statistics Detail */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem 0.75rem', flex: 1 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>OPERAÇÕES</span>
-                    <strong style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{strategy.totalTrades}</strong>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>ASSERTIVID.</span>
-                    <strong style={{ fontSize: '0.8rem', color: wrColor, fontFamily: 'var(--font-mono)' }}>
+                  {/* History W - L */}
+                  <td style={{ padding: '8px 4px', textAlign: 'center', verticalAlign: 'middle' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontFamily: 'var(--font-mono)' }}>
                       {strategy.wins}W - {strategy.losses}L
-                    </strong>
-                  </div>
-                </div>
-              </div>
+                    </span>
+                  </td>
 
-              {/* Bottom Row: Active Signal Alerts */}
-              {hasSignal ? (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.4rem 0.6rem',
-                  borderRadius: '6px',
-                  background: signal.direction === 'CALL' ? 'var(--success-glow)' : 'var(--danger-glow)',
-                  border: `1px solid ${signal.direction === 'CALL' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
-                }}>
-                  <BellRing size={13} className={signal.direction === 'CALL' ? 'pulse-dot-green' : 'pulse-dot-red'} style={{ color: signal.direction === 'CALL' ? 'var(--success)' : 'var(--danger)' }} />
-                  <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: signal.direction === 'CALL' ? 'var(--success)' : 'var(--danger)' }}>
-                    SINAL: {signal.direction === 'CALL' ? 'COMPRA (CALL)' : 'VENDA (PUT)'}
-                  </span>
-                </div>
-              ) : (
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem', height: '24px' }}>
-                  <span>Aguardando sinal...</span>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                  {/* Status signal */}
+                  <td style={{ padding: '8px 4px', textAlign: 'right', verticalAlign: 'middle' }}>
+                    {getStatusBadge(strategy.id, signal)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

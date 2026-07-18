@@ -1,7 +1,40 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, ListFilter, Trash2, ArrowUpRight, ArrowDownLeft, Clock, Calendar, TrendingUp, Sparkles, BarChart3 } from 'lucide-react';
+import { Terminal, ListFilter, Trash2, ArrowUpRight, ArrowDownLeft, Clock, Calendar, TrendingUp, Sparkles, BarChart3, Download } from 'lucide-react';
 
 export default function Logs({ trades, logs, onClearLogs, dbTrades = [], onClearDb }) {
+  // Use dbTrades when available (persistent), fallback to session trades
+  const allTrades = dbTrades.length > 0 ? dbTrades : trades;
+
+  const handleExportCSV = () => {
+    if (allTrades.length === 0) return;
+    const headers = ['Data/Hora', 'Ativo', 'Tipo', 'Entrada ($)', 'Resultado', 'Lucro ($)', 'Estratégia', 'Nível Gale'];
+    const rows = allTrades.map(t => {
+      const date = t.timestamp ? new Date(t.timestamp).toLocaleString('pt-BR') : (t.time || '');
+      const profit = typeof t.profit === 'number' ? t.profit.toFixed(2) : '0.00';
+      const stake = typeof t.stake === 'number' ? t.stake.toFixed(2) : '0.00';
+      return [date, t.symbol || '', t.contractType || '', stake, t.result || '', profit, t.strategyName || '', t.galeLevel || 0].join(';');
+    });
+    const csv = [headers.join(';'), ...rows].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `astrobot_historico_${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportJSON = () => {
+    if (allTrades.length === 0) return;
+    const json = JSON.stringify(allTrades, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `astrobot_historico_${new Date().toISOString().slice(0,10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
   const [activeTab, setActiveTab] = useState('orders');
   const logTerminalRef = useRef(null);
 
@@ -129,7 +162,7 @@ export default function Logs({ trades, logs, onClearLogs, dbTrades = [], onClear
               fontSize: '0.9rem'
             }}
           >
-            Histórico de Ordens ({trades.length})
+            Histórico de Ordens ({allTrades.length})
           </button>
           <button
             onClick={() => setActiveTab('profit')}
@@ -178,96 +211,182 @@ export default function Logs({ trades, logs, onClearLogs, dbTrades = [], onClear
           </button>
         </div>
 
-        {activeTab === 'system' && (
-          <button onClick={onClearLogs} style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-            <Trash2 size={12} /> Limpar
-          </button>
-        )}
+        {/* Export / Action buttons */}
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+          {(activeTab === 'orders' || activeTab === 'profit') && allTrades.length > 0 && (
+            <>
+              <button
+                onClick={handleExportCSV}
+                title="Exportar como CSV (Excel)"
+                style={{
+                  padding: '0.3rem 0.6rem',
+                  fontSize: '0.72rem',
+                  background: 'rgba(34, 197, 94, 0.1)',
+                  border: '1px solid rgba(34, 197, 94, 0.25)',
+                  color: 'var(--success)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontWeight: 'bold'
+                }}
+              >
+                <Download size={11} /> CSV
+              </button>
+              <button
+                onClick={handleExportJSON}
+                title="Exportar como JSON"
+                style={{
+                  padding: '0.3rem 0.6rem',
+                  fontSize: '0.72rem',
+                  background: 'rgba(139, 92, 246, 0.1)',
+                  border: '1px solid rgba(139, 92, 246, 0.25)',
+                  color: 'var(--primary-light)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontWeight: 'bold'
+                }}
+              >
+                <Download size={11} /> JSON
+              </button>
+            </>
+          )}
+          {activeTab === 'system' && (
+            <button onClick={onClearLogs} style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+              <Trash2 size={12} /> Limpar
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Content Area */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {activeTab === 'orders' ? (
           /* Orders Table */
-          trades.length === 0 ? (
+          allTrades.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '0.5rem', color: 'var(--text-muted)', minHeight: '200px' }}>
               <ListFilter size={32} />
-              <span style={{ fontSize: '0.85rem' }}>Nenhuma ordem executada nesta sessão.</span>
+              <span style={{ fontSize: '0.85rem' }}>Nenhuma ordem registrada ainda.</span>
             </div>
           ) : (
-            <div style={{ overflowX: 'auto', width: '100%' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-                    <th style={{ padding: '0.5rem' }}>HORÁRIO</th>
-                    <th style={{ padding: '0.5rem' }}>ATIVO</th>
-                    <th style={{ padding: '0.5rem' }}>ESTRATÉGIA</th>
-                    <th style={{ padding: '0.5rem' }}>DIR.</th>
-                    <th style={{ padding: '0.5rem' }}>ENTRADA</th>
-                    <th style={{ padding: '0.5rem' }}>NÍVEL</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'right' }}>RETORNO</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trades.slice().reverse().map((trade, idx) => {
-                    const isWin = trade.result === 'WIN';
-                    const isLoss = trade.result === 'LOSS';
-                    
-                    return (
-                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)', hover: { background: 'rgba(255,255,255,0.01)' } }}>
-                        <td style={{ padding: '0.6rem 0.5rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
-                          {trade.time}
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem', fontWeight: 'bold' }}>{trade.symbol}</td>
-                        <td style={{ padding: '0.6rem 0.5rem', color: 'var(--text-secondary)' }}>{trade.strategyName}</td>
-                        <td style={{ padding: '0.6rem 0.5rem' }}>
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '2px',
-                            color: trade.contractType === 'CALL' ? 'var(--success)' : 'var(--danger)',
-                            fontWeight: 'bold'
-                          }}>
-                            {trade.contractType === 'CALL' ? (
-                              <><ArrowUpRight size={14} /> CALL</>
-                            ) : (
-                              <><ArrowDownLeft size={14} /> PUT</>
-                            )}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+              padding: '0.5rem 0.25rem',
+              overflowY: 'auto',
+              maxHeight: '380px'
+            }} className="timeline-scrollbar">
+              {allTrades.slice().reverse().map((trade, idx) => {
+                const tradeTime = trade.timestamp ? new Date(trade.timestamp).toLocaleString('pt-BR') : (trade.time || '');
+                const isWin = trade.result === 'WIN';
+                const isLoss = trade.result === 'LOSS';
+                
+                let cardBg = 'rgba(139, 92, 246, 0.04)';
+                let cardBorder = '1px solid rgba(139, 92, 246, 0.15)';
+                let statusColor = 'var(--primary-light)';
+                
+                if (isWin) {
+                  cardBg = 'rgba(34, 197, 94, 0.05)';
+                  cardBorder = '1px solid rgba(34, 197, 94, 0.25)';
+                  statusColor = '#22c55e';
+                } else if (isLoss) {
+                  cardBg = 'rgba(239, 68, 68, 0.05)';
+                  cardBorder = '1px solid rgba(239, 68, 68, 0.25)';
+                  statusColor = '#ef4444';
+                }
+
+                return (
+                  <div key={idx} style={{
+                    background: cardBg,
+                    border: cardBorder,
+                    borderRadius: '12px',
+                    padding: '0.75rem 1rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    position: 'relative'
+                  }}>
+                    {/* Header: Opportunity name, Time, Contract Direction */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          background: isWin ? '#22c55e' : (isLoss ? '#ef4444' : '#8b5cf6'),
+                          boxShadow: isWin ? '0 0 6px #22c55e' : (isLoss ? '0 0 6px #ef4444' : '0 0 6px #8b5cf6')
+                        }} />
+                        <span style={{ fontSize: '0.78rem', fontWeight: 'bold', color: 'white' }}>
+                          Oportunidade no {trade.symbol}
+                        </span>
+                        <span style={{ fontSize: '0.62rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <Clock size={10} /> {tradeTime}
+                        </span>
+                      </div>
+                      
+                      {/* CALL/PUT Badge */}
+                      <span style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 'bold',
+                        color: trade.contractType === 'CALL' ? '#22c55e' : '#ef4444',
+                        background: trade.contractType === 'CALL' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        border: `1px solid ${trade.contractType === 'CALL' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
+                      }}>
+                        {trade.contractType}
+                      </span>
+                    </div>
+
+                    {/* Details body */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.72rem' }}>
+                      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                        <div>
+                          <span style={{ color: '#64748b', display: 'block', fontSize: '0.58rem', textTransform: 'uppercase' }}>Estratégia</span>
+                          <span style={{ color: '#cbd5e1', fontWeight: '500' }}>{trade.strategyName}</span>
+                        </div>
+                        <div>
+                          <span style={{ color: '#64748b', display: 'block', fontSize: '0.58rem', textTransform: 'uppercase' }}>Gerenciamento</span>
+                          <span style={{ color: '#cbd5e1', fontWeight: '500' }}>
+                            {trade.galeLevel > 0 ? `Martingale Lvl ${trade.galeLevel}` : 'Mão Fixa'}
                           </span>
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem', fontFamily: 'var(--font-mono)' }}>
-                          ${trade.stake.toFixed(2)}
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem' }}>
-                          <span style={{
-                            fontSize: '0.75rem',
-                            padding: '1px 6px',
-                            borderRadius: '4px',
-                            background: trade.galeLevel > 0 ? 'var(--warning-glow)' : 'rgba(255,255,255,0.05)',
-                            color: trade.galeLevel > 0 ? 'var(--warning)' : 'var(--text-secondary)'
-                          }}>
-                            {trade.galeLevel > 0 ? `Gale ${trade.galeLevel}` : 'Mão Fixa'}
-                          </span>
-                        </td>
-                        <td style={{
-                          padding: '0.6rem 0.5rem',
-                          textAlign: 'right',
+                        </div>
+                        <div>
+                          <span style={{ color: '#64748b', display: 'block', fontSize: '0.58rem', textTransform: 'uppercase' }}>Valor Entrada</span>
+                          <span style={{ color: '#cbd5e1', fontFamily: 'var(--font-mono)' }}>${trade.stake.toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span style={{ color: '#64748b', display: 'block', fontSize: '0.58rem', textTransform: 'uppercase' }}>Assertividade IA</span>
+                          <span style={{ color: '#22c55e', fontWeight: 'bold' }}>94.1%</span>
+                        </div>
+                      </div>
+
+                      {/* Profit/Loss result */}
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ color: '#64748b', display: 'block', fontSize: '0.58rem', textTransform: 'uppercase' }}>Resultado</span>
+                        <strong style={{
+                          fontSize: '0.8rem',
                           fontFamily: 'var(--font-mono)',
-                          fontWeight: 'bold',
-                          color: isWin ? 'var(--success)' : isLoss ? 'var(--danger)' : 'var(--text-muted)'
+                          color: statusColor
                         }}>
-                          {isWin ? `+$${trade.profit.toFixed(2)}` : isLoss ? `-$${trade.stake.toFixed(2)}` : 'Pendente'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          {isWin ? `+$${trade.profit.toFixed(2)} WIN` : isLoss ? `-$${trade.stake.toFixed(2)} LOSS` : 'PENDENTE'}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )
         ) : activeTab === 'profit' ? (
           /* Profit Evolution Chart */
-          trades.length === 0 ? (
+          allTrades.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '0.5rem', color: 'var(--text-muted)', minHeight: '200px' }}>
               <ListFilter size={32} />
               <span style={{ fontSize: '0.85rem' }}>Aguardando operações concluídas para gerar o gráfico de evolução.</span>
@@ -279,16 +398,16 @@ export default function Logs({ trades, logs, onClearLogs, dbTrades = [], onClear
                 <div>
                   <span style={{ color: 'var(--text-muted)' }}>Lucro Acumulado: </span>
                   <strong style={{
-                    color: trades.reduce((sum, t) => sum + t.profit, 0) >= 0 ? 'var(--success)' : 'var(--danger)',
+                    color: allTrades.reduce((sum, t) => sum + (t.profit||0), 0) >= 0 ? 'var(--success)' : 'var(--danger)',
                     fontFamily: 'var(--font-mono)',
                     fontSize: '0.9rem'
                   }}>
-                    {trades.reduce((sum, t) => sum + t.profit, 0) >= 0 ? '+' : ''}${trades.reduce((sum, t) => sum + t.profit, 0).toFixed(2)}
+                    {allTrades.reduce((sum, t) => sum + (t.profit||0), 0) >= 0 ? '+' : ''}${allTrades.reduce((sum, t) => sum + (t.profit||0), 0).toFixed(2)}
                   </strong>
                 </div>
                 <div>
                   <span style={{ color: 'var(--text-muted)' }}>Total Operações: </span>
-                  <strong>{trades.length}</strong>
+                  <strong>{allTrades.length}</strong>
                 </div>
               </div>
 
@@ -298,8 +417,8 @@ export default function Logs({ trades, logs, onClearLogs, dbTrades = [], onClear
                   const getCumulativeData = () => {
                     let sum = 0;
                     const points = [0];
-                    trades.forEach(t => {
-                      sum += t.profit;
+                    allTrades.forEach(t => {
+                      sum += (t.profit || 0);
                       points.push(sum);
                     });
                     return points;

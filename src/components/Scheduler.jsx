@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Plus, Trash2, Play, AlertCircle, CheckCircle, RefreshCw, Calendar, Power } from 'lucide-react';
+import { 
+  Clock, Plus, Trash2, Play, AlertCircle, CheckCircle, RefreshCw, Calendar, Power, 
+  X, ChevronRight, ChevronLeft, User, Cpu, ShieldCheck, Layers, TrendingUp, 
+  TrendingDown, Info, Sliders, Eye, Settings, Activity, FileText, Check, Search, Award 
+} from 'lucide-react';
 
 export default function Scheduler({
   schedulerState,
@@ -9,19 +13,56 @@ export default function Scheduler({
   activeCycleId,
   onTriggerCycleManually,
   schedulerLogs,
-  onClearSchedulerLogs
+  onClearSchedulerLogs,
+  onStopBot
 }) {
-  const [newCycle, setNewCycle] = useState({
+  const defaultCycle = {
     name: '',
     startTime: '09:00',
-    takeProfit: 50.0,
-    stopLoss: 50.0,
-    stakeValue: 1.0,
+    days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
+    timezone: 'GMT-3',
     symbol: 'R_100',
-    selectedStrategy: 'autopilot'
-  });
+    granularity: '60', // 1m
+    selectedStrategy: 'autopilot',
+    stakeValue: 1.0,
+    takeProfit: 10.0,
+    stopLoss: 20.0,
+    martingaleLevels: 2,
+    martingaleMultiplier: 2.0,
+    enableMasterCandleSecondary: false,
+    disableSlowStrategies: false,
+    minProbability: 90,
+    icon: '🤖',
+    color: '#8b5cf6' // Purple
+  };
+
+  // Sanitize cycles array on the fly to support old items from localStorage
+  const sanitizedCycles = (cycles || []).map(c => ({
+    ...defaultCycle,
+    ...c,
+    days: c.days || defaultCycle.days,
+    icon: c.icon || defaultCycle.icon,
+    color: c.color || defaultCycle.color,
+    minProbability: c.minProbability || defaultCycle.minProbability,
+    martingaleLevels: c.martingaleLevels ?? defaultCycle.martingaleLevels,
+    martingaleMultiplier: c.martingaleMultiplier ?? defaultCycle.martingaleMultiplier,
+    timezone: c.timezone || defaultCycle.timezone
+  }));
 
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
+  const [selectedCycleId, setSelectedCycleId] = useState(null);
+  
+  // Wizard (Modal) States
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [wizardData, setWizardData] = useState(defaultCycle);
+
+  // Filter States for Logs
+  const [logSearch, setLogSearch] = useState('');
+  const [logFilter, setLogFilter] = useState('all'); // 'all' | 'today' | 'yesterday'
+
+  // Countdown timer for next scheduled cycle
+  const [nextCycleCountdown, setNextCycleCountdown] = useState('--:--:--');
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -74,32 +115,109 @@ export default function Scheduler({
     { id: 'bos_choch', name: 'BOS + ChoCH' }
   ];
 
-  const handleAddCycle = (e) => {
-    e.preventDefault();
-    if (!newCycle.name.trim()) return;
+  const presetIcons = ['🌅', '🌇', '🌙', '🤖', '🚀', '⚡', '🎯', '🛡️'];
+  const presetColors = ['#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899'];
 
-    const cycleToAdd = {
-      ...newCycle,
-      id: `cycle-${Date.now()}`,
-      active: true,
-      status: 'Aguardando', // 'Aguardando' | 'Executando' | 'Meta Batida' | 'Stop Atingido' | 'Interrompido'
-      lastRun: null
-    };
+  // Select first cycle by default if selectedCycleId is null
+  useEffect(() => {
+    if (sanitizedCycles.length > 0 && !selectedCycleId) {
+      setSelectedCycleId(sanitizedCycles[0].id);
+    }
+  }, [cycles.length, selectedCycleId]);
 
-    onSaveCycles([...cycles, cycleToAdd]);
-    setNewCycle({
-      name: '',
-      startTime: '09:00',
-      takeProfit: 50.0,
-      stopLoss: 50.0,
-      stakeValue: 1.0,
-      symbol: 'R_100',
-      selectedStrategy: 'autopilot'
+  // Next cycle countdown logic
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const next = getNextCycle();
+      if (!next) {
+        setNextCycleCountdown('--:--:--');
+        return;
+      }
+      const now = new Date();
+      const [h, m] = next.startTime.split(':').map(Number);
+      const target = new Date();
+      target.setHours(h, m, 0, 0);
+      if (target < now) target.setDate(target.getDate() + 1);
+
+      const diffMs = target - now;
+      const diffSecs = Math.floor(diffMs / 1000);
+      
+      const hrs = Math.floor(diffSecs / 3600);
+      const mins = Math.floor((diffSecs % 3600) / 60);
+      const secs = diffSecs % 60;
+
+      setNextCycleCountdown(
+        `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+      );
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [cycles]);
+
+  const getNextCycle = () => {
+    if (!sanitizedCycles || sanitizedCycles.length === 0) return null;
+    const activeCycles = sanitizedCycles.filter(c => c.active && c.status === 'Aguardando');
+    if (activeCycles.length === 0) return null;
+
+    const now = new Date();
+    const sorted = [...activeCycles].sort((a, b) => {
+      const [aH, aM] = a.startTime.split(':').map(Number);
+      const [bH, bM] = b.startTime.split(':').map(Number);
+      
+      const aDate = new Date();
+      aDate.setHours(aH, aM, 0, 0);
+      if (aDate < now) aDate.setDate(aDate.getDate() + 1);
+
+      const bDate = new Date();
+      bDate.setHours(bH, bM, 0, 0);
+      if (bDate < now) bDate.setDate(bDate.getDate() + 1);
+
+      return aDate - bDate;
     });
+
+    return sorted[0];
+  };
+
+  const getCleanSymbolName = (symbolCode) => {
+    const asset = assets.find(a => a.symbol === symbolCode);
+    return asset ? asset.name.replace('Volatility ', '').replace(' Index', '') : symbolCode;
+  };
+
+  const getCleanStrategyName = (strategyId) => {
+    const strat = strategies.find(s => s.id === strategyId);
+    return strat ? strat.name : strategyId;
+  };
+
+  // Actions
+  const handleOpenNewWizard = () => {
+    setWizardData({ ...defaultCycle });
+    setWizardStep(1);
+    setIsWizardOpen(true);
+  };
+
+  const handleEditClick = (cycle) => {
+    setWizardData({ ...cycle });
+    setWizardStep(1);
+    setIsWizardOpen(true);
+  };
+
+  const handleDuplicateClick = (cycle) => {
+    const duplicated = {
+      ...cycle,
+      id: `cycle-${Date.now()}`,
+      name: `${cycle.name} (Cópia)`,
+      active: true,
+      status: 'Aguardando'
+    };
+    onSaveCycles([...cycles, duplicated]);
   };
 
   const handleDeleteCycle = (id) => {
     onSaveCycles(cycles.filter(c => c.id !== id));
+    if (selectedCycleId === id) {
+      const remaining = cycles.filter(c => c.id !== id);
+      setSelectedCycleId(remaining.length > 0 ? remaining[0].id : null);
+    }
   };
 
   const handleToggleCycleActive = (id, currentVal) => {
@@ -114,370 +232,1468 @@ export default function Scheduler({
     onSaveCycles(cycles.map(c => ({ ...c, status: 'Aguardando' })));
   };
 
-  const getCleanSymbolName = (symbolCode) => {
-    const asset = assets.find(a => a.symbol === symbolCode);
-    return asset ? asset.name.replace('Volatility ', '').replace(' Index', '') : symbolCode;
+  const handleSaveWizard = (e) => {
+    if (e) e.preventDefault();
+    if (!wizardData.name.trim()) return;
+
+    if (wizardData.id) {
+      // Edit
+      onSaveCycles(cycles.map(c => c.id === wizardData.id ? wizardData : c));
+    } else {
+      // Add
+      const newCycleToAdd = {
+        ...wizardData,
+        id: `cycle-${Date.now()}`,
+        active: true,
+        status: 'Aguardando',
+        lastRun: null
+      };
+      onSaveCycles([...cycles, newCycleToAdd]);
+      setSelectedCycleId(newCycleToAdd.id);
+    }
+
+    setIsWizardOpen(false);
   };
 
-  const getCleanStrategyName = (strategyId) => {
-    const strat = strategies.find(s => s.id === strategyId);
-    return strat ? strat.name : strategyId;
+  const nextStep = () => setWizardStep(prev => Math.min(prev + 1, 5));
+  const prevStep = () => setWizardStep(prev => Math.max(prev - 1, 1));
+
+  // Filter logs logic
+  const filteredLogs = schedulerLogs.filter(log => {
+    const matchesSearch = log.message.toLowerCase().includes(logSearch.toLowerCase());
+    
+    // Filter by date
+    if (logFilter === 'today') {
+      const todayStr = new Date().toLocaleDateString();
+      // Since logs just show HH:MM:SS, let's assume they are today if added this session
+      return matchesSearch;
+    }
+    return matchesSearch;
+  });
+
+  const selectedCycle = sanitizedCycles.find(c => c.id === selectedCycleId);
+  const nextCycle = getNextCycle();
+
+  // Status mapping
+  const getStatusDisplay = (status) => {
+    switch (status) {
+      case 'Aguardando':
+        return { text: 'Aguardando', color: '#94a3b8', dotClass: 'pulse-dot-gray' };
+      case 'Executando':
+      case 'Monitorando':
+        return { text: 'Monitorando', color: '#10b981', dotClass: 'pulse-dot-green' };
+      case 'Scanner':
+        return { text: 'Scanner', color: '#a78bfa', dotClass: 'pulse-dot-purple' };
+      case 'Procurando':
+      case 'Procurando Entrada':
+        return { text: 'Procurando Entrada', color: '#f59e0b', dotClass: 'pulse-dot-yellow' };
+      case 'Executando Ordem':
+        return { text: 'Executando Ordem', color: '#3b82f6', dotClass: 'pulse-dot-blue' };
+      case 'Meta Batida':
+        return { text: 'Meta Batida', color: '#fbbf24', dotClass: '' };
+      case 'Stop Atingido':
+        return { text: 'Stop Atingido', color: '#ef4444', dotClass: '' };
+      case 'Interrompido':
+      case 'Finalizado':
+        return { text: 'Finalizado', color: '#64748b', dotClass: '' };
+      default:
+        return { text: status, color: '#94a3b8', dotClass: '' };
+    }
+  };
+
+  // Pipeline flow highlights
+  const getPipelineActiveIndex = (status) => {
+    if (status === 'Meta Batida' || status === 'Stop Atingido' || status === 'Finalizado') return 6;
+    if (status === 'Executando Ordem') return 4;
+    if (status === 'Procurando Entrada' || status === 'Procurando') return 3;
+    if (status === 'Scanner') return 2;
+    if (status === 'Monitorando' || status === 'Executando') return 1;
+    return 0; // Aguardando
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '1.25rem', height: '100%', overflow: 'hidden' }}>
-      
-      {/* Coluna Esquerda: Adicionar Ciclo e Status Global */}
-      <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
-        
-        {/* Painel de Controle Global */}
-        <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Power size={18} style={{ color: schedulerState ? 'var(--success)' : 'var(--text-muted)' }} />
-              <h3 style={{ fontSize: '0.95rem', fontWeight: '800', letterSpacing: '0.5px' }}>AGENDADOR AUTOMÁTICO</h3>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '1.25rem',
+      height: '100%',
+      color: 'var(--text-primary)'
+    }}>
+
+      {/* TOPO: CENTRAL DE AUTOMAÇÃO */}
+      <div className="glass-panel" style={{
+        padding: '1.25rem 1.75rem',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        background: 'rgba(15, 11, 28, 0.75)',
+        border: '1px solid rgba(139, 92, 246, 0.2)',
+        borderRadius: '16px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Cpu size={20} style={{ color: 'var(--primary-light)' }} className="pulse-primary" />
+            <h2 style={{ fontSize: '1.3rem', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
+              Central de Automação de Missões
+            </h2>
+          </div>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+            Hora Local: <strong style={{ fontFamily: 'var(--font-mono)' }}>{currentTime}</strong> | Missões Ativas: <strong>{sanitizedCycles.filter(c => c.active).length}</strong>
+          </span>
+        </div>
+
+        {/* Top Quick Stats Grid */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+          {/* Next Cycle Widget */}
+          {nextCycle && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', borderRight: '1px solid rgba(255,255,255,0.06)', paddingRight: '1.5rem' }}>
+              <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Próxima Missão</span>
+              <strong style={{ fontSize: '0.88rem', color: 'white', display: 'flex', alignItems: 'center', gap: '5px', marginTop: '1px' }}>
+                {nextCycle.icon} {nextCycle.name} <span style={{ color: 'var(--primary-light)', fontSize: '0.75rem' }}>({nextCycle.startTime})</span>
+              </strong>
+              <span style={{ fontSize: '0.7rem', color: '#10b981', fontFamily: 'var(--font-mono)', marginTop: '2px', fontWeight: 'bold' }}>
+                T-minus {nextCycleCountdown}
+              </span>
             </div>
-            <label className="switch">
+          )}
+
+          {/* Motor Status Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Motor IA</span>
+              <strong style={{ fontSize: '0.8rem', color: schedulerState ? '#10b981' : '#ef4444', marginTop: '1px' }}>
+                {schedulerState ? 'ONLINE & MONITORANDO' : 'DESACTIVADO'}
+              </strong>
+            </div>
+            <label className="switch" style={{ width: '42px', height: '22px' }}>
               <input
                 type="checkbox"
                 checked={schedulerState}
                 onChange={(e) => onToggleScheduler(e.target.checked)}
               />
-              <span className="slider"></span>
+              <span className="slider" style={{ borderRadius: '22px' }}></span>
             </label>
           </div>
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-            <span>Hora Local:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text-primary)' }}>{currentTime}</strong>
-          </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>
-            <span>Status:</span>
-            <span style={{ 
-              fontWeight: 'bold', 
-              color: schedulerState ? 'var(--success)' : 'var(--danger)',
-              fontSize: '0.75rem',
-              display: 'inline-flex',
+          {/* Add New Mission Button */}
+          <button
+            onClick={handleOpenNewWizard}
+            className="primary"
+            style={{
+              padding: '0.65rem 1.2rem',
+              borderRadius: '10px',
+              fontSize: '0.8rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
               alignItems: 'center',
-              gap: '4px'
-            }}>
-              {schedulerState ? (
-                <>
-                  <span className="pulse-dot-green" style={{ width: '6px', height: '6px', boxShadow: 'none' }} />
-                  ATIVO E MONITORANDO
-                </>
-              ) : (
-                'DESATIVADO'
-              )}
-            </span>
-          </div>
-
-          {activeCycleId && (
-            <div style={{ 
-              marginTop: '0.75rem', 
-              padding: '0.5rem 0.75rem', 
-              background: 'rgba(139, 92, 246, 0.08)', 
-              border: '1px solid rgba(139, 92, 246, 0.2)', 
-              borderRadius: '8px',
-              fontSize: '0.75rem'
-            }}>
-              <span style={{ color: 'var(--text-secondary)', display: 'block', fontSize: '0.65rem', fontWeight: 'bold' }}>CICLO EM EXECUÇÃO</span>
-              <strong style={{ color: 'var(--primary-light)' }}>
-                {cycles.find(c => c.id === activeCycleId)?.name || 'Ciclo Ativo'}
-              </strong>
-            </div>
-          )}
-        </div>
-
-        {/* Formulário Novo Ciclo */}
-        <form onSubmit={handleAddCycle} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <h4 style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--primary-light)', letterSpacing: '0.5px' }}>NOVO CICLO DIÁRIO</h4>
-          
-          <div>
-            <label style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>NOME DO CICLO</label>
-            <input
-              type="text"
-              placeholder="Ex: Manhã, Tarde, Noite..."
-              value={newCycle.name}
-              onChange={(e) => setNewCycle({ ...newCycle, name: e.target.value })}
-              style={{ fontSize: '0.8rem', padding: '0.45rem 0.6rem' }}
-              required
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-            <div>
-              <label style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>HORÁRIO INÍCIO</label>
-              <input
-                type="time"
-                value={newCycle.startTime}
-                onChange={(e) => setNewCycle({ ...newCycle, startTime: e.target.value })}
-                style={{ 
-                  fontSize: '0.8rem', 
-                  padding: '0.45rem 0.6rem',
-                  background: 'rgba(15, 23, 42, 0.6)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '8px',
-                  color: 'white',
-                  width: '100%',
-                  outline: 'none'
-                }}
-                required
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>VALOR ENTRADA ($)</label>
-              <input
-                type="number"
-                value={newCycle.stakeValue}
-                onChange={(e) => setNewCycle({ ...newCycle, stakeValue: parseFloat(e.target.value) })}
-                min="0.35"
-                step="0.01"
-                style={{ fontSize: '0.8rem', padding: '0.45rem 0.6rem' }}
-                required
-              />
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-            <div>
-              <label style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>META LUCRO ($)</label>
-              <input
-                type="number"
-                value={newCycle.takeProfit}
-                onChange={(e) => setNewCycle({ ...newCycle, takeProfit: parseFloat(e.target.value) })}
-                min="1"
-                step="1"
-                style={{ fontSize: '0.8rem', padding: '0.45rem 0.6rem' }}
-                required
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>STOP LOSS ($)</label>
-              <input
-                type="number"
-                value={newCycle.stopLoss}
-                onChange={(e) => setNewCycle({ ...newCycle, stopLoss: parseFloat(e.target.value) })}
-                min="1"
-                step="1"
-                style={{ fontSize: '0.8rem', padding: '0.45rem 0.6rem' }}
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>ATIVO DE NEGOCIAÇÃO</label>
-            <select
-              value={newCycle.symbol}
-              onChange={(e) => setNewCycle({ ...newCycle, symbol: e.target.value })}
-              style={{ fontSize: '0.8rem', padding: '0.45rem 0.6rem', height: '34px' }}
-            >
-              {assets.map(a => (
-                <option key={a.symbol} value={a.symbol}>{a.name} ({a.symbol})</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>ESTRATÉGIA</label>
-            <select
-              value={newCycle.selectedStrategy}
-              onChange={(e) => setNewCycle({ ...newCycle, selectedStrategy: e.target.value })}
-              style={{ fontSize: '0.8rem', padding: '0.45rem 0.6rem', height: '34px' }}
-            >
-              {strategies.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <button type="submit" className="primary" style={{ padding: '0.5rem', fontSize: '0.82rem', fontWeight: 'bold', marginTop: '0.25rem', width: '100%' }}>
-            <Plus size={16} /> ADICIONAR CICLO
+              gap: '6px'
+            }}
+          >
+            <Plus size={16} /> Nova Missão
           </button>
-        </form>
+        </div>
       </div>
 
-      {/* Coluna Direita: Lista de Ciclos e Logs do Agendador */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflow: 'hidden' }}>
-        
-        {/* Painel Central: Lista de Ciclos */}
-        <div className="glass-panel" style={{ padding: '1.25rem', flex: 1.3, display: 'flex', flexDirection: 'column', gap: '0.75rem', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-            <h3 style={{ fontSize: '0.9rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Calendar size={18} style={{ color: 'var(--primary-light)' }} />
-              CICLOS DE OPERAÇÃO PROGRAMADOS
-            </h3>
-            <button 
-              onClick={handleResetAllCycles} 
-              style={{ padding: '3px 8px', fontSize: '0.65rem', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)' }}
-              title="Resetar todos os ciclos para Aguardando"
-            >
-              Resetar Status
-            </button>
-          </div>
+      {/* BOTTOM LAYOUT GRID */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '290px 1fr 290px',
+        gap: '1.25rem',
+        flex: 1,
+        overflow: 'hidden',
+        minHeight: '620px'
+      }}>
 
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.6rem', paddingRight: '2px' }}>
-            {cycles.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '0.5rem', color: 'var(--text-muted)' }}>
-                <Clock size={32} style={{ strokeWidth: 1.5 }} />
-                <span style={{ fontSize: '0.78rem' }}>Nenhum ciclo de operação agendado.</span>
-                <span style={{ fontSize: '0.68rem', textAlign: 'center', maxWidth: '280px' }}>Adicione ciclos de manhã ou noite usando o formulário ao lado.</span>
+        {/* LATERAL ESQUERDA: TIMELINE DOS CICLOS */}
+        <div className="glass-panel" style={{
+          padding: '1.25rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem',
+          background: 'rgba(15, 11, 28, 0.4)',
+          border: '1px solid rgba(255,255,255,0.03)',
+          borderRadius: '16px',
+          overflowY: 'auto'
+        }}>
+          <h3 style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0, paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            Linha do Tempo
+          </h3>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1 }}>
+            {sanitizedCycles.length === 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '0.5rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1rem' }}>
+                <Clock size={28} />
+                <span style={{ fontSize: '0.72rem' }}>Nenhuma missão programada.</span>
               </div>
             ) : (
-              cycles.map((cycle) => {
-                const isCycleRunning = activeCycleId === cycle.id;
-                
-                let statusColor = 'var(--text-muted)';
-                if (cycle.status === 'Executando') statusColor = 'var(--primary-light)';
-                if (cycle.status === 'Meta Batida') statusColor = 'var(--success)';
-                if (cycle.status === 'Stop Atingido') statusColor = 'var(--danger)';
-                if (cycle.status === 'Interrompido') statusColor = 'var(--warning)';
+              sanitizedCycles.map((c) => {
+                const isSelected = c.id === selectedCycleId;
+                const statusInfo = getStatusDisplay(c.status);
+                const isRunning = activeCycleId === c.id;
 
                 return (
-                  <div 
-                    key={cycle.id} 
-                    style={{ 
-                      padding: '0.75rem 1rem', 
-                      background: isCycleRunning ? 'rgba(139, 92, 246, 0.04)' : 'rgba(255,255,255,0.01)',
-                      border: isCycleRunning ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid var(--border-color)',
-                      borderRadius: '10px',
+                  <div
+                    key={c.id}
+                    onClick={() => setSelectedCycleId(c.id)}
+                    style={{
+                      padding: '0.85rem 1rem',
+                      background: isSelected ? 'rgba(139, 92, 246, 0.08)' : 'rgba(255,255,255,0.01)',
+                      borderLeft: `3px solid ${c.color || 'var(--primary-light)'}`,
+                      borderTop: isSelected ? '1px solid rgba(139, 92, 246, 0.25)' : '1px solid rgba(255,255,255,0.02)',
+                      borderRight: isSelected ? '1px solid rgba(139, 92, 246, 0.25)' : '1px solid rgba(255,255,255,0.02)',
+                      borderBottom: isSelected ? '1px solid rgba(139, 92, 246, 0.25)' : '1px solid rgba(255,255,255,0.02)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '0.75rem',
-                      transition: 'all 0.2s'
+                      flexDirection: 'column',
+                      gap: '0.4rem',
+                      transition: 'all 0.2s',
+                      boxShadow: isSelected ? '0 4px 15px rgba(139, 92, 246, 0.1)' : 'none'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                      <label className="switch" style={{ width: '34px', height: '18px' }}>
-                        <input
-                          type="checkbox"
-                          checked={cycle.active}
-                          onChange={() => handleToggleCycleActive(cycle.id, cycle.active)}
-                          disabled={isCycleRunning}
-                        />
-                        <span className="slider" style={{ borderRadius: '18px' }}></span>
-                      </label>
-                      
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <strong style={{ fontSize: '0.85rem', color: cycle.active ? 'var(--text-primary)' : 'var(--text-muted)' }}>{cycle.name}</strong>
-                          <span style={{ 
-                            fontSize: '0.68rem', 
-                            padding: '1px 5px', 
-                            borderRadius: '4px', 
-                            background: 'rgba(255,255,255,0.05)', 
-                            fontFamily: 'var(--font-mono)',
-                            color: 'var(--primary-light)',
-                            fontWeight: 'bold' 
-                          }}>
-                            {cycle.startTime}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                          Entrada: <strong>${cycle.stakeValue}</strong> | TP: <strong style={{ color: 'var(--success)' }}>${cycle.takeProfit}</strong> | SL: <strong style={{ color: 'var(--danger)' }}>${cycle.stopLoss}</strong>
-                        </div>
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '1px' }}>
-                          Ativo: {getCleanSymbolName(cycle.symbol)} | {getCleanStrategyName(cycle.selectedStrategy)}
-                        </div>
-                      </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 'bold' }}>
+                        <span>{c.icon}</span>
+                        <span style={{ color: c.active ? 'white' : 'var(--text-muted)' }}>{c.name}</span>
+                      </span>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 'bold', fontFamily: 'var(--font-mono)', color: 'var(--primary-light)' }}>
+                        {c.startTime}
+                      </span>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                      <span style={{ 
-                        fontSize: '0.7rem', 
-                        fontWeight: 'bold', 
-                        color: statusColor,
-                        background: cycle.status === 'Aguardando' ? 'transparent' : 'rgba(255,255,255,0.03)',
-                        padding: '2px 6px',
-                        borderRadius: '4px'
-                      }}>
-                        {cycle.status.toUpperCase()}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                      <span>{getCleanSymbolName(c.symbol)}</span>
+                      <span>Stake: ${c.stakeValue}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '4px' }}>
+                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {c.days.length === 7 ? 'Todos os dias' : `${c.days.length} dias`}
                       </span>
-                      
-                      <div style={{ display: 'flex', gap: '0.25rem' }}>
-                        {cycle.status !== 'Aguardando' && (
-                          <button
-                            onClick={() => handleResetCycleStatus(cycle.id)}
-                            style={{ padding: '4px', background: 'rgba(255,255,255,0.03)', borderRadius: '4px', color: 'var(--text-secondary)' }}
-                            title="Resetar Status para Aguardando"
-                          >
-                            <RefreshCw size={11} />
-                          </button>
+                      <span style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 'bold',
+                        color: statusInfo.color,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        {statusInfo.dotClass && (
+                          <span className={statusInfo.dotClass} style={{ width: '5px', height: '5px', boxShadow: 'none' }} />
                         )}
-                        <button
-                          onClick={() => onTriggerCycleManually(cycle.id)}
-                          disabled={!schedulerState || isCycleRunning}
-                          style={{ padding: '4px', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.15)', borderRadius: '4px', color: 'var(--success)' }}
-                          title="Iniciar Ciclo Manualmente Agora"
-                        >
-                          <Play size={11} fill="currentColor" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCycle(cycle.id)}
-                          disabled={isCycleRunning}
-                          style={{ padding: '4px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', borderRadius: '4px', color: 'var(--danger)' }}
-                          title="Excluir Ciclo"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
+                        {statusInfo.text}
+                      </span>
                     </div>
                   </div>
                 );
               })
             )}
           </div>
+
+          <button
+            onClick={handleResetAllCycles}
+            style={{
+              padding: '0.45rem',
+              fontSize: '0.68rem',
+              borderRadius: '6px',
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.05)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            Resetar Status dos Ciclos
+          </button>
         </div>
 
-        {/* Painel Inferior: Histórico de Ações do Agendador */}
-        <div className="glass-panel" style={{ padding: '1rem 1.25rem', flex: 0.7, display: 'flex', flexDirection: 'column', gap: '0.5rem', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', justifySelf: 'stretch', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem' }}>
-            <h4 style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--text-primary)' }}>LOGS DE AUTOMAÇÃO</h4>
-            <button 
-              onClick={onClearSchedulerLogs}
-              style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.65rem', cursor: 'pointer', padding: '2px' }}
-            >
-              Limpar Logs
-            </button>
-          </div>
+        {/* ÁREA CENTRAL: DETALHES COMPLETOS DO CICLO */}
+        <div className="glass-panel" style={{
+          padding: '1.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1.25rem',
+          background: 'rgba(15, 11, 28, 0.45)',
+          border: '1px solid rgba(255,255,255,0.04)',
+          borderRadius: '16px',
+          overflowY: 'auto'
+        }}>
+          {!selectedCycle ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '0.5rem', color: 'var(--text-muted)' }}>
+              <Sliders size={40} style={{ strokeWidth: 1.2, color: 'var(--primary-light)' }} />
+              <strong style={{ fontSize: '0.9rem' }}>Nenhum ciclo selecionado</strong>
+              <span style={{ fontSize: '0.72rem' }}>Clique em um ciclo na barra lateral esquerda para gerenciar sua missão.</span>
+            </div>
+          ) : (
+            <>
+              {/* Mission Detail Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ fontSize: '1.75rem' }}>{selectedCycle.icon}</span>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0 }}>{selectedCycle.name}</h3>
+                      <span style={{
+                        fontSize: '0.7rem',
+                        fontWeight: 'bold',
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        background: 'rgba(139,92,246,0.1)',
+                        color: 'var(--primary-light)',
+                        fontFamily: 'var(--font-mono)'
+                      }}>
+                        {selectedCycle.startTime} ({selectedCycle.timezone || 'GMT-3'})
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'block', marginTop: '2px' }}>
+                      Ativo em: {selectedCycle.days.join(', ')}
+                    </span>
+                  </div>
+                </div>
 
-          <div style={{ 
-            flex: 1, 
-            background: 'rgba(0,0,0,0.2)', 
-            border: '1px solid rgba(255,255,255,0.03)', 
-            borderRadius: '8px', 
-            padding: '0.5rem',
-            overflowY: 'auto',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.7rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.25rem'
-          }}>
-            {schedulerLogs.length === 0 ? (
-              <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', display: 'block', marginTop: '1rem' }}>Sem eventos registrados.</span>
-            ) : (
-              schedulerLogs.map((log, idx) => (
-                <div 
-                  key={idx} 
-                  style={{ 
-                    color: log.type === 'error' ? 'var(--danger)' : 
-                           log.type === 'success' ? 'var(--success)' : 
-                           log.type === 'warning' ? 'var(--warning)' : 'var(--text-secondary)',
-                    lineHeight: '1.3'
+                {/* Switch Active & Action triggers */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '0.5rem' }}>
+                    <span style={{ fontSize: '0.72rem', color: selectedCycle.active ? '#10b981' : 'var(--text-muted)' }}>
+                      {selectedCycle.active ? 'Ativo' : 'Desativado'}
+                    </span>
+                    <label className="switch" style={{ width: '36px', height: '18px' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedCycle.active}
+                        onChange={() => {
+                          if (activeCycleId === selectedCycle.id) {
+                            onStopBot();
+                          } else {
+                            handleToggleCycleActive(selectedCycle.id, selectedCycle.active);
+                          }
+                        }}
+                      />
+                      <span className="slider" style={{ borderRadius: '18px' }}></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons Toolbar */}
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {activeCycleId === selectedCycle.id ? (
+                  <button
+                    onClick={onStopBot}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      color: '#ef4444',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      boxShadow: '0 0 10px rgba(239,68,68,0.2)'
+                    }}
+                  >
+                    <Power size={12} /> Parar Execução
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onTriggerCycleManually(selectedCycle.id)}
+                    disabled={!schedulerState}
+                    style={{
+                      background: 'rgba(16, 185, 129, 0.08)',
+                      border: '1px solid rgba(16, 185, 129, 0.25)',
+                      color: '#10b981',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Play size={12} fill="currentColor" /> Executar Agora
+                  </button>
+                )}
+
+                <button
+                  onClick={() => handleEditClick(selectedCycle)}
+                  disabled={activeCycleId === selectedCycle.id}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    color: 'white',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
                   }}
                 >
-                  [{log.time}] {log.message}
+                  <Settings size={12} /> Editar
+                </button>
+
+                <button
+                  onClick={() => handleDuplicateClick(selectedCycle)}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    color: 'white',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Layers size={12} /> Duplicar
+                </button>
+
+                {selectedCycle.status !== 'Aguardando' && (
+                  <button
+                    onClick={() => handleResetCycleStatus(selectedCycle.id)}
+                    style={{
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      color: 'var(--text-secondary)',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <RefreshCw size={12} /> Resetar Status
+                  </button>
+                )}
+
+                <button
+                  onClick={() => handleDeleteCycle(selectedCycle.id)}
+                  disabled={activeCycleId === selectedCycle.id}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    color: '#ef4444',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    marginLeft: 'auto'
+                  }}
+                >
+                  <Trash2 size={12} /> Excluir
+                </button>
+              </div>
+
+              {/* Grid of detail Cards */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '1rem',
+                marginTop: '0.5rem'
+              }}>
+                {/* Card 1: Mercado & Estratégia */}
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                  borderRadius: '12px',
+                  padding: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem'
+                }}>
+                  <strong style={{ fontSize: '0.75rem', color: 'var(--primary-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Configurações de Mercado
+                  </strong>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Ativo:</span>
+                      <strong style={{ color: 'white' }}>{getCleanSymbolName(selectedCycle.symbol)} ({selectedCycle.symbol})</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Timeframe:</span>
+                      <strong style={{ color: 'white' }}>{selectedCycle.granularity === '60' ? '1 Minuto (M1)' : selectedCycle.granularity === '300' ? '5 Minutos (M5)' : '15 Minutos (M15)'}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Estratégia:</span>
+                      <strong style={{ color: 'white' }}>{getCleanStrategyName(selectedCycle.selectedStrategy)}</strong>
+                    </div>
+                  </div>
                 </div>
-              ))
-            )}
+
+                {/* Card 2: Gestão de Risco */}
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                  borderRadius: '12px',
+                  padding: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem'
+                }}>
+                  <strong style={{ fontSize: '0.75rem', color: 'var(--primary-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Gestão de Risco
+                  </strong>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Valor Entrada:</span>
+                      <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>${selectedCycle.stakeValue.toFixed(2)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Meta de Lucro:</span>
+                      <strong style={{ color: '#10b981', fontFamily: 'var(--font-mono)' }}>${selectedCycle.takeProfit.toFixed(2)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Stop Loss:</span>
+                      <strong style={{ color: '#ef4444', fontFamily: 'var(--font-mono)' }}>${selectedCycle.stopLoss.toFixed(2)}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 3: Parâmetros */}
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                  borderRadius: '12px',
+                  padding: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem'
+                }}>
+                  <strong style={{ fontSize: '0.75rem', color: 'var(--primary-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Scanner & Probabilidade
+                  </strong>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Scanner Inteligente:</span>
+                      <strong style={{ color: '#10b981' }}>ATIVO</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Probabilidade Mínima:</span>
+                      <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>
+                        {selectedCycle.minProbability || 90}%
+                      </strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Filtro de Tendência:</span>
+                      <strong style={{ color: 'white' }}>Médias Móveis</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 4: Gale & Autopiloto */}
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                  borderRadius: '12px',
+                  padding: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem'
+                }}>
+                  <strong style={{ fontSize: '0.75rem', color: 'var(--primary-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Martingale & Filtros
+                  </strong>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Níveis de Martingale:</span>
+                      <strong style={{ color: 'white' }}>{selectedCycle.martingaleLevels || 2} Níveis</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Multiplicador Gale:</span>
+                      <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>{selectedCycle.martingaleMultiplier || 2.0}x</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Vela Mestra Secundária:</span>
+                      <strong style={{ color: selectedCycle.enableMasterCandleSecondary ? 'var(--primary-light)' : 'var(--text-muted)' }}>
+                        {selectedCycle.enableMasterCandleSecondary ? 'HABILITADA' : 'DESATIVADA'}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* FLUXO VISUAL PIPELINE */}
+              <div style={{
+                background: 'rgba(15, 11, 28, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.02)',
+                borderRadius: '14px',
+                padding: '1.25rem',
+                marginTop: '0.5rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+              }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                  Pipeline Visual da Automação (Missão)
+                </span>
+
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '4px',
+                  marginTop: '0.5rem',
+                  padding: '0.5rem 0',
+                  position: 'relative',
+                  overflowX: 'auto'
+                }}>
+                  {(() => {
+                    const activeStep = getPipelineActiveIndex(selectedCycle.status);
+                    
+                    const pipelineSteps = [
+                      { label: 'Agendado', info: selectedCycle.startTime },
+                      { label: 'Scanner IA', info: 'Buscando' },
+                      { label: 'Estratégia', info: getCleanStrategyName(selectedCycle.selectedStrategy).split(' ')[0] },
+                      { label: 'Filtro Prob', info: `>${selectedCycle.minProbability || 90}%` },
+                      { label: 'Executado', info: 'Spot' },
+                      { label: 'Gale/Soros', info: `${selectedCycle.martingaleLevels || 2} lvl` },
+                      { label: 'Meta/Stop', info: 'Concluído' }
+                    ];
+
+                    return pipelineSteps.map((step, idx) => {
+                      const isCompleted = idx < activeStep;
+                      const isCurrent = idx === activeStep;
+                      const isFuture = idx > activeStep;
+
+                      let nodeBg = 'rgba(255,255,255,0.02)';
+                      let nodeBorder = 'rgba(255,255,255,0.05)';
+                      let textColor = 'var(--text-muted)';
+                      let badgeColor = 'rgba(255,255,255,0.03)';
+                      let badgeText = '#64748b';
+
+                      if (isCompleted) {
+                        nodeBg = 'rgba(16, 185, 129, 0.06)';
+                        nodeBorder = 'rgba(16, 185, 129, 0.3)';
+                        textColor = '#cbd5e1';
+                        badgeColor = 'rgba(16, 185, 129, 0.15)';
+                        badgeText = '#10b981';
+                      } else if (isCurrent) {
+                        nodeBg = 'rgba(139, 92, 246, 0.12)';
+                        nodeBorder = 'var(--primary-light)';
+                        textColor = 'white';
+                        badgeColor = 'rgba(139, 92, 246, 0.2)';
+                        badgeText = 'var(--primary-light)';
+                      }
+
+                      return (
+                        <React.Fragment key={idx}>
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '6px',
+                            minWidth: '78px',
+                            flex: 1,
+                            padding: '6px',
+                            borderRadius: '10px',
+                            background: nodeBg,
+                            border: `1px solid ${nodeBorder}`,
+                            boxShadow: isCurrent ? '0 0 15px rgba(139, 92, 246, 0.15)' : 'none',
+                            transition: 'all 0.3s'
+                          }}>
+                            <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: textColor, textAlign: 'center' }}>
+                              {step.label}
+                            </span>
+                            <span style={{
+                              fontSize: '0.55rem',
+                              padding: '1px 5px',
+                              borderRadius: '4px',
+                              background: badgeColor,
+                              color: badgeText,
+                              fontWeight: '800',
+                              fontFamily: 'var(--font-mono)'
+                            }}>
+                              {step.info}
+                            </span>
+                          </div>
+
+                          {idx < pipelineSteps.length - 1 && (
+                            <div style={{
+                              width: '18px',
+                              height: '2px',
+                              background: isCompleted ? '#10b981' : 'rgba(255,255,255,0.06)',
+                              flexShrink: 0,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              position: 'relative'
+                            }}>
+                              {isCurrent && (
+                                <span className="pulse-primary" style={{
+                                  position: 'absolute',
+                                  width: '6px',
+                                  height: '6px',
+                                  borderRadius: '50%',
+                                  background: 'var(--primary-light)',
+                                  boxShadow: '0 0 8px var(--primary-light)'
+                                }} />
+                              )}
+                            </div>
+                          )}
+                        </React.Fragment>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* LATERAL DIREITA: PAINEL DE STATUS EM TEMPO REAL */}
+        <div className="glass-panel" style={{
+          padding: '1.25rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem',
+          background: 'rgba(15, 11, 28, 0.4)',
+          border: '1px solid rgba(255,255,255,0.03)',
+          borderRadius: '16px',
+          overflow: 'hidden'
+        }}>
+          {/* Engine Real-Time Monitor */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            <h3 style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0, paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              Monitor de Status
+            </h3>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '10px', padding: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Motor de Ciclos:</span>
+                <strong style={{ color: schedulerState ? '#10b981' : '#ef4444' }}>
+                  {schedulerState ? '● OPERANDO' : 'OFFLINE'}
+                </strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', marginTop: '2px' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Scanner Ativo:</span>
+                <strong style={{ color: activeCycleId ? 'var(--primary-light)' : 'var(--text-muted)' }}>
+                  {activeCycleId ? 'BUSCANDO' : 'STANDBY'}
+                </strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', marginTop: '2px' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Conexão Deriv:</span>
+                <strong style={{ color: '#10b981' }}>SYNCED</strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Logs Timeline Widget */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h4 style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)' }}>LOGS DE MISSÃO</h4>
+              <button 
+                onClick={onClearSchedulerLogs}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.6rem', cursor: 'pointer', padding: '2px' }}
+              >
+                Limpar
+              </button>
+            </div>
+
+            {/* Log Filters */}
+            <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.02)', padding: '2px', borderRadius: '6px' }}>
+              <button
+                onClick={() => setLogFilter('all')}
+                style={{
+                  flex: 1,
+                  padding: '3px',
+                  fontSize: '0.58rem',
+                  fontWeight: 'bold',
+                  background: logFilter === 'all' ? 'var(--primary)' : 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setLogFilter('today')}
+                style={{
+                  flex: 1,
+                  padding: '3px',
+                  fontSize: '0.58rem',
+                  fontWeight: 'bold',
+                  background: logFilter === 'today' ? 'var(--primary)' : 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Hoje
+              </button>
+            </div>
+
+            {/* Log Search input */}
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={logSearch}
+                onChange={(e) => setLogSearch(e.target.value)}
+                placeholder="Buscar em logs..."
+                style={{
+                  padding: '0.4rem 0.5rem 0.4rem 1.6rem',
+                  fontSize: '0.68rem',
+                  background: 'rgba(15, 23, 42, 0.4)',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  borderRadius: '6px',
+                  color: 'white',
+                  width: '100%',
+                  outline: 'none'
+                }}
+              />
+              <Search size={11} style={{ position: 'absolute', left: '8px', color: 'var(--text-muted)' }} />
+            </div>
+
+            {/* Timeline scrollbox */}
+            <div style={{
+              flex: 1,
+              background: 'rgba(0,0,0,0.15)',
+              border: '1px solid rgba(255,255,255,0.02)',
+              borderRadius: '8px',
+              padding: '0.5rem',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.5rem'
+            }}>
+              {filteredLogs.length === 0 ? (
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.62rem', fontStyle: 'italic', textAlign: 'center', display: 'block', marginTop: '1rem' }}>
+                  Nenhum registro.
+                </span>
+              ) : (
+                filteredLogs.map((log, idx) => {
+                  let badgeColor = 'rgba(255,255,255,0.05)';
+                  let icon = '⚪';
+
+                  if (log.type === 'error') {
+                    badgeColor = 'rgba(239, 68, 68, 0.15)';
+                    icon = '🔴';
+                  } else if (log.type === 'success') {
+                    badgeColor = 'rgba(16, 185, 129, 0.15)';
+                    icon = '🟢';
+                  } else if (log.type === 'warning') {
+                    badgeColor = 'rgba(245, 158, 11, 0.15)';
+                    icon = '🟡';
+                  }
+
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: '0.4rem',
+                        background: badgeColor,
+                        borderRadius: '6px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                        borderLeft: `2px solid ${log.type === 'error' ? '#ef4444' : log.type === 'success' ? '#10b981' : '#8b5cf6'}`
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.58rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                        <span>{icon} Evento</span>
+                        <span>{log.time}</span>
+                      </div>
+                      <p style={{ fontSize: '0.65rem', color: '#e2e8f0', margin: 0, lineHeight: '1.3' }}>
+                        {log.message}
+                      </p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
 
       </div>
+
+      {/* STEPPER WIZARD MODAL */}
+      {isWizardOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(9, 6, 18, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 2000,
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            background: 'rgba(15, 11, 28, 0.95)',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
+            boxShadow: '0 0 50px rgba(139, 92, 246, 0.2)',
+            borderRadius: '20px',
+            width: '540px',
+            maxWidth: '90%',
+            maxHeight: '92vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            position: 'relative'
+          }}>
+            {/* Wizard Header */}
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: 'white' }}>
+                  {wizardData.id ? 'Editar Missão Automática' : 'Criar Nova Missão de Automação'}
+                </h3>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                  Siga os passos para programar o robô trader.
+                </span>
+              </div>
+              <button
+                onClick={() => setIsWizardOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Stepper Progress bar */}
+            <div style={{ display: 'flex', padding: '0.75rem 1.5rem', background: 'rgba(0,0,0,0.15)', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+              {[
+                { step: 1, label: 'Identidade' },
+                { step: 2, label: 'Agenda' },
+                { step: 3, label: 'Mercado' },
+                { step: 4, label: 'Risco' },
+                { step: 5, label: 'Confirmação' }
+              ].map((s) => {
+                const isActive = wizardStep === s.step;
+                const isPassed = wizardStep > s.step;
+                return (
+                  <div key={s.step} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '50%',
+                      background: isActive ? 'var(--primary)' : (isPassed ? '#10b981' : 'rgba(255,255,255,0.05)'),
+                      color: isActive || isPassed ? 'white' : '#64748b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.65rem',
+                      fontWeight: 'bold',
+                      border: isActive ? '1px solid white' : 'none'
+                    }}>
+                      {isPassed ? <Check size={10} /> : s.step}
+                    </div>
+                    <span style={{
+                      fontSize: '0.7rem',
+                      fontWeight: isActive ? 'bold' : '500',
+                      color: isActive ? 'white' : (isPassed ? '#cbd5e1' : '#64748b')
+                    }}>
+                      {s.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Wizard Form Content */}
+            <form onSubmit={handleSaveWizard} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto' }}>
+              <div style={{ padding: '1.5rem', flex: 1 }}>
+
+                {/* STEP 1: IDENTIDADE */}
+                {wizardStep === 1 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                        Nome da Missão
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Operação Matinal, Scalper Volatilidade..."
+                        value={wizardData.name}
+                        onChange={(e) => setWizardData({ ...wizardData, name: e.target.value })}
+                        required
+                        style={{ padding: '0.65rem 0.85rem', fontSize: '0.85rem' }}
+                      />
+                    </div>
+
+                    {/* Preset Icons Selection */}
+                    <div>
+                      <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                        Ícone da Missão
+                      </label>
+                      <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+                        {presetIcons.map((ico) => {
+                          const isSelected = wizardData.icon === ico;
+                          return (
+                            <button
+                              key={ico}
+                              type="button"
+                              onClick={() => setWizardData({ ...wizardData, icon: ico })}
+                              style={{
+                                fontSize: '1.5rem',
+                                padding: '0.5rem',
+                                borderRadius: '8px',
+                                background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.02)',
+                                border: isSelected ? '2px solid var(--primary-light)' : '1.5px solid rgba(255,255,255,0.05)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                width: '48px',
+                                height: '48px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                            >
+                              {ico}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Preset Colors Selection */}
+                    <div>
+                      <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                        Cor do Tema
+                      </label>
+                      <div style={{ display: 'flex', gap: '0.75rem' }}>
+                        {presetColors.map((col) => {
+                          const isSelected = wizardData.color === col;
+                          return (
+                            <button
+                              key={col}
+                              type="button"
+                              onClick={() => setWizardData({ ...wizardData, color: col })}
+                              style={{
+                                background: col,
+                                borderRadius: '50%',
+                                width: '28px',
+                                height: '28px',
+                                border: isSelected ? '2px solid white' : '2px solid transparent',
+                                boxShadow: isSelected ? `0 0 10px ${col}` : 'none',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 2: AGENDA */}
+                {wizardStep === 2 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                          Horário de Início (HH:MM)
+                        </label>
+                        <input
+                          type="time"
+                          value={wizardData.startTime}
+                          onChange={(e) => setWizardData({ ...wizardData, startTime: e.target.value })}
+                          required
+                          style={{
+                            padding: '0.6rem 0.8rem',
+                            fontSize: '0.85rem',
+                            background: 'rgba(15, 23, 42, 0.6)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '8px',
+                            color: 'white',
+                            width: '100%',
+                            outline: 'none'
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                          Fuso Horário
+                        </label>
+                        <select
+                          value={wizardData.timezone}
+                          onChange={(e) => setWizardData({ ...wizardData, timezone: e.target.value })}
+                          style={{ height: '38px', fontSize: '0.85rem' }}
+                        >
+                          <option value="GMT-3">Brasília (GMT-3)</option>
+                          <option value="GMT+0">UTC (GMT+0)</option>
+                          <option value="GMT-4">Amazonas (GMT-4)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Active Days Multi-selector */}
+                    <div>
+                      <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                        Dias Ativos de Execução
+                      </label>
+                      <div style={{ display: 'flex', gap: '0.45rem', justifyContent: 'space-between' }}>
+                        {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((d) => {
+                          const isChecked = wizardData.days.includes(d);
+                          return (
+                            <button
+                              key={d}
+                              type="button"
+                              onClick={() => {
+                                const updatedDays = isChecked
+                                  ? wizardData.days.filter(day => day !== d)
+                                  : [...wizardData.days, d];
+                                setWizardData({ ...wizardData, days: updatedDays });
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '0.5rem 0',
+                                borderRadius: '6px',
+                                background: isChecked ? 'var(--primary)' : 'rgba(255,255,255,0.02)',
+                                border: isChecked ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.05)',
+                                color: isChecked ? 'white' : 'var(--text-secondary)',
+                                fontSize: '0.75rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s'
+                              }}
+                            >
+                              {d}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 3: MERCADO */}
+                {wizardStep === 3 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                        Ativo de Negociação
+                      </label>
+                      <select
+                        value={wizardData.symbol}
+                        onChange={(e) => setWizardData({ ...wizardData, symbol: e.target.value })}
+                        style={{ height: '38px', fontSize: '0.85rem' }}
+                      >
+                        {assets.map(a => (
+                          <option key={a.symbol} value={a.symbol}>{a.name} ({a.symbol})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                          Timeframe (Velas)
+                        </label>
+                        <select
+                          value={wizardData.granularity}
+                          onChange={(e) => setWizardData({ ...wizardData, granularity: e.target.value })}
+                          style={{ height: '38px', fontSize: '0.85rem' }}
+                        >
+                          <option value="60">1 Minuto (M1)</option>
+                          <option value="300">5 Minutos (M5)</option>
+                          <option value="900">15 Minutos (M15)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                          Estratégia Principal
+                        </label>
+                        <select
+                          value={wizardData.selectedStrategy}
+                          onChange={(e) => setWizardData({ ...wizardData, selectedStrategy: e.target.value })}
+                          style={{ height: '38px', fontSize: '0.85rem' }}
+                        >
+                          {strategies.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                        Assertividade Mínima do Sinal (%)
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <input
+                          type="range"
+                          min="60"
+                          max="95"
+                          step="5"
+                          value={wizardData.minProbability || 90}
+                          onChange={(e) => setWizardData({ ...wizardData, minProbability: parseInt(e.target.value) })}
+                          style={{ flex: 1, accentColor: 'var(--primary)' }}
+                        />
+                        <strong style={{ fontSize: '0.9rem', color: 'var(--primary-light)', fontFamily: 'var(--font-mono)', minWidth: '32px' }}>
+                          {wizardData.minProbability || 90}%
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 4: RISCO */}
+                {wizardStep === 4 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                          Entrada ($)
+                        </label>
+                        <input
+                          type="number"
+                          value={wizardData.stakeValue}
+                          onChange={(e) => setWizardData({ ...wizardData, stakeValue: parseFloat(e.target.value) })}
+                          min="0.35"
+                          step="0.01"
+                          required
+                          style={{ padding: '0.6rem 0.8rem', fontSize: '0.85rem' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                          Meta ($)
+                        </label>
+                        <input
+                          type="number"
+                          value={wizardData.takeProfit}
+                          onChange={(e) => setWizardData({ ...wizardData, takeProfit: parseFloat(e.target.value) })}
+                          min="1"
+                          step="1"
+                          required
+                          style={{ padding: '0.6rem 0.8rem', fontSize: '0.85rem' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                          Stop Loss ($)
+                        </label>
+                        <input
+                          type="number"
+                          value={wizardData.stopLoss}
+                          onChange={(e) => setWizardData({ ...wizardData, stopLoss: parseFloat(e.target.value) })}
+                          min="1"
+                          step="1"
+                          required
+                          style={{ padding: '0.6rem 0.8rem', fontSize: '0.85rem' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                          Níveis de Gale
+                        </label>
+                        <select
+                          value={wizardData.martingaleLevels}
+                          onChange={(e) => setWizardData({ ...wizardData, martingaleLevels: parseInt(e.target.value) })}
+                          style={{ height: '38px', fontSize: '0.85rem' }}
+                        >
+                          <option value="0">Sem Martingale (Mão Fixa)</option>
+                          <option value="1">Gale Nível 1</option>
+                          <option value="2">Gale Nível 2</option>
+                          <option value="3">Gale Nível 3</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                          Multiplicador Gale
+                        </label>
+                        <input
+                          type="number"
+                          value={wizardData.martingaleMultiplier}
+                          onChange={(e) => setWizardData({ ...wizardData, martingaleMultiplier: parseFloat(e.target.value) })}
+                          min="1.0"
+                          max="3.0"
+                          step="0.1"
+                          disabled={wizardData.martingaleLevels === 0}
+                          style={{ padding: '0.6rem 0.8rem', fontSize: '0.85rem' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Exclude/Flags checklist */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255,255,255,0.01)', padding: '0.75rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <strong style={{ fontSize: '0.75rem', color: 'white', display: 'block' }}>Vela Mestra Secundária</strong>
+                          <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Filtra/opera rompimentos baseados em máximas/mínimas</span>
+                        </div>
+                        <label className="switch" style={{ width: '34px', height: '18px' }}>
+                          <input
+                            type="checkbox"
+                            checked={wizardData.enableMasterCandleSecondary}
+                            onChange={(e) => setWizardData({ ...wizardData, enableMasterCandleSecondary: e.target.checked })}
+                          />
+                          <span className="slider" style={{ borderRadius: '18px' }}></span>
+                        </label>
+                      </div>
+                      
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                        <div>
+                          <strong style={{ fontSize: '0.75rem', color: 'white', display: 'block' }}>Excluir Estratégias Lentas</strong>
+                          <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Pula Pullback e Reversão no piloto automático</span>
+                        </div>
+                        <label className="switch" style={{ width: '34px', height: '18px' }}>
+                          <input
+                            type="checkbox"
+                            checked={wizardData.disableSlowStrategies}
+                            onChange={(e) => setWizardData({ ...wizardData, disableSlowStrategies: e.target.checked })}
+                          />
+                          <span className="slider" style={{ borderRadius: '18px' }}></span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 5: CONFIRMAÇÃO */}
+                {wizardStep === 5 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
+                      <span style={{ fontSize: '2.5rem' }}>🚀</span>
+                      <h4 style={{ fontSize: '1rem', fontWeight: '800', margin: '0.5rem 0 0.25rem 0', color: 'white' }}>
+                        Pronto para Lançamento!
+                      </h4>
+                      <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', margin: 0 }}>
+                        Revise a configuração da missão antes de registrar.
+                      </p>
+                    </div>
+
+                    <div style={{
+                      background: 'rgba(0,0,0,0.15)',
+                      border: '1px solid rgba(255,255,255,0.03)',
+                      borderRadius: '12px',
+                      padding: '1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.6rem',
+                      fontSize: '0.8rem'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.4rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Identidade:</span>
+                        <strong>{wizardData.icon} {wizardData.name}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.4rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Agenda:</span>
+                        <strong>{wizardData.startTime} ({wizardData.timezone}) | {wizardData.days.join(', ')}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.4rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Ativo & Timeframe:</span>
+                        <strong>{getCleanSymbolName(wizardData.symbol)} | {wizardData.granularity === '60' ? 'M1' : wizardData.granularity === '300' ? 'M5' : 'M15'}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.4rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Estratégia:</span>
+                        <strong>{getCleanStrategyName(wizardData.selectedStrategy)}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.4rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Gestão Risco:</span>
+                        <strong>Entrada: ${wizardData.stakeValue} | Meta: ${wizardData.takeProfit} | Stop: ${wizardData.stopLoss}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Martingale:</span>
+                        <strong>{wizardData.martingaleLevels > 0 ? `${wizardData.martingaleLevels} Níveis (${wizardData.martingaleMultiplier}x)` : 'Sem Gale'}</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+              {/* Wizard Footer buttons */}
+              <div style={{
+                padding: '1rem 1.5rem',
+                borderTop: '1px solid rgba(255,255,255,0.05)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                background: 'rgba(0,0,0,0.1)'
+              }}>
+                <button
+                  type="button"
+                  onClick={prevStep}
+                  disabled={wizardStep === 1}
+                  style={{
+                    padding: '0.55rem 1rem',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    color: wizardStep === 1 ? 'var(--text-muted)' : 'white',
+                    cursor: wizardStep === 1 ? 'not-allowed' : 'pointer',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <ChevronLeft size={14} /> Voltar
+                </button>
+
+                {wizardStep < 5 ? (
+                  <button
+                    type="button"
+                    onClick={nextStep}
+                    style={{
+                      padding: '0.55rem 1.2rem',
+                      borderRadius: '8px',
+                      background: 'var(--primary)',
+                      border: 'none',
+                      color: 'white',
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    Avançar <ChevronRight size={14} />
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="primary"
+                    style={{
+                      padding: '0.55rem 1.5rem',
+                      borderRadius: '8px',
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <CheckCircle size={14} /> Salvar Missão
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

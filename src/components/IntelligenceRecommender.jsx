@@ -1,5 +1,5 @@
 import React from 'react';
-import { Brain, Cpu, Database, Award, Sparkles, TrendingUp } from 'lucide-react';
+import { Brain, Cpu, Database, Award, Sparkles, TrendingUp, ShieldCheck } from 'lucide-react';
 
 export default function IntelligenceRecommender({
   bestStrategy,
@@ -88,87 +88,146 @@ export default function IntelligenceRecommender({
 
   const dbRecs = getDbRecommendations();
   const sessionAsset = getBestSessionAsset();
-  const formatSymbol = (sym) => sym ? sym.replace('Volatility ', '').replace(' Index', '') : '';
+  
+  const formatSymbol = (sym) => {
+    if (!sym) return '';
+    if (sym.startsWith('frx')) return sym.replace('frx', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2');
+    if (sym.startsWith('1HZ')) return sym.replace('1HZ', '').replace('V', '') + ' (1s)';
+    return sym.replace('Volatility ', 'Vol ').replace(' Index', '');
+  };
 
   return (
-    <div className="glass-panel" style={{
-      padding: '0.75rem 1.25rem',
-      background: 'linear-gradient(90deg, rgba(139, 92, 246, 0.04) 0%, rgba(217, 70, 239, 0.04) 100%)',
-      border: '1px solid rgba(139, 92, 246, 0.15)',
-      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
-      borderRadius: '12px',
+    <div style={{
+      padding: '0.85rem 1.5rem',
+      background: 'linear-gradient(90deg, rgba(124, 58, 237, 0.05) 0%, rgba(217, 70, 239, 0.05) 100%)',
+      border: '1px solid rgba(139, 92, 246, 0.25)',
+      boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)',
+      borderRadius: '14px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: '1.5rem',
-      flexWrap: 'wrap'
+      flexWrap: 'wrap',
+      backdropFilter: 'blur(10px)'
     }}>
       {/* Title block */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '180px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: '200px' }}>
         <div style={{
-          background: 'var(--primary-glow)',
-          padding: '0.4rem',
-          borderRadius: '8px',
+          background: 'linear-gradient(135deg, #7c3aed, #db2777)',
+          padding: '0.5rem',
+          borderRadius: '10px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          border: '1px solid var(--border-active)'
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          boxShadow: '0 0 12px rgba(124, 58, 237, 0.35)'
         }}>
-          <Brain size={18} style={{ color: 'var(--primary-light)' }} className="pulse-primary" />
+          <Brain size={18} style={{ color: '#ffffff' }} />
         </div>
         <div>
-          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', fontWeight: 'bold' }}>MOTOR DE INTELIGÊNCIA</span>
-          <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-primary)' }}>RECOMENDAÇÕES AI</span>
+          <span style={{ fontSize: '0.58rem', color: '#a78bfa', display: 'block', fontWeight: 800, letterSpacing: '0.08em' }}>MOTOR DE INTELIGÊNCIA</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#ffffff', letterSpacing: '0.04em', background: 'linear-gradient(90deg, #ffffff, #e2e8f0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>RECOMENDAÇÕES AI</span>
         </div>
       </div>
 
       {/* Recommended Strategy for CURRENT Asset */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, minWidth: '220px' }}>
-        <Sparkles size={16} style={{ color: 'var(--accent)' }} />
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        flex: 1,
+        minWidth: '220px',
+        padding: '0.5rem 0.75rem',
+        background: 'rgba(255,255,255,0.015)',
+        border: '1px solid rgba(255,255,255,0.03)',
+        borderRadius: '10px'
+      }}>
+        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(236,72,153,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Sparkles size={14} style={{ color: '#f472b6' }} />
+        </div>
         <div>
-          <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', display: 'block', fontWeight: '500' }}>
-            MELHOR ESTRATÉGIA NO ATIVO ({formatSymbol(currentSymbol)})
+          <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block', fontWeight: 700, letterSpacing: '0.05em' }}>
+            ESTRATÉGIA RECOMENDADA ({formatSymbol(currentSymbol)})
           </span>
           {bestStrategy ? (
-            <strong style={{ fontSize: '0.78rem', color: 'var(--text-primary)' }}>
-              {bestStrategy.name} <span style={{ color: 'var(--success)' }}>({bestStrategy.winRate.toFixed(1)}% Assertividade)</span>
-            </strong>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              <strong style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>
+                {bestStrategy.name}
+              </strong>
+              <span style={{ fontSize: '0.7rem', color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                {bestStrategy.winRate.toFixed(1)}% WR
+              </span>
+            </div>
           ) : (
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Analisando velas do mercado...</span>
+            <span style={{ fontSize: '0.72rem', color: '#475569' }}>Analisando mercado...</span>
           )}
         </div>
       </div>
 
       {/* Recommended Asset based on LIVE backtests */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, minWidth: '220px' }}>
-        <TrendingUp size={16} style={{ color: 'var(--primary-light)' }} />
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        flex: 1,
+        minWidth: '220px',
+        padding: '0.5rem 0.75rem',
+        background: 'rgba(255,255,255,0.015)',
+        border: '1px solid rgba(255,255,255,0.03)',
+        borderRadius: '10px'
+      }}>
+        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(139,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <TrendingUp size={14} style={{ color: '#a78bfa' }} />
+        </div>
         <div>
-          <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', display: 'block', fontWeight: '500' }}>
-            MELHOR ATIVO (SESSÃO EM TEMPO REAL)
+          <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block', fontWeight: 700, letterSpacing: '0.05em' }}>
+            MELHOR ATIVO (SESSÃO LIVE)
           </span>
           {sessionAsset ? (
-            <strong style={{ fontSize: '0.78rem', color: 'var(--text-primary)' }}>
-              {formatSymbol(sessionAsset.symbol)} <span style={{ color: 'var(--success)' }}>({sessionAsset.winRate.toFixed(1)}% via {sessionAsset.strategy.split(' ')[0]})</span>
-            </strong>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              <strong style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>
+                {formatSymbol(sessionAsset.symbol)}
+              </strong>
+              <span style={{ fontSize: '0.7rem', color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }} title={sessionAsset.strategy}>
+                {sessionAsset.winRate.toFixed(1)}%
+              </span>
+            </div>
           ) : (
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Navegue por ativos para calcular</span>
+            <span style={{ fontSize: '0.72rem', color: '#475569' }}>Nenhum ativo analisado ainda</span>
           )}
         </div>
       </div>
 
       {/* Recommended Asset & Strategy based on DB history */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, minWidth: '220px' }}>
-        <Database size={16} style={{ color: 'var(--success)' }} />
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        flex: 1,
+        minWidth: '220px',
+        padding: '0.5rem 0.75rem',
+        background: 'rgba(255,255,255,0.015)',
+        border: '1px solid rgba(255,255,255,0.03)',
+        borderRadius: '10px'
+      }}>
+        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Database size={14} style={{ color: '#34d399' }} />
+        </div>
         <div>
-          <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', display: 'block', fontWeight: '500' }}>
-            MAIS ASSERTIVO HISTÓRICO (BANCO DE DADOS)
+          <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block', fontWeight: 700, letterSpacing: '0.05em' }}>
+            MAIS ASSERTIVO HISTÓRICO (BD)
           </span>
           {dbRecs.asset ? (
-            <strong style={{ fontSize: '0.78rem', color: 'var(--text-primary)' }}>
-              {formatSymbol(dbRecs.asset.name)} <span style={{ color: 'var(--success)' }}>({dbRecs.asset.winRate.toFixed(0)}% Winrate de {dbRecs.asset.total} ordens)</span>
-            </strong>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              <strong style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>
+                {formatSymbol(dbRecs.asset.name)}
+              </strong>
+              <span style={{ fontSize: '0.7rem', color: '#34d399', background: 'rgba(52,211,153,0.1)', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                {dbRecs.asset.winRate.toFixed(0)}% ({dbRecs.asset.total} op)
+              </span>
+            </div>
           ) : (
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Aguardando histórico de operações...</span>
+            <span style={{ fontSize: '0.72rem', color: '#475569' }}>Sem dados históricos</span>
           )}
         </div>
       </div>

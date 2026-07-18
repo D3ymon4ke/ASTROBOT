@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { derivAPI } from './deriv/DerivAPI';
-import { analyzeStrategies, getLiveSignal, evaluateTrade } from './strategies/tradingStrategies';
+import { analyzeStrategies, getLiveSignal, evaluateTrade, calculateEMA } from './strategies/tradingStrategies';
 import Chart from './components/Chart';
 import Settings from './components/Settings';
 import StrategyList from './components/StrategyList';
@@ -10,10 +10,44 @@ import IntelligenceRecommender from './components/IntelligenceRecommender';
 import Overlay from './components/Overlay';
 import Scanner from './components/Scanner';
 import Scheduler from './components/Scheduler';
-import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, TrendingUp, Zap, CheckCircle, Menu, X } from 'lucide-react';
+import NewsEditor from './components/NewsEditor';
+import NewsFeed, { getUnreadCount } from './components/NewsFeed';
+import Reports from './components/Reports';
+import NeuralLoader from './components/NeuralLoader';
+import StrategiesCatalog from './components/StrategiesCatalog';
+import Planning from './components/Planning';
+import Strands from './components/Strands';
+import TelegramConfig from './components/TelegramConfig';
+import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, TrendingUp, Zap, CheckCircle, Menu, X, Percent, TrendingDown, Target, Newspaper, Bell, User, Camera, Upload, Send } from 'lucide-react';
 import { loadDbTrades, saveDbTrade, clearDbTrades } from './utils/db';
+import { playWinSound, playLossSound } from './utils/sound';
+import {
+  sendTelegramMessage,
+  formatWinMessage,
+  formatLossMessage,
+  formatOpportunityFound,
+  formatOrderExecuted,
+  formatTakeProfitMessage,
+  formatStopLossMessage,
+  formatStatusReport,
+  formatDailySummary
+} from './utils/telegram';
 import moonImg from './assets/moon.avif';
 import logoImg from './assets/newlogo.png';
+
+const presetAvatars = [
+  // Preset 1: Purple Cyborg
+  `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%238B5CF6"/><stop offset="100%" stop-color="%23EC4899"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(%23g1)"/><circle cx="50" cy="37" r="18" fill="%23ffffff" opacity="0.9"/><path d="M22,78 C22,60 34,52 50,52 C66,52 78,60 78,78" fill="%23ffffff" opacity="0.9"/><rect x="42" y="32" width="16" height="4" rx="2" fill="%231E1B4B"/><circle cx="45" cy="38" r="2" fill="%2306B6D4"/><circle cx="55" cy="38" r="2" fill="%2306B6D4"/></svg>`,
+
+  // Preset 2: Cyber Blue AI
+  `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%2306B6D4"/><stop offset="100%" stop-color="%233B82F6"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(%23g2)"/><path d="M50,15 L75,30 L75,60 L50,85 L25,60 L25,30 Z" fill="none" stroke="%23ffffff" stroke-width="4" opacity="0.8"/><circle cx="50" cy="45" r="10" fill="%23ffffff" opacity="0.9"/><circle cx="50" cy="45" r="4" fill="%233B82F6"/><line x1="50" y1="15" x2="50" y2="35" stroke="%23ffffff" stroke-width="2" opacity="0.8"/><line x1="50" y1="55" x2="50" y2="85" stroke="%23ffffff" stroke-width="2" opacity="0.8"/></svg>`,
+
+  // Preset 3: Gold Sentinel
+  `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g3" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%23F59E0B"/><stop offset="100%" stop-color="%23D97706"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(%23g3)"/><path d="M50,22 L72,32 L72,56 C72,70 62,80 50,84 C38,80 28,70 28,56 L28,32 Z" fill="%23ffffff" opacity="0.9"/><path d="M50,30 L64,37 L64,54 C64,64 58,72 50,75 C42,72 36,64 36,54 L36,37 Z" fill="url(%23g3)"/><polygon points="50,40 53,47 60,47 55,52 57,59 50,55 43,59 45,52 40,47 47,47" fill="%23ffffff"/></svg>`,
+
+  // Preset 4: Emerald Agent
+  `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g4" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%2310B981"/><stop offset="100%" stop-color="%23047857"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(%23g4)"/><circle cx="50" cy="35" r="14" fill="%23ffffff" opacity="0.9"/><path d="M26,74 C26,58 38,50 50,50 C62,50 74,58 74,74" fill="%23ffffff" opacity="0.9"/><circle cx="50" cy="35" r="7" fill="url(%23g4)"/><circle cx="50" cy="35" r="2" fill="%23ffffff"/></svg>`
+];
 
 export default function App() {
   const isOverlayMode = window.location.search.includes('overlay=true');
@@ -52,7 +86,7 @@ export default function App() {
   
   // Trading states
   const [isRunning, setIsRunning] = useState(false);
-  const [settings, setSettings] = useState({
+  const DEFAULT_SETTINGS = {
     symbol: 'R_100',
     granularity: '60', // 1 min (60)
     stakeType: 'fixed', // 'fixed' | 'percentage'
@@ -68,7 +102,20 @@ export default function App() {
     autoPilot: true,
     autoPilotInterval: '5',
     disableSlowStrategies: false,
-    enableMasterCandleSecondary: false
+    enableMasterCandleSecondary: false,
+    soundEnabled: true
+  };
+
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem('astrobot_settings');
+    if (saved) {
+      try {
+        return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+      } catch (e) {
+        // ignore
+      }
+    }
+    return DEFAULT_SETTINGS;
   });
   
   const [strategiesStats, setStrategiesStats] = useState([]);
@@ -88,11 +135,116 @@ export default function App() {
   const [dbTrades, setDbTrades] = useState([]);
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeName, setWelcomeName] = useState('');
+  const [profileImage, setProfileImage] = useState(localStorage.getItem('astrobot_profile_image') || '');
+  const [isProfileConfigured, setIsProfileConfigured] = useState(localStorage.getItem('astrobot_profile_configured') === 'true');
+  const [tempProfileName, setTempProfileName] = useState('');
+  const [tempProfileImage, setTempProfileImage] = useState('');
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
+
+  useEffect(() => {
+    if (showWelcome) {
+      setTempProfileName(welcomeName || localStorage.getItem('astrobot_custom_name') || '');
+      setTempProfileImage(profileImage || localStorage.getItem('astrobot_profile_image') || presetAvatars[0]);
+    }
+  }, [showWelcome, welcomeName, profileImage]);
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setTempProfileImage(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveProfile = (e) => {
+    if (e) e.preventDefault();
+    if (!tempProfileName.trim()) return;
+
+    localStorage.setItem('astrobot_custom_name', tempProfileName);
+    localStorage.setItem('astrobot_profile_image', tempProfileImage);
+    localStorage.setItem('astrobot_profile_configured', 'true');
+
+    setWelcomeName(tempProfileName);
+    setProfileImage(tempProfileImage);
+    setIsProfileConfigured(true);
+
+    setIsProfileSaving(true);
+    setTimeout(() => {
+      setIsProfileSaving(false);
+      setAuthorized(true);
+      setShowWelcome(false);
+    }, 1500);
+  };
   const [showLanding, setShowLanding] = useState(true);
   const [landingTab, setLandingTab] = useState('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [overlayActive, setOverlayActive] = useState(false);
   const [bottomTab, setBottomTab] = useState('logs');
+  const [activePage, setActivePage] = useState('dashboard');
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+  // News / Patch Notes state
+  const [posts, setPosts] = useState([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [postsFetched, setPostsFetched] = useState(false);
+
+  // Simulated Live Demo Dashboard states for Landing Page
+  const [demoProfit, setDemoProfit] = useState(142.50);
+  const [demoWins, setDemoWins] = useState(24);
+  const [demoLosses, setDemoLosses] = useState(3);
+  const [demoChartData, setDemoChartData] = useState([100, 110, 95, 120, 135, 130, 145, 140, 155]);
+  const [demoTrades, setDemoTrades] = useState([
+    { id: 1, time: '16:41:20', symbol: 'R_100', type: 'CALL', stake: 2.00, payout: 3.92, status: 'win' },
+    { id: 2, time: '16:42:05', symbol: 'R_50', type: 'PUT', stake: 2.00, payout: 3.92, status: 'win' },
+    { id: 3, time: '16:43:00', symbol: 'R_100', type: 'CALL', stake: 2.00, payout: 0, status: 'loss' },
+    { id: 4, time: '16:44:12', symbol: 'R_10', type: 'CALL', stake: 4.40, payout: 8.62, status: 'win' }
+  ]);
+
+  useEffect(() => {
+    if (!showLanding || landingTab !== 'home') return;
+    const interval = setInterval(() => {
+      const isWin = Math.random() > 0.3;
+      const profitValue = isWin ? 1.92 : -2.00;
+      
+      setDemoProfit(prev => Math.max(0, parseFloat((prev + profitValue).toFixed(2))));
+      if (isWin) {
+        setDemoWins(w => w + 1);
+      } else {
+        setDemoLosses(l => l + 1);
+      }
+      
+      setDemoChartData(prev => {
+        const next = [...prev.slice(1)];
+        const last = prev[prev.length - 1];
+        next.push(Math.max(40, last + (isWin ? 15 : -15)));
+        return next;
+      });
+
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+      const symbols = ['R_100', 'R_75', 'R_50', 'R_10', 'R_25'];
+      const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+      const randomType = Math.random() > 0.5 ? 'CALL' : 'PUT';
+
+      const newTrade = {
+        id: Date.now(),
+        time: timeStr,
+        symbol: randomSymbol,
+        type: randomType,
+        stake: isWin ? 2.00 : 4.40,
+        payout: isWin ? 3.92 : 0,
+        status: isWin ? 'win' : 'loss'
+      };
+
+      setDemoTrades(prev => [newTrade, ...prev.slice(0, 3)]);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [showLanding, landingTab]);
 
   // License / CDKey States
   const [cdKey, setCdKey] = useState(() => {
@@ -121,6 +273,7 @@ export default function App() {
   const [adminPassword, setAdminPassword] = useState('');
   const [adminLoginError, setAdminLoginError] = useState('');
   const [adminLoggingIn, setAdminLoggingIn] = useState(false);
+  const [adminSubTab, setAdminSubTab] = useState('licenses'); // 'licenses' | 'news'
 
   const [adminKeysList, setAdminKeysList] = useState([]);
   const [loadingAdminKeys, setLoadingAdminKeys] = useState(false);
@@ -210,6 +363,52 @@ export default function App() {
       setActivationError('Erro ao se conectar ao servidor de validação.');
     } finally {
       setActivating(false);
+    }
+  };
+
+  const fetchPosts = async () => {
+    setPostsLoading(true);
+    try {
+      const isLocalOrElectron = window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.protocol === 'file:' ||
+        (window.process && window.process.type === 'renderer');
+      const base = isLocalOrElectron ? 'https://astrobot-seven.vercel.app/api' : '/api';
+      const res = await fetch(`${base}/posts`);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPosts(data.posts || []);
+        localStorage.setItem('astrobot_cached_posts', JSON.stringify(data.posts || []));
+      } else {
+        throw new Error('API response failed');
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar posts online, carregando cache local:', err);
+      try {
+        const cached = localStorage.getItem('astrobot_cached_posts');
+        if (cached) {
+          setPosts(JSON.parse(cached));
+        } else {
+          const defaultPosts = [
+            {
+              id: 'initial_welcome',
+              title: 'Bem-vindo ao ASTROBOT Premium Elite!',
+              content: 'Estamos entusiasmados em apresentar a interface redesenhada do ASTROBOT. Um ambiente operacional de alta performance projetado para oferecer a máxima precisão estatística e controle absoluto dos seus investimentos.\n\n### O que há de novo na v2.5:\n1. **Design High-Performance**: Interface otimizada com glassmorphism avançado, contraste ultra-nítido e visualização limpa.\n2. **Motor Neural Calibrado**: Tempos de resposta de 12ms para processamento das ordens na Deriv.\n3. **Catálogo de Estratégias**: Agora você pode alternar manualmente entre mais de 15 algoritmos matemáticos ou deixar a inteligência artificial decidir no Piloto Automático.',
+              tag: 'novidade',
+              coverImage: 'https://images.unsplash.com/photo-1642790106117-e829e14a795f?auto=format&fit=crop&w=800&q=80',
+              pinned: true,
+              createdAt: Date.now() - 3600000 * 24
+            }
+          ];
+          setPosts(defaultPosts);
+          localStorage.setItem('astrobot_cached_posts', JSON.stringify(defaultPosts));
+        }
+      } catch (cacheErr) {
+        // ignore
+      }
+    } finally {
+      setPostsLoading(false);
+      setPostsFetched(true);
     }
   };
 
@@ -338,7 +537,15 @@ export default function App() {
     if (landingTab === 'admin' && isAdminLoggedIn) {
       loadAdminKeys();
     }
+    if (landingTab === 'novidades' && !postsFetched) {
+      fetchPosts();
+    }
   }, [landingTab, isAdminLoggedIn]);
+
+  // Fetch posts on mount to calculate badge count
+  useEffect(() => {
+    fetchPosts();
+  }, []);
 
   // Scheduler / Automation States
   const [schedulerState, setSchedulerState] = useState(() => {
@@ -365,6 +572,8 @@ export default function App() {
         stakeValue: 1.0,
         symbol: 'R_100',
         selectedStrategy: 'autopilot',
+        enableMasterCandleSecondary: false,
+        disableSlowStrategies: false,
         active: true,
         status: 'Aguardando',
         lastRun: null
@@ -378,6 +587,8 @@ export default function App() {
         stakeValue: 1.0,
         symbol: 'R_100',
         selectedStrategy: 'autopilot',
+        enableMasterCandleSecondary: false,
+        disableSlowStrategies: false,
         active: true,
         status: 'Aguardando',
         lastRun: null
@@ -441,7 +652,11 @@ export default function App() {
     waitingForGaleNextCandle: false,
     lastGaleDirection: null,
     candles: [],
-    activeCycleId: null
+    activeCycleId: null,
+    liveSignals: {},
+    strategiesStats: [],
+    cycles: [],
+    trades: []
   });
 
   // Sync ref values
@@ -452,7 +667,134 @@ export default function App() {
     stateRef.current.initialBalance = initialBalance;
     stateRef.current.candles = candles;
     stateRef.current.activeCycleId = activeCycleId;
-  }, [isRunning, settings, balance, initialBalance, candles, activeCycleId]);
+    stateRef.current.liveSignals = liveSignals;
+    stateRef.current.strategiesStats = strategiesStats;
+    stateRef.current.cycles = cycles;
+    stateRef.current.trades = trades;
+  }, [isRunning, settings, balance, initialBalance, candles, activeCycleId, liveSignals, strategiesStats, cycles, trades]);
+
+  // Telegram notification helper – reads config fresh from localStorage each call
+  const sendTelegramNotif = async (type, htmlText) => {
+    try {
+      const raw = localStorage.getItem('astrobot_telegram_config');
+      if (!raw) return;
+      const cfg = JSON.parse(raw);
+      if (!cfg.enabled || !cfg.token || !cfg.chatId) return;
+      if (cfg.notifications && cfg.notifications[type] === false) return;
+      await sendTelegramMessage(cfg.token, cfg.chatId, htmlText, true);
+    } catch (e) {
+      // silent
+    }
+  };
+
+  // Shared handler for Telegram remote commands (used by both Electron IPC and Browser Polling)
+  const executeTelegramCommand = (text) => {
+    const cmd = (text || '').trim().toLowerCase();
+    const cfg = (() => { try { return JSON.parse(localStorage.getItem('astrobot_telegram_config') || '{}'); } catch { return {}; } })();
+    const tok = cfg.token;
+    const cid = cfg.chatId;
+
+    const reply = (html) => { if (tok && cid) sendTelegramMessage(tok, cid, html, true); };
+
+    if (cmd === '/startbot' || cmd === '▶ iniciar bot') {
+      if (!stateRef.current.isRunning) startBot();
+      reply('🟢 <b>Comando recebido!</b>\nBot iniciando operações...');
+    } else if (cmd === '/stopbot' || cmd === '⛔ parar') {
+      stopBot();
+      reply('🛑 <b>Comando recebido!</b>\nBot parado.');
+    } else if (cmd === '/pause' || cmd === '⏸ pausar') {
+      stopBot();
+      reply('⏸ <b>Bot pausado</b> via Telegram.');
+    } else if (cmd === '/resume') {
+      if (!stateRef.current.isRunning) startBot();
+      reply('▶️ <b>Bot retomado</b> via Telegram.');
+    } else if (cmd === '/saldo' || cmd === '💰 saldo') {
+      reply(`💰 <b>Saldo Atual</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Saldo:</b> <code>$${stateRef.current.balance?.toFixed(2) || '0.00'}</code>`);
+    } else if (cmd === '/lucro' || cmd === '📈 relatório') {
+      const profit = (stateRef.current.balance || 0) - (stateRef.current.initialBalance || 0);
+      const sign = profit >= 0 ? '+' : '';
+      reply(`📈 <b>Resultado da Sessão</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Lucro/Prejuízo:</b> <code>${sign}$${profit.toFixed(2)}</code>\n<b>Saldo:</b> <code>$${stateRef.current.balance?.toFixed(2)}</code>`);
+    } else if (cmd === '/status') {
+      const s = stateRef.current;
+      const profit = (s.balance || 0) - (s.initialBalance || 0);
+      const sign = profit >= 0 ? '+' : '';
+      reply(`${s.isRunning ? '🟢' : '🔴'} <b>STATUS</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Estado:</b> <code>${s.isRunning ? 'OPERANDO' : 'PAUSADO'}</code>\n<b>Saldo:</b> <code>$${s.balance?.toFixed(2) || '0.00'}</code>\n<b>Lucro Sessão:</b> <code>${sign}$${profit.toFixed(2)}</code>`);
+    } else if (cmd === '/scanner' || cmd === '📊 scanner') {
+      const s = stateRef.current;
+      const activeSigList = Object.entries(s.liveSignals || {}).map(([id, sig]) => {
+        const name = (s.strategiesStats || []).find(st => st.id === id)?.name || id;
+        const emoji = sig.direction === 'CALL' ? '🟩' : '🟥';
+        return `• <b>${name}</b>: ${emoji} <code>${sig.direction}</code>`;
+      });
+      const sigText = activeSigList.length > 0
+        ? activeSigList.join('\n')
+        : '<i>Nenhum sinal ativo no momento.</i>';
+      reply(`📊 <b>SCANNER DE SINAIS</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ativo:</b> <code>${s.settings.symbol}</code>\n\n<b>Sinais Ativos:</b>\n${sigText}`);
+    } else if (cmd === '/ciclos' || cmd === '📅 ciclos') {
+      const s = stateRef.current;
+      const cycleListText = (s.cycles || []).map(c => {
+        const statusEmoji = c.active ? '⏰' : '⏸';
+        return `• <b>${c.name}</b> (${c.startTime}): ${statusEmoji} <code>${c.status}</code>`;
+      }).join('\n');
+      reply(`📅 <b>CICLOS DO AGENDADOR</b>\n━━━━━━━━━━━━━━━━━━━━━━\n${cycleListText || '<i>Nenhum ciclo cadastrado.</i>'}`);
+    } else if (cmd === '/estrategias') {
+      const s = stateRef.current;
+      const sortedStrats = [...(s.strategiesStats || [])].sort((a, b) => b.winRate - a.winRate);
+      const stratText = sortedStrats.slice(0, 8).map(st => {
+        return `• <b>${st.name}</b>: <code>${st.winRate.toFixed(1)}%</code> (${st.wins}W - ${st.losses}L)`;
+      }).join('\n');
+      reply(`🧠 <b>ASSERTIVIDADE DE ESTRATÉGIAS</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ativo:</b> <code>${s.settings.symbol}</code>\n\n<b>Melhores Desempenhos:</b>\n${stratText || '<i>Sem dados de estatísticas ainda.</i>'}`);
+    } else if (cmd === '/relatorio') {
+      const s = stateRef.current;
+      const profit = (s.balance || 0) - (s.initialBalance || 0);
+      const sign = profit >= 0 ? '+' : '';
+      const tList = s.trades || [];
+      const totalTrades = tList.length;
+      const wins = tList.filter(t => t.profit > 0).length;
+      const losses = tList.filter(t => t.profit < 0).length;
+      const winrate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
+      
+      reply(`📈 <b>RELATÓRIO OPERACIONAL</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `<b>Ativo Atual:</b> <code>${s.settings.symbol}</code>\n` +
+            `<b>Saldo Inicial:</b> <code>$${s.initialBalance?.toFixed(2)}</code>\n` +
+            `<b>Saldo Atual:</b> <code>$${s.balance?.toFixed(2)}</code>\n` +
+            `<b>Resultado Sessão:</b> <code>${sign}$${profit.toFixed(2)}</code>\n` +
+            `<b>Operações:</b> <code>${totalTrades}</code> (${wins}W - ${losses}L)\n` +
+            `<b>Winrate:</b> <code>${winrate.toFixed(1)}%</code>\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `🤖 <i>ASTROBOT Relatório em tempo real.</i>`);
+    } else if (cmd === '/config' || cmd === '⚙ configurações') {
+      const s = stateRef.current;
+      const settingsText = `⚙️ <b>CONFIGURAÇÕES DO BOT</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `<b>Ativo:</b> <code>${s.settings.symbol}</code>\n` +
+        `<b>Timeframe:</b> <code>M${s.settings.granularity === '60' ? '1' : s.settings.granularity === '300' ? '5' : '15'}</code>\n` +
+        `<b>Gerenciamento:</b> <code>${s.settings.moneyManagement?.toUpperCase() || 'N/A'}</code>\n` +
+        `<b>Stake:</b> <code>$${s.settings.stakeValue}</code>\n` +
+        `<b>Piloto Automático:</b> <code>${s.settings.autoPilot ? 'ATIVADO' : 'DESATIVADO'}</code>\n` +
+        `<b>Martingale:</b> <code>${s.settings.martingaleEnabled ? `Sim (Max ${s.settings.martingaleMaxLevels} níveis)` : 'Não'}</code>\n` +
+        `<b>Take Profit:</b> <code>$${s.settings.takeProfit}</code>\n` +
+        `<b>Stop Loss:</b> <code>$${s.settings.stopLoss}</code>`;
+      reply(settingsText);
+    } else if (cmd === '/help') {
+      reply(`🤖 <b>ASTROBOT – Comandos</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `/startbot – Iniciar bot\n` +
+            `/stopbot – Parar bot\n` +
+            `/pause – Pausar\n` +
+            `/resume – Retomar\n` +
+            `/status – Status geral\n` +
+            `/saldo – Ver saldo\n` +
+            `/lucro – Lucro da sessão\n` +
+            `/scanner – Sinais ativos\n` +
+            `/ciclos – Ciclos do agendador\n` +
+            `/estrategias – Assertividade das estratégias\n` +
+            `/relatorio – Relatório detalhado\n` +
+            `/config – Configurações atuais\n` +
+            `/help – Esta mensagem`);
+    }
+  };
 
   // Handle IPC communication with overlay
   useEffect(() => {
@@ -475,12 +817,110 @@ export default function App() {
       setOverlayActive(active);
     };
 
+    // Telegram remote commands from Electron polling
+    const handleTelegramCommand = (event, text) => {
+      executeTelegramCommand(text);
+    };
+
     ipcRenderer.on('bot-command', handleBotCommand);
     ipcRenderer.on('overlay-status', handleOverlayStatus);
+    ipcRenderer.on('telegram-command', handleTelegramCommand);
 
     return () => {
       ipcRenderer.removeListener('bot-command', handleBotCommand);
       ipcRenderer.removeListener('overlay-status', handleOverlayStatus);
+      ipcRenderer.removeListener('telegram-command', handleTelegramCommand);
+    };
+  }, []);
+
+  // Handle Telegram command polling in non-Electron (Browser / Vercel) environments
+  useEffect(() => {
+    const isElectron = window && window.process && window.process.type === 'renderer';
+    if (isElectron) return; // Electron main process handles polling
+
+    let active = true;
+    let timeoutId = null;
+    let offset = 0;
+    let initialized = false;
+
+    const poll = async () => {
+      if (!active) return;
+
+      const raw = localStorage.getItem('astrobot_telegram_config');
+      if (!raw) {
+        timeoutId = setTimeout(poll, 5000);
+        return;
+      }
+
+      try {
+        const cfg = JSON.parse(raw);
+        if (!cfg.enabled || !cfg.token || !cfg.chatId) {
+          timeoutId = setTimeout(poll, 5000);
+          return;
+        }
+
+        let url = '';
+        if (!initialized) {
+          // Initialize offset with the latest update to avoid executing old commands
+          url = `https://api.telegram.org/bot${cfg.token}/getUpdates?offset=-1&limit=1`;
+        } else {
+          url = `https://api.telegram.org/bot${cfg.token}/getUpdates?offset=${offset + 1}&timeout=5`;
+        }
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (active && data.ok && data.result) {
+          if (!initialized) {
+            if (data.result.length > 0) {
+              offset = data.result[0].update_id;
+            }
+            initialized = true;
+          } else {
+            for (const update of data.result) {
+              offset = update.update_id;
+              if (update.message) {
+                const msg = update.message;
+                const chatIdStr = msg.chat.id.toString();
+                const expectedChatId = cfg.chatId.toString();
+
+                if (chatIdStr !== expectedChatId) {
+                  // Reject unauthorized users
+                  const rejectUrl = `https://api.telegram.org/bot${cfg.token}/sendMessage`;
+                  await fetch(rejectUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      chat_id: msg.chat.id,
+                      text: `❌ <b>ACESSO NEGADO</b>\nEste bot está vinculado a outra licença do ASTROBOT.`,
+                      parse_mode: 'HTML'
+                    })
+                  });
+                  continue;
+                }
+
+                // Process authorized command
+                if (msg.text) {
+                  executeTelegramCommand(msg.text);
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // Silent catch for network/CORS issues
+      }
+
+      if (active) {
+        timeoutId = setTimeout(poll, 1000);
+      }
+    };
+
+    poll();
+
+    return () => {
+      active = false;
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, []);
 
@@ -531,13 +971,25 @@ export default function App() {
       setBalance(info.balance);
       setInitialBalance(info.balance);
       setAccountInfo(info);
-      setWelcomeName(info.fullname || info.email || 'Usuário');
+      
+      const customName = localStorage.getItem('astrobot_custom_name');
+      const customImage = localStorage.getItem('astrobot_profile_image');
+      const isConfigured = localStorage.getItem('astrobot_profile_configured') === 'true';
+
+      setWelcomeName(customName || info.fullname || info.email || 'Usuário');
+      if (customImage) {
+        setProfileImage(customImage);
+      }
+      setIsProfileConfigured(isConfigured);
+
       setShowWelcome(true);
 
-      setTimeout(() => {
-        setAuthorized(true);
-        setShowWelcome(false);
-      }, 2200);
+      if (isConfigured) {
+        setTimeout(() => {
+          setAuthorized(true);
+          setShowWelcome(false);
+        }, 2200);
+      }
 
       addLog({ message: `Conta Autorizada: ${info.fullname} | Saldo Inicial: $${info.balance}`, type: 'success', time: new Date().toLocaleTimeString() });
     };
@@ -726,6 +1178,9 @@ export default function App() {
     const profit = stateRef.current.balance - stateRef.current.initialBalance;
     if (profit >= parseFloat(currentSettings.takeProfit)) {
       addLog({ message: `Meta de Lucro (Take Profit) atingida! Parando bot. Lucro: $${profit.toFixed(2)}`, type: 'success', time: new Date().toLocaleTimeString() });
+
+      // Telegram notification
+      sendTelegramNotif('take_profit', formatTakeProfitMessage(profit, trades.length, trades.length > 0 ? (trades.filter(t => t.profit > 0).length / trades.length) * 100 : 0));
       
       // Update Cycle if active
       if (stateRef.current.activeCycleId) {
@@ -747,6 +1202,9 @@ export default function App() {
     }
     if (profit <= -parseFloat(currentSettings.stopLoss)) {
       addLog({ message: `Limite de Perda (Stop Loss) atingido! Parando bot. Prejuízo: $${profit.toFixed(2)}`, type: 'error', time: new Date().toLocaleTimeString() });
+
+      // Telegram notification
+      sendTelegramNotif('stop_loss', formatStopLossMessage(profit, trades.length, trades.length > 0 ? (trades.filter(t => t.profit > 0).length / trades.length) * 100 : 0));
       
       // Update Cycle if active
       if (stateRef.current.activeCycleId) {
@@ -937,6 +1395,28 @@ export default function App() {
 
         const isWin = profit > 0;
         const resultLabel = isWin ? 'WIN' : 'LOSS';
+
+        if (stateRef.current.settings.soundEnabled !== false) {
+          if (isWin) {
+            playWinSound();
+          } else {
+            playLossSound();
+          }
+        }
+
+        // Telegram WIN/LOSS notification
+        const newBal = stateRef.current.balance + profit;
+        if (isWin) {
+          const sessionProfit = newBal - stateRef.current.initialBalance;
+          const goalPct = currentSettings.takeProfit > 0 ? (sessionProfit / currentSettings.takeProfit) * 100 : 0;
+          sendTelegramNotif('win', formatWinMessage(profit, newBal, goalPct));
+        } else {
+          const nextGale = stateRef.current.galeLevel + 1;
+          const maxGale = parseInt(currentSettings.martingaleMaxLevels || '2');
+          const hasGale = nextGale <= maxGale && (currentSettings.moneyManagement === 'martingale' || currentSettings.moneyManagement === 'progressive_gale');
+          const nextStakeEst = hasGale ? parseFloat(currentSettings.stakeValue) * Math.pow(parseFloat(currentSettings.martingaleMultiplier || '2.2'), nextGale) : 0;
+          sendTelegramNotif('loss', formatLossMessage(profit, newBal, hasGale ? nextGale : 0, nextStakeEst));
+        }
         
         // Update states
         const newBalance = stateRef.current.balance + profit;
@@ -1143,7 +1623,12 @@ export default function App() {
   };
 
   // Start / Stop Bot handlers
-  const startBot = () => {
+  const startBot = (force = false) => {
+    if (force !== true && !isRunning && !isInitializing) {
+      setIsInitializing(true);
+      return;
+    }
+
     setIsRunning(true);
     stateRef.current.isRunning = true;
     stateRef.current.galeLevel = 0;
@@ -1153,7 +1638,18 @@ export default function App() {
     setInitialBalance(balance);
     stateRef.current.initialBalance = balance;
 
-    addLog({ message: 'Bot INICIADO. Monitorando mercado para triggers...', type: 'success', time: new Date().toLocaleTimeString() });
+    addLog({ message: 'Motor Neural Ativado. Monitorando mercado para triggers...', type: 'success', time: new Date().toLocaleTimeString() });
+
+    // Telegram notification
+    sendTelegramNotif('bot_started',
+      `🚀 <b>ASTROBOT INICIADO</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `<b>Ativo:</b> <code>${stateRef.current.settings.symbol}</code>\n` +
+      `<b>Estratégia:</b> <code>${stateRef.current.settings.autoPilot ? 'Piloto Automático' : stateRef.current.settings.selectedStrategy.replace('_',' ').toUpperCase()}</code>\n` +
+      `<b>Horário:</b> <code>${new Date().toLocaleTimeString('pt-BR')}</code>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `🤖 <i>Motor Neural ativado. Monitorando mercado...</i>`
+    );
   };
 
   const stopBot = () => {
@@ -1178,6 +1674,16 @@ export default function App() {
     }
 
     addLog({ message: 'Bot PARADO pelo usuário.', type: 'warning', time: new Date().toLocaleTimeString() });
+
+    // Telegram notification
+    sendTelegramNotif('bot_stopped',
+      `🛑 <b>ASTROBOT DESLIGADO</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `<b>Saldo Final:</b> <code>$${stateRef.current.balance?.toFixed(2) || '0.00'}</code>\n` +
+      `<b>Horário:</b> <code>${new Date().toLocaleTimeString('pt-BR')}</code>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `💤 <i>Bot encerrado. Use /startbot para retomar.</i>`
+    );
   };
 
   // Change symbol or granularity
@@ -1191,6 +1697,15 @@ export default function App() {
       setCandles([]);
       derivAPI.changeSymbol(newSettings.symbol, parseInt(newSettings.granularity));
     }
+  };
+
+  const handleSaveSettings = () => {
+    localStorage.setItem('astrobot_settings', JSON.stringify(settings));
+    addLog({
+      message: '[Configurações] Painel de Módulos Salvo com Sucesso!',
+      type: 'success',
+      time: new Date().toLocaleTimeString()
+    });
   };
 
   // Scheduler Automation helper functions
@@ -1211,7 +1726,9 @@ export default function App() {
       stopLoss: cycle.stopLoss,
       stakeValue: cycle.stakeValue,
       selectedStrategy: isAutopilot ? stateRef.current.settings.selectedStrategy : cycle.selectedStrategy,
-      autoPilot: isAutopilot
+      autoPilot: isAutopilot,
+      enableMasterCandleSecondary: cycle.enableMasterCandleSecondary !== undefined ? cycle.enableMasterCandleSecondary : false,
+      disableSlowStrategies: cycle.disableSlowStrategies !== undefined ? cycle.disableSlowStrategies : false
     };
 
     setSettings(cycleSettings);
@@ -1300,7 +1817,6 @@ export default function App() {
 
   if (showWelcome) {
     return (
-      /* Welcome Screen transition */
       <div style={{
         width: '100vw',
         height: '100vh',
@@ -1309,66 +1825,279 @@ export default function App() {
         justifyContent: 'center',
         alignItems: 'center',
         background: 'var(--bg-main)',
-        padding: '2rem'
+        backgroundImage: `
+          radial-gradient(at 10% 20%, rgba(139, 92, 246, 0.15) 0px, transparent 40%),
+          radial-gradient(at 90% 80%, rgba(217, 70, 239, 0.08) 0px, transparent 45%)
+        `,
+        padding: '2rem',
+        overflow: 'auto',
+        position: 'relative'
       }}>
+        {/* Particle glow in background */}
+        <div style={{
+          position: 'absolute',
+          width: '350px',
+          height: '350px',
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(139,92,246,0.18) 0%, transparent 70%)',
+          filter: 'blur(30px)',
+          zIndex: 0,
+          pointerEvents: 'none'
+        }} />
+
         <div className="login-container-animate" style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: '1.5rem',
-          padding: '3rem 4.5rem',
+          gap: '1.75rem',
+          padding: isProfileConfigured ? '3.5rem 4rem' : '2.5rem 3rem',
           borderRadius: '24px',
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-active)',
-          boxShadow: 'var(--shadow-neon)',
-          maxWidth: '500px',
-          width: '100%'
+          background: 'rgba(15, 11, 28, 0.85)',
+          border: '1px solid rgba(139, 92, 246, 0.3)',
+          backdropFilter: 'blur(16px)',
+          boxShadow: '0 0 50px rgba(139, 92, 246, 0.15)',
+          maxWidth: isProfileConfigured ? '480px' : '540px',
+          width: '100%',
+          position: 'relative',
+          zIndex: 10,
+          transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
         }}>
-          {/* Glowing Avatar/Check */}
-          <div style={{
-            background: 'var(--success-glow)',
-            width: '80px',
-            height: '80px',
-            borderRadius: '50%',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            border: '2px solid var(--success)',
-            boxShadow: '0 0 25px rgba(16, 185, 129, 0.3)',
-            marginBottom: '0.5rem'
-          }}>
-            <ShieldCheck size={40} style={{ color: 'var(--success)' }} />
-          </div>
+          {isProfileSaving ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', padding: '2rem 0' }}>
+              <div className="spin" style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                border: '3px solid rgba(139, 92, 246, 0.1)',
+                borderTopColor: 'var(--primary-light)',
+                boxShadow: '0 0 15px rgba(139, 92, 246, 0.2)'
+              }} />
+              <div style={{ textAlign: 'center' }}>
+                <h3 style={{ fontSize: '1.2rem', color: 'white', fontWeight: '800', margin: '0 0 0.25rem 0' }}>
+                  Sincronizando Identidade
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
+                  Calibrando banca VIP e carregando chaves criptográficas...
+                </p>
+              </div>
+            </div>
+          ) : isProfileConfigured ? (
+            /* Standard quick welcome screen (subsequent logins) */
+            <>
+              {/* Glowing Avatar */}
+              <div style={{
+                width: '90px',
+                height: '90px',
+                borderRadius: '50%',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                border: '2px solid rgba(251, 191, 36, 0.8)',
+                boxShadow: '0 0 25px rgba(251, 191, 36, 0.25)',
+                marginBottom: '0.25rem',
+                overflow: 'hidden',
+                background: 'rgba(255,255,255,0.02)'
+              }}>
+                {profileImage ? (
+                  <img src={profileImage} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <User size={36} style={{ color: 'var(--primary-light)' }} />
+                )}
+              </div>
 
-          <div className="welcome-text-animate" style={{ textAlign: 'center' }}>
-            <h2 style={{ fontSize: '1.75rem', fontWeight: '800', marginBottom: '0.35rem', color: '#ffffff' }}>
-              Bem-vindo ao ASTROBOT
-            </h2>
-            <span style={{ fontSize: '1.2rem', color: 'var(--primary-light)', fontWeight: '700' }}>
-              {welcomeName}
-            </span>
-          </div>
+              <div className="welcome-text-animate" style={{ textAlign: 'center' }}>
+                <h2 style={{ fontSize: '1.65rem', fontWeight: '800', marginBottom: '0.35rem', color: '#ffffff', letterSpacing: '-0.5px' }}>
+                  Bem-vindo ao ASTROBOT
+                </h2>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '1.25rem', color: 'var(--primary-light)', fontWeight: '800' }}>
+                    {welcomeName}
+                  </span>
+                  <span style={{
+                    background: 'linear-gradient(135deg, #FBBF24 0%, #D97706 100%)',
+                    color: '#1E1B4B',
+                    fontSize: '0.62rem',
+                    fontWeight: '900',
+                    padding: '1px 6px',
+                    borderRadius: '10px',
+                    boxShadow: '0 0 10px rgba(251, 191, 36, 0.4)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    VIP
+                  </span>
+                </div>
+              </div>
 
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '340px', lineHeight: '1.5' }}>
-            Autenticação realizada com sucesso. Carregando dados da sua conta e sincronizando gráficos...
-          </p>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', maxWidth: '340px', lineHeight: '1.5', textAlign: 'center', margin: 0 }}>
+                Autenticação realizada com sucesso. Carregando dados da sua conta e sincronizando gráficos...
+              </p>
 
-          {/* Glowing line loader */}
-          <div style={{
-            width: '100%',
-            height: '4px',
-            background: 'rgba(255,255,255,0.05)',
-            borderRadius: '2px',
-            overflow: 'hidden',
-            marginTop: '0.5rem'
-          }}>
-            <div style={{
-              height: '100%',
-              background: 'linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%)',
-              width: '100%',
-              borderRadius: '2px'
-            }} className="pulse-primary" />
-          </div>
+              {/* Glowing line loader */}
+              <div style={{
+                width: '100%',
+                height: '4px',
+                background: 'rgba(255,255,255,0.04)',
+                borderRadius: '2px',
+                overflow: 'hidden',
+                marginTop: '0.5rem'
+              }}>
+                <div style={{
+                  height: '100%',
+                  background: 'linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%)',
+                  width: '100%',
+                  borderRadius: '2px'
+                }} className="pulse-primary" />
+              </div>
+            </>
+          ) : (
+            /* First-time onboarding / Customizing form */
+            <form onSubmit={handleSaveProfile} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+              <div style={{ textAlign: 'center' }}>
+                <h2 style={{ fontSize: '1.65rem', fontWeight: '800', margin: '0 0 0.25rem 0', color: 'white', letterSpacing: '-0.5px' }}>
+                  Personalize seu Perfil
+                </h2>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
+                  Defina como deseja ser identificado no terminal ASTROBOT.
+                </p>
+              </div>
+
+              {/* Avatar Selector and Preview */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ position: 'relative' }}>
+                  <div style={{
+                    width: '96px',
+                    height: '96px',
+                    borderRadius: '50%',
+                    border: '2px solid var(--primary-light)',
+                    boxShadow: '0 0 20px rgba(139, 92, 246, 0.25)',
+                    background: 'rgba(255,255,255,0.02)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden'
+                  }}>
+                    {tempProfileImage ? (
+                      <img src={tempProfileImage} alt="Preview Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <User size={38} style={{ color: 'var(--text-secondary)' }} />
+                    )}
+                  </div>
+                  
+                  {/* File Upload Button overlayed */}
+                  <label htmlFor="upload-avatar-file" style={{
+                    position: 'absolute',
+                    bottom: '-2px',
+                    right: '-2px',
+                    background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+                    border: '1px solid rgba(255,255,255,0.25)',
+                    borderRadius: '50%',
+                    width: '32px',
+                    height: '32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.5), 0 0 10px rgba(139, 92, 246, 0.4)',
+                    transition: 'all 0.2s ease',
+                    zIndex: 20
+                  }}>
+                    <Camera size={14} style={{ color: 'white' }} />
+                  </label>
+                  <input
+                    type="file"
+                    id="upload-avatar-file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    style={{ display: 'none' }}
+                  />
+                </div>
+
+                {/* Preset Avatars Selection */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center', marginTop: '0.25rem' }}>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Ou escolha um Avatar IA
+                  </span>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
+                    {presetAvatars.map((preset, index) => {
+                      const isSelected = tempProfileImage === preset;
+                      return (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => setTempProfileImage(preset)}
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            background: 'transparent',
+                            border: isSelected ? '2px solid var(--primary-light)' : '2px solid transparent',
+                            padding: '1px',
+                            cursor: 'pointer',
+                            boxShadow: isSelected ? '0 0 10px rgba(139, 92, 246, 0.4)' : 'none',
+                            transform: isSelected ? 'scale(1.1)' : 'scale(1)',
+                            transition: 'all 0.2s ease',
+                            outline: 'none'
+                          }}
+                        >
+                          <img
+                            src={preset}
+                            alt={`Preset ${index + 1}`}
+                            style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Name Input */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                  Nome de Operador (Como quer ser chamado)
+                </label>
+                <input
+                  type="text"
+                  value={tempProfileName}
+                  onChange={(e) => setTempProfileName(e.target.value)}
+                  placeholder="Ex: Lucas Machado"
+                  style={{
+                    padding: '0.8rem 1rem',
+                    fontSize: '0.9rem',
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    color: 'white',
+                    outline: 'none',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    transition: 'all 0.2s'
+                  }}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="primary"
+                style={{
+                  padding: '0.85rem',
+                  fontSize: '0.9rem',
+                  fontWeight: 'bold',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Upload size={16} /> SALVAR E CONECTAR VIP
+              </button>
+            </form>
+          )}
         </div>
       </div>
     );
@@ -1612,179 +2341,633 @@ export default function App() {
         </header>
 
         {/* Main Content Area */}
-        <main style={{ flex: 1, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 2rem' }}>
-          
+        <main className="landing-page-wrapper" style={{ flex: 1, zIndex: 10, display: 'flex', flexDirection: 'column', padding: 0, position: 'relative' }}>
+          {/* Space Background & Grid */}
+          <div className="space-background">
+            <div className="star-particles"></div>
+            <div className="space-grid"></div>
+          </div>
+
           {/* HOME TAB */}
           {landingTab === 'home' && (
-            <div style={{ maxWidth: '900px', width: '100%', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '3rem', alignItems: 'center' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }} className="welcome-text-animate">
+            <div style={{ position: 'relative', zIndex: 5, width: '100%', display: 'flex', flexDirection: 'column', gap: '8rem', padding: '4rem 0 0 0' }}>
+              
+              {/* HERO SECTION */}
+              <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem', display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '4rem', alignItems: 'center', width: '100%', boxSizing: 'border-box' }} className="hero-grid-responsive">
+                {/* Lado Esquerdo */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', textAlign: 'left' }}>
+                  <div style={{ display: 'inline-flex', alignSelf: 'flex-start' }}>
+                    <div style={{
+                      background: 'rgba(34, 197, 94, 0.08)',
+                      border: '1px solid rgba(34, 197, 94, 0.3)',
+                      borderRadius: '30px',
+                      padding: '6px 14px',
+                      fontSize: '0.78rem',
+                      fontWeight: '800',
+                      color: '#22C55E',
+                      letterSpacing: '0.5px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      boxShadow: '0 0 15px rgba(34, 197, 94, 0.1)'
+                    }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22C55E', display: 'inline-block', animation: 'navLinePulse 1.5s infinite ease-in-out' }} />
+                      🟢 IA ONLINE • Conectado à Vercel Serverless
+                    </div>
+                  </div>
+
+                  <h1 style={{
+                    fontSize: '3.6rem',
+                    fontWeight: '900',
+                    lineHeight: '1.15',
+                    margin: 0,
+                    fontFamily: "'Outfit', sans-serif",
+                    letterSpacing: '-1.5px',
+                    color: '#ffffff',
+                    textShadow: '0 0 30px rgba(139, 92, 246, 0.15)',
+                    background: 'linear-gradient(135deg, #ffffff 40%, #c084fc 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent'
+                  }}>
+                    A Inteligência Artificial que Opera na Deriv por Você
+                  </h1>
+
+                  <p style={{
+                    fontSize: '1.08rem',
+                    color: '#94A3B8',
+                    lineHeight: '1.75',
+                    margin: 0,
+                    maxWidth: '580px'
+                  }}>
+                    O ASTROBOT analisa probabilidades em tempo real, escolhe automaticamente a melhor estratégia, executa operações inteligentes, controla metas, stops, ciclos automáticos e acompanha toda a gestão da banca.
+                  </p>
+
+                  <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
+                    <button 
+                      className="cta-connect"
+                      onClick={() => setShowLanding(false)}
+                      style={{ padding: '0.95rem 2.5rem', fontSize: '0.95rem', borderRadius: '12px' }}
+                    >
+                      CONECTAR AO ROBÔ
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const target = document.getElementById('painel-preview-section');
+                        if (target) target.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="pricing-btn-secondary"
+                      style={{ padding: '0.95rem 2.25rem', fontSize: '0.95rem', borderRadius: '12px' }}
+                    >
+                      Assistir Demonstração
+                    </button>
+                  </div>
+
+                  {/* Stats list */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: '1.5rem',
+                    marginTop: '1.5rem',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                    paddingTop: '2rem'
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <span style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff', letterSpacing: '-0.5px' }}>+50.000</span>
+                      <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>operações realizadas</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <span style={{ fontSize: '1.8rem', fontWeight: '800', color: '#8B5CF6', letterSpacing: '-0.5px' }}>15</span>
+                      <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>estratégias inteligentes</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <span style={{ fontSize: '1.8rem', fontWeight: '800', color: '#38BDF8', letterSpacing: '-0.5px' }}>IA Ativa 24h</span>
+                      <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>monitoramento contínuo</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <span style={{ fontSize: '1.8rem', fontWeight: '800', color: '#22C55E', letterSpacing: '-0.5px' }}>Automático</span>
+                      <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ciclos e recuperações</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Lado Direito - Live Simulated Mockup */}
+                <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }} className="hero-mockup-container">
+                  {/* Glowing purple nebula behind */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '320px',
+                    height: '320px',
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, rgba(0,0,0,0) 70%)',
+                    zIndex: -1,
+                    filter: 'blur(30px)'
+                  }} />
+
+                  {/* Panel Mockup container */}
+                  <div style={{
+                    background: 'rgba(14, 11, 24, 0.8)',
+                    border: '1px solid rgba(139, 92, 246, 0.25)',
+                    borderRadius: '24px',
+                    width: '100%',
+                    maxWidth: '460px',
+                    boxShadow: '0 20px 50px rgba(0,0,0,0.5), 0 0 30px rgba(139, 92, 246, 0.1)',
+                    overflow: 'hidden',
+                    fontFamily: 'var(--font-sans)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    backdropFilter: 'blur(16px)',
+                    position: 'relative'
+                  }}>
+                    {/* Mockup Header */}
+                    <div style={{
+                      padding: '1rem 1.25rem',
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }} />
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#eab308' }} />
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }} />
+                        <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontWeight: 'bold', marginLeft: '6px' }}>COMMAND_CENTER_IA</span>
+                      </div>
+                      <div style={{
+                        background: 'rgba(34, 197, 94, 0.12)',
+                        border: '1px solid rgba(34, 197, 94, 0.25)',
+                        borderRadius: '12px',
+                        padding: '2px 8px',
+                        color: '#22C55E',
+                        fontSize: '0.68rem',
+                        fontWeight: '800',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#22C55E', display: 'inline-block', animation: 'navLinePulse 1.2s infinite ease-in-out' }} />
+                        ONLINE
+                      </div>
+                    </div>
+
+                    {/* Mockup Body */}
+                    <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                      {/* Top stats bar */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '14px', padding: '10px', textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.62rem', color: '#94A3B8', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}>LUCRO HOJE</div>
+                          <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#22C55E' }}>+${demoProfit.toFixed(2)}</div>
+                        </div>
+                        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '14px', padding: '10px', textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.62rem', color: '#94A3B8', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}>VITÓRIAS</div>
+                          <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#ffffff' }}>{demoWins}</div>
+                        </div>
+                        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '14px', padding: '10px', textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.62rem', color: '#94A3B8', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}>DERROTAS</div>
+                          <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#ef4444' }}>{demoLosses}</div>
+                        </div>
+                      </div>
+
+                      {/* SVG Live Graphic Chart */}
+                      <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(255, 255, 255, 0.03)', borderRadius: '16px', padding: '10px', position: 'relative' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#94A3B8', marginBottom: '8px', padding: '0 4px' }}>
+                          <span>ATIVIDADE ESTATÍSTICA IA</span>
+                          <span style={{ color: '#8B5CF6', fontWeight: 'bold' }}>CURVA DE RENDIMENTO</span>
+                        </div>
+                        <div style={{ height: '120px', width: '100%', position: 'relative' }}>
+                          <svg viewBox="0 0 320 120" style={{ width: '100%', height: '120px' }}>
+                            <defs>
+                              <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="rgba(139, 92, 246, 0.35)" />
+                                <stop offset="100%" stopColor="rgba(139, 92, 246, 0)" />
+                              </linearGradient>
+                            </defs>
+                            <polyline 
+                              fill="none" 
+                              stroke="#8B5CF6" 
+                              strokeWidth="3" 
+                              points={demoChartData.map((val, idx) => `${idx * 40},${120 - val * 0.6}`).join(' ')} 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round" 
+                              style={{ transition: 'points 0.5s ease-in-out' }}
+                            />
+                            <path 
+                              d={`M0,120 L${demoChartData.map((val, idx) => `${idx * 40},${120 - val * 0.6}`).join(' ')} L320,120 Z`} 
+                              fill="url(#chartGradient)" 
+                              style={{ transition: 'd 0.5s ease-in-out' }}
+                            />
+                          </svg>
+                        </div>
+                      </div>
+
+                      {/* Status indicator bar */}
+                      <div style={{
+                        background: 'rgba(139, 92, 246, 0.08)',
+                        border: '1px solid rgba(139, 92, 246, 0.2)',
+                        borderRadius: '12px',
+                        padding: '10px 14px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 'bold' }}>STATUS DA OPERAÇÃO:</span>
+                        <span style={{ fontSize: '0.72rem', color: '#8B5CF6', fontWeight: '800', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#8B5CF6', display: 'inline-block', animation: 'navLinePulse 1s infinite ease-in-out' }} />
+                          ATIVADA - ANALISANDO MERCADO
+                        </span>
+                      </div>
+
+                      {/* Recent Simulated Trades logs ticker */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ fontSize: '0.68rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ÚLTIMAS EXECUÇÕES DA IA</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {demoTrades.map((t) => (
+                            <div key={t.id} style={{
+                              background: 'rgba(255,255,255,0.01)',
+                              border: '1px solid rgba(255,255,255,0.03)',
+                              borderRadius: '10px',
+                              padding: '8px 12px',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              fontSize: '0.72rem'
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>{t.time}</span>
+                                <span style={{ background: 'rgba(255,255,255,0.04)', padding: '2px 5px', borderRadius: '4px', color: '#ffffff', fontWeight: 'bold', fontSize: '0.62rem' }}>{t.symbol}</span>
+                                <span style={{ color: t.type === 'CALL' ? '#22C55E' : '#ef4444', fontWeight: 'bold' }}>{t.type}</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ color: '#94A3B8' }}>Stake: ${t.stake.toFixed(2)}</span>
+                                <span style={{
+                                  fontWeight: 'bold',
+                                  color: t.status === 'win' ? '#22C55E' : '#94A3B8',
+                                  background: t.status === 'win' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255,255,255,0.03)',
+                                  padding: '2px 8px',
+                                  borderRadius: '20px',
+                                  border: t.status === 'win' ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid rgba(255,255,255,0.05)'
+                                }}>
+                                  {t.status === 'win' ? `+$${t.payout.toFixed(2)}` : 'Loss'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* RECURSOS SECTION */}
+              <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem', width: '100%', boxSizing: 'border-box' }}>
+                <div style={{ textAlign: 'center', marginBottom: '4rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#8B5CF6', letterSpacing: '1.5px', textTransform: 'uppercase' }}>TECNOLOGIA EXCLUSIVA</span>
+                  <h2 style={{ fontSize: '2.5rem', fontWeight: '900', margin: 0, fontFamily: "'Outfit', sans-serif" }}>Recursos Premium do ASTROBOT</h2>
+                  <p style={{ fontSize: '1rem', color: '#94A3B8', maxWidth: '600px', margin: '0.5rem 0 0 0' }}>
+                    Cada detalhe projetado para automatizar suas operações de forma consistente, protegendo seu capital com inteligência artificial avançada.
+                  </p>
+                </div>
+
                 <div style={{
-                  background: 'rgba(139, 92, 246, 0.06)',
-                  border: '1px solid rgba(139, 92, 246, 0.2)',
-                  borderRadius: '20px',
-                  padding: '4px 14px',
-                  fontSize: '0.72rem',
-                  fontWeight: '800',
-                  color: 'var(--primary-light)',
-                  letterSpacing: '1px',
-                  display: 'inline-flex',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: '1.5rem',
+                  width: '100%'
+                }} className="pricing-grid-responsive">
+                  <div className="feature-card-premium">
+                    <div className="feature-card-icon-container"><Calendar size={28} /></div>
+                    <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Ciclos Inteligentes</h3>
+                    <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Agende múltiplos ciclos de operação automáticos com metas de lucro, stops e stakes 100% autônomos.</p>
+                  </div>
+                  <div className="feature-card-premium">
+                    <div className="feature-card-icon-container"><Brain size={28} /></div>
+                    <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Piloto Automático IA</h3>
+                    <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>O robô calcula a assertividade histórica das estratégias probabilísticas e seleciona o melhor setup.</p>
+                  </div>
+                  <div className="feature-card-premium">
+                    <div className="feature-card-icon-container"><Shield size={28} /></div>
+                    <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Gestão de Risco</h3>
+                    <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Configurações flexíveis de Martingale (Tradicional/Inteligente) e Soros com travas automáticas.</p>
+                  </div>
+                  <div className="feature-card-premium">
+                    <div className="feature-card-icon-container"><TrendingUp size={28} /></div>
+                    <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Painel Estatístico</h3>
+                    <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Acompanhamento visual completo com winrate, lucro diário e histórico detalhado das operações.</p>
+                  </div>
+                  <div className="feature-card-premium">
+                    <div className="feature-card-icon-container"><Clock size={28} /></div>
+                    <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Agendamento Diário</h3>
+                    <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Planeje o robô para iniciar ou pausar em horários específicos de alta assertividade probabilística.</p>
+                  </div>
+                  <div className="feature-card-premium">
+                    <div className="feature-card-icon-container"><Zap size={28} /></div>
+                    <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Recuperação Inteligente</h3>
+                    <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Algoritmos avançados de recuperação pós-loss que buscam minimizar perdas indesejadas.</p>
+                  </div>
+                  <div className="feature-card-premium">
+                    <div className="feature-card-icon-container"><CheckCircle size={28} /></div>
+                    <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Controle de Meta</h3>
+                    <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Pausa automática assim que sua meta diária for atingida ou o stop loss configurado for tocado.</p>
+                  </div>
+                  <div className="feature-card-premium">
+                    <div className="feature-card-icon-container"><Layers size={28} /></div>
+                    <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Histórico Completo</h3>
+                    <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Relatório completo de operações salvas em tempo real no banco de dados local com filtro inteligente.</p>
+                  </div>
+                </div>
+              </section>
+
+              {/* COMO FUNCIONA */}
+              <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem', width: '100%', boxSizing: 'border-box' }}>
+                <div style={{ textAlign: 'center', marginBottom: '5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#38BDF8', letterSpacing: '1.5px', textTransform: 'uppercase' }}>PROCESSO SIMPLIFICADO</span>
+                  <h2 style={{ fontSize: '2.5rem', fontWeight: '900', margin: 0, fontFamily: "'Outfit', sans-serif" }}>Como Funciona o ASTROBOT</h2>
+                  <p style={{ fontSize: '1rem', color: '#94A3B8', maxWidth: '600px', margin: '0.5rem 0 0 0' }}>
+                    Em poucos cliques você conecta sua conta e ativa a inteligência de trading.
+                  </p>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  position: 'relative',
+                  width: '100%'
+                }} className="pricing-grid-responsive">
+                  {/* Absolute connector line behind on desktop */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '24px',
+                    left: '50px',
+                    right: '50px',
+                    height: '2px',
+                    background: 'linear-gradient(90deg, rgba(139, 92, 246, 0.1) 0%, rgba(139, 92, 246, 0.6) 50%, rgba(56, 189, 248, 0.1) 100%)',
+                    zIndex: 1
+                  }} className="timeline-connector-line" />
+
+                  <div className="timeline-step">
+                    <div className="timeline-step-badge">1</div>
+                    <h4 style={{ color: 'white', fontWeight: 'bold', fontSize: '1rem', margin: '0 0 0.5rem 0' }}>Conecte sua conta Deriv</h4>
+                    <p style={{ fontSize: '0.78rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>Conecte com segurança total usando seu Token de API Deriv diretamente.</p>
+                  </div>
+                  <div className="timeline-step">
+                    <div className="timeline-step-badge">2</div>
+                    <h4 style={{ color: 'white', fontWeight: 'bold', fontSize: '1rem', margin: '0 0 0.5rem 0' }}>Escolha as estratégias</h4>
+                    <p style={{ fontSize: '0.78rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>Selecione seus setups probabilísticos favoritos ou ative o recomendador IA.</p>
+                  </div>
+                  <div className="timeline-step">
+                    <div className="timeline-step-badge">3</div>
+                    <h4 style={{ color: 'white', fontWeight: 'bold', fontSize: '1rem', margin: '0 0 0.5rem 0' }}>Configure metas e stops</h4>
+                    <p style={{ fontSize: '0.78rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>Defina seu limite diário de ganho e perda conforme sua gestão pessoal.</p>
+                  </div>
+                  <div className="timeline-step">
+                    <div className="timeline-step-badge">4</div>
+                    <h4 style={{ color: 'white', fontWeight: 'bold', fontSize: '1rem', margin: '0 0 0.5rem 0' }}>Ative a IA</h4>
+                    <p style={{ fontSize: '0.78rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>Clique em Iniciar Automação e a IA começará o rastreamento em tempo real.</p>
+                  </div>
+                  <div className="timeline-step">
+                    <div className="timeline-step-badge">5</div>
+                    <h4 style={{ color: 'white', fontWeight: 'bold', fontSize: '1rem', margin: '0 0 0.5rem 0' }}>O ASTROBOT opera</h4>
+                    <p style={{ fontSize: '0.78rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>A IA cuida das entradas, ordens, ciclos e recuperações de forma 100% autônoma.</p>
+                  </div>
+                </div>
+              </section>
+
+              {/* INTELIGÊNCIA ARTIFICIAL SECTION */}
+              <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem', width: '100%', boxSizing: 'border-box' }}>
+                <div style={{ textAlign: 'center', marginBottom: '5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#8B5CF6', letterSpacing: '1.5px', textTransform: 'uppercase' }}>MOTOR DA OPERAÇÃO</span>
+                  <h2 style={{ fontSize: '2.5rem', fontWeight: '900', margin: 0, fontFamily: "'Outfit', sans-serif" }}>Como a Nossa IA Toma Decisões</h2>
+                  <p style={{ fontSize: '1rem', color: '#94A3B8', maxWidth: '600px', margin: '0.5rem 0 0 0' }}>
+                    Entenda o fluxo analítico por trás de cada ordem enviada ao mercado de opções binárias.
+                  </p>
+                </div>
+
+                {/* Fluxograma Diagram */}
+                <div style={{
+                  display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  marginBottom: '0.5rem'
-                }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 8px #10b981' }} />
-                  AGORA INTEGRADO COM VERCEL SERVERLESS
+                  justifyContent: 'center',
+                  flexWrap: 'wrap',
+                  gap: '1rem',
+                  width: '100%'
+                }} className="flux-diagram-responsive">
+                  <div className="flux-card" style={{ borderLeft: '3px solid #8B5CF6' }}>Mercado</div>
+                  <div className="flux-arrow">→</div>
+                  <div className="flux-card" style={{ borderLeft: '3px solid #6D28D9' }}>Análise Estatística</div>
+                  <div className="flux-arrow">→</div>
+                  <div className="flux-card" style={{ borderLeft: '3px solid #38BDF8' }}>Probabilidade</div>
+                  <div className="flux-arrow">→</div>
+                  <div className="flux-card" style={{ borderLeft: '3px solid #a78bfa' }}>Seleção da Estratégia</div>
+                  <div className="flux-arrow">→</div>
+                  <div className="flux-card" style={{ borderLeft: '3px solid #22C55E' }}>Execução</div>
+                  <div className="flux-arrow">→</div>
+                  <div className="flux-card" style={{ borderLeft: '3px solid #f43f5e' }}>Gestão da Operação</div>
+                  <div className="flux-arrow">→</div>
+                  <div className="flux-card" style={{ borderLeft: '3px solid #22c55e' }}>Registro de Resultados</div>
                 </div>
-                <h1 style={{ fontSize: '3.8rem', fontWeight: '900', lineHeight: '1.1', margin: 0, background: 'linear-gradient(to right, #ffffff 40%, var(--primary-light) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-1px' }}>
-                  A Revolução na Automação de Opções Binárias
-                </h1>
-                <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', maxWidth: '650px', margin: '0.5rem 0 0 0', lineHeight: '1.6' }}>
-                  Opere de forma autônoma na Deriv com o ASTROBOT. Análises probabilísticas em tempo real, piloto automático inteligente, agendamento de horários e gestão de banca completa.
-                </p>
-              </div>
+              </section>
 
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <button 
-                  className="primary" 
-                  onClick={() => setShowLanding(false)}
-                  style={{
-                    padding: '0.9rem 2.25rem',
-                    fontSize: '1rem',
-                    fontWeight: 'bold',
-                    borderRadius: '12px',
-                    boxShadow: 'var(--shadow-neon)'
-                  }}
-                >
-                  ACESSAR PAINEL DO ROBÔ
-                </button>
-                <button 
-                  className="secondary" 
-                  onClick={() => setLandingTab('pricing')}
-                  style={{
-                    padding: '0.9rem 2.25rem',
-                    fontSize: '1rem',
-                    fontWeight: 'bold',
-                    borderRadius: '12px'
-                  }}
-                >
-                  VER PLANOS & VALORES
-                </button>
-              </div>
-
-              {/* Features Grid */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: '1.5rem',
-                width: '100%',
-                marginTop: '1.5rem'
-              }}>
-                <div className="glass-panel glass-panel-interactive" style={{ padding: '1.75rem 1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderRadius: '20px', borderLeft: '3px solid var(--primary-light)' }}>
-                  <h3 style={{ fontSize: '1.12rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-                    <Calendar size={18} style={{ color: 'var(--primary-light)' }} /> Ciclos de Horários Independentes
-                  </h3>
-                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-                    Agende múltiplos ciclos de operação automática (ex: Ciclo Manhã às 09:00 e Ciclo Noite às 21:00) com metas de lucro, stops e stakes 100% autônomos.
+              {/* PAINEL DO ROBÔ (GALLERY) */}
+              <section id="painel-preview-section" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem', width: '100%', boxSizing: 'border-box' }}>
+                <div style={{ textAlign: 'center', marginBottom: '4rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#38BDF8', letterSpacing: '1.5px', textTransform: 'uppercase' }}>INTERFACE EM AÇÃO</span>
+                  <h2 style={{ fontSize: '2.5rem', fontWeight: '900', margin: 0, fontFamily: "'Outfit', sans-serif" }}>Visão Geral do Painel</h2>
+                  <p style={{ fontSize: '1rem', color: '#94A3B8', maxWidth: '600px', margin: '0.5rem 0 0 0' }}>
+                    Explore os diferentes módulos do centro de controle do ASTROBOT.
                   </p>
                 </div>
 
-                <div className="glass-panel glass-panel-interactive" style={{ padding: '1.75rem 1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderRadius: '20px', borderLeft: '3px solid var(--accent)' }}>
-                  <h3 style={{ fontSize: '1.12rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-                    <Brain size={18} style={{ color: 'var(--accent)' }} /> Piloto Automático Inteligente
-                  </h3>
-                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-                    O robô calcula dinamicamente a taxa de assertividade histórica de mais de 15 estratégias probabilísticas e seleciona o melhor setup para entrar.
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '1.5rem',
+                  width: '100%'
+                }} className="pricing-grid-responsive">
+                  <div className="feature-card-premium" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid rgba(255,255,255,0.03)' }}>
+                    <span style={{ fontSize: '0.68rem', color: '#8B5CF6', fontWeight: 'bold', textTransform: 'uppercase' }}>MÓDULO PRINCIPAL</span>
+                    <strong style={{ color: 'white', fontSize: '1.1rem' }}>Dashboard</strong>
+                    <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>Painel com controle do robô, status de conexão da corretora, lucros acumulados e gráficos em tempo real.</p>
+                  </div>
+                  <div className="feature-card-premium" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid rgba(255,255,255,0.03)' }}>
+                    <span style={{ fontSize: '0.68rem', color: '#38BDF8', fontWeight: 'bold', textTransform: 'uppercase' }}>BANCO DE DADOS</span>
+                    <strong style={{ color: 'white', fontSize: '1.1rem' }}>Histórico</strong>
+                    <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>Lista completa de operações salvas em tempo real com detalhes de taxa de acerto, payouts e corretora.</p>
+                  </div>
+                  <div className="feature-card-premium" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid rgba(255,255,255,0.03)' }}>
+                    <span style={{ fontSize: '0.68rem', color: '#22C55E', fontWeight: 'bold', textTransform: 'uppercase' }}>DESEMPENHO</span>
+                    <strong style={{ color: 'white', fontSize: '1.1rem' }}>Estatísticas</strong>
+                    <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>Taxa de assertividade de cada estratégia específica para você escolher os algoritmos mais estáveis.</p>
+                  </div>
+                  <div className="feature-card-premium" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid rgba(255,255,255,0.03)' }}>
+                    <span style={{ fontSize: '0.68rem', color: '#8B5CF6', fontWeight: 'bold', textTransform: 'uppercase' }}>MÉTODO MATEMÁTICO</span>
+                    <strong style={{ color: 'white', fontSize: '1.1rem' }}>Estratégias</strong>
+                    <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>Configurações de catalogação, assertividade e escolha manual ou no piloto automático de estratégias.</p>
+                  </div>
+                  <div className="feature-card-premium" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid rgba(255,255,255,0.03)' }}>
+                    <span style={{ fontSize: '0.68rem', color: '#38BDF8', fontWeight: 'bold', textTransform: 'uppercase' }}>GESTÃO DE BANCA</span>
+                    <strong style={{ color: 'white', fontSize: '1.1rem' }}>Configurações</strong>
+                    <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>Ajuste de stake, stop loss, take profit, fator multiplicador do martingale e quantidade limite de níveis.</p>
+                  </div>
+                  <div className="feature-card-premium" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid rgba(255,255,255,0.03)' }}>
+                    <span style={{ fontSize: '0.68rem', color: '#22C55E', fontWeight: 'bold', textTransform: 'uppercase' }}>MÓDULO AUTOMÁTICO</span>
+                    <strong style={{ color: 'white', fontSize: '1.1rem' }}>Agenda Automática</strong>
+                    <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>Agende múltiplos ciclos operacionais independentes para iniciar ou pausar nos horários programados.</p>
+                  </div>
+                </div>
+              </section>
+
+              {/* PRICING SECTION (HOME) */}
+              <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem 4rem 2rem', width: '100%', boxSizing: 'border-box' }}>
+                <div style={{ textAlign: 'center', marginBottom: '4rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#8B5CF6', letterSpacing: '1.5px', textTransform: 'uppercase' }}>LICENÇAS DISPONÍVEIS</span>
+                  <h2 style={{ fontSize: '2.5rem', fontWeight: '900', margin: 0, fontFamily: "'Outfit', sans-serif" }}>Planos e Valores</h2>
+                  <p style={{ fontSize: '1rem', color: '#94A3B8', maxWidth: '600px', margin: '0.5rem 0 0 0' }}>
+                    Escolha a licença ideal para o tamanho da sua banca. Liberação imediata após contato com ADM.
                   </p>
                 </div>
 
-                <div className="glass-panel glass-panel-interactive" style={{ padding: '1.75rem 1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderRadius: '20px', borderLeft: '3px solid var(--success)' }}>
-                  <h3 style={{ fontSize: '1.12rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-                    <Shield size={18} style={{ color: 'var(--success)' }} /> Gestão e Recuperação de Risco
-                  </h3>
-                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-                    Configurações flexíveis de Martingale (Tradicional ou Inteligente) e Soros. Travas de segurança integradas para respeitar seu Stop Loss.
-                  </p>
-                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '2rem',
+                  alignItems: 'center',
+                  width: '100%'
+                }} className="pricing-grid-responsive">
+                  {/* Mensal */}
+                  <div className="price-card-premium">
+                    <span style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LICENÇA MENSAL</span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                      <strong style={{ fontSize: '2.2rem', color: 'white', fontWeight: '800' }}>R$ 97</strong>
+                      <span style={{ fontSize: '0.9rem', color: '#94A3B8' }}>/mês</span>
+                    </div>
+                    <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>Acesso total por 30 dias</span>
+                    <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)' }} />
+                    <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.78rem', color: '#94A3B8', display: 'flex', flexDirection: 'column', gap: '10px', margin: 0, flexGrow: 1 }}>
+                      <li>Painel completo do ASTROBOT</li>
+                      <li>Todas as estratégias probabilísticas</li>
+                      <li>Agendador de Horários (Ciclos)</li>
+                      <li>Suporte prioritário via Telegram</li>
+                    </ul>
+                    <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" className="pricing-btn-secondary">
+                      ASSINAR COM ADM
+                    </a>
+                  </div>
 
-                <div className="glass-panel glass-panel-interactive" style={{ padding: '1.75rem 1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderRadius: '20px', borderLeft: '3px solid #60a5fa' }}>
-                  <h3 style={{ fontSize: '1.12rem', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-                    <TrendingUp size={18} style={{ color: '#60a5fa' }} /> Painel de Estatísticas Avançadas
-                  </h3>
-                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-                    Acompanhamento visual completo dos seus resultados com gráficos, histórico de contratos Deriv detalhado, winrate e contador de vitórias consecutivas.
-                  </p>
+                  {/* Trimestral (Recomendado) */}
+                  <div className="price-card-premium price-card-premium-recommended">
+                    <div style={{ position: 'absolute', top: '-14px', left: '50%', transform: 'translateX(-50%)', background: '#8B5CF6', color: 'white', fontSize: '0.68rem', fontWeight: '800', padding: '4px 14px', borderRadius: '20px', letterSpacing: '0.5px' }}>
+                      RECOMENDADO
+                    </div>
+                    <span style={{ fontSize: '0.8rem', color: '#8B5CF6', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LICENÇA TRIMESTRAL</span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                      <strong style={{ fontSize: '2.5rem', color: 'white', fontWeight: '800' }}>R$ 247</strong>
+                      <span style={{ fontSize: '0.9rem', color: '#94A3B8' }}>/90 dias</span>
+                    </div>
+                    <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>Economia de 15% em relação ao mensal</span>
+                    <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)' }} />
+                    <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.78rem', color: '#94A3B8', display: 'flex', flexDirection: 'column', gap: '10px', margin: 0, flexGrow: 1 }}>
+                      <li><strong>Tudo do plano mensal</strong></li>
+                      <li>Recomendador inteligente de estratégias</li>
+                      <li>Atualizações automáticas da Vercel</li>
+                      <li>Suporte prioritário individual VIP</li>
+                    </ul>
+                    <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" className="pricing-btn-primary">
+                      ASSINAR COM ADM
+                    </a>
+                  </div>
+
+                  {/* Anual */}
+                  <div className="price-card-premium">
+                    <span style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LICENÇA ANUAL</span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                      <strong style={{ fontSize: '2.2rem', color: 'white', fontWeight: '800' }}>R$ 697</strong>
+                      <span style={{ fontSize: '0.9rem', color: '#94A3B8' }}>/ano</span>
+                    </div>
+                    <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>Melhor custo-benefício (40% de desconto)</span>
+                    <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)' }} />
+                    <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.78rem', color: '#94A3B8', display: 'flex', flexDirection: 'column', gap: '10px', margin: 0, flexGrow: 1 }}>
+                      <li><strong>Acesso total por 365 dias</strong></li>
+                      <li>Mapeamento de setups individuais</li>
+                      <li>Acesso antecipado a novos módulos de IA</li>
+                      <li>Suporte individual VIP do Administrador</li>
+                    </ul>
+                    <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" className="pricing-btn-secondary">
+                      ASSINAR COM ADM
+                    </a>
+                  </div>
                 </div>
-              </div>
+              </section>
+
             </div>
           )}
 
           {/* STRATEGIES TAB */}
           {landingTab === 'strategies' && (
-            <div style={{ maxWidth: '900px', width: '100%', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <h2 style={{ fontSize: '2.2rem', fontWeight: '800', margin: 0 }}>Catálogo de Estratégias</h2>
-                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                  O ASTROBOT vem equipado de fábrica com mais de 15 algoritmos matemáticos e probabilísticos testados.
+            <div style={{ position: 'relative', zIndex: 5, maxWidth: '1000px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '4rem', padding: '4rem 2rem' }}>
+              <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#8B5CF6', letterSpacing: '1.5px', textTransform: 'uppercase' }}>CATÁLOGO DE ESTRATÉGIAS</span>
+                <h2 style={{ fontSize: '2.5rem', fontWeight: '900', margin: 0, fontFamily: "'Outfit', sans-serif" }}>Nossos Algoritmos de IA</h2>
+                <p style={{ fontSize: '1.02rem', color: '#94A3B8', maxWidth: '600px' }}>
+                  Conheça alguns dos principais algoritmos probabilísticos integrados de fábrica no painel do ASTROBOT.
                 </p>
               </div>
 
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '1rem'
-              }}>
-                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>PROBABILÍSTICA (5 MIN)</span>
-                  <strong style={{ color: 'white', fontSize: '0.95rem' }}>MHI Minoria</strong>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-                    Analisa as 3 últimas velas de um quadrante de 5 minutos e realiza a entrada a favor da cor minoritária no início do próximo quadrante.
+                gap: '1.5rem'
+              }} className="pricing-grid-responsive">
+                <div className="feature-card-premium">
+                  <span style={{ fontSize: '0.68rem', color: '#8B5CF6', fontWeight: 'bold' }}>PROBABILÍSTICA (5 MIN)</span>
+                  <h3 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 'bold', margin: '0.25rem 0 0.75rem 0' }}>MHI Minoria</h3>
+                  <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>
+                    Analisa as 3 últimas velas de um quadrante de 5 minutos e executa ordens na cor minoritária no início do próximo quadrante.
                   </p>
                 </div>
-
-                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>PROBABILÍSTICA (5 MIN)</span>
-                  <strong style={{ color: 'white', fontSize: '0.95rem' }}>MHI Maioria</strong>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-                    Seguindo o mesmo quadrante MHI, realiza a entrada a favor da cor majoritária das últimas 3 velas, ideal para mercados em forte tendência.
+                <div className="feature-card-premium">
+                  <span style={{ fontSize: '0.68rem', color: '#38BDF8', fontWeight: 'bold' }}>PROBABILÍSTICA (5 MIN)</span>
+                  <h3 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 'bold', margin: '0.25rem 0 0.75rem 0' }}>MHI Maioria</h3>
+                  <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>
+                    Realiza a entrada a favor da cor majoritária das últimas 3 velas do quadrante de 5 minutos, ideal para mercados com forte tendência direcional.
                   </p>
                 </div>
-
-                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>REVERSÃO E CONTROLE</span>
-                  <strong style={{ color: 'white', fontSize: '0.95rem' }}>Torres Gêmeas</strong>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-                    Compara a cor da 1ª vela e da 5ª vela do quadrante de 5 minutos, prevendo a reversão da tendência de fechamento no ciclo probabilístico.
+                <div className="feature-card-premium">
+                  <span style={{ fontSize: '0.68rem', color: '#22C55E', fontWeight: 'bold' }}>REVERSÃO PROBABILÍSTICA</span>
+                  <h3 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 'bold', margin: '0.25rem 0 0.75rem 0' }}>Torres Gêmeas</h3>
+                  <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>
+                    Compara a cor da 1ª vela e da 5ª vela de um quadrante de 5 minutos, prevendo a reversão de fechamento probabilístico do mercado.
                   </p>
                 </div>
-
-                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>CONTINUAÇÃO DE FLUXO</span>
-                  <strong style={{ color: 'white', fontSize: '0.95rem' }}>Três Mosqueteiros</strong>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-                    Busca o alinhamento de 3 velas consecutivas da mesma cor. A entrada é efetuada na 4ª vela apostando na continuidade do movimento.
+                <div className="feature-card-premium">
+                  <span style={{ fontSize: '0.68rem', color: '#8B5CF6', fontWeight: 'bold' }}>CONTINUAÇÃO DE TENDÊNCIA</span>
+                  <h3 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 'bold', margin: '0.25rem 0 0.75rem 0' }}>Três Mosqueteiros</h3>
+                  <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>
+                    Rastreia o alinhamento de 3 velas consecutivas da mesma cor e executa a ordem na 4ª vela apostando na continuidade.
                   </p>
                 </div>
-
-                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>ANÁLISE ESTATÍSTICA</span>
-                  <strong style={{ color: 'white', fontSize: '0.95rem' }}>Padrão 23</strong>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-                    Estratégia baseada na probabilidade do fechamento da 2ª e 3ª vela do quadrante. Ideal para mercados em canais laterais (consolidação).
+                <div className="feature-card-premium">
+                  <span style={{ fontSize: '0.68rem', color: '#38BDF8', fontWeight: 'bold' }}>CONSOLIDAÇÃO DE CANAL</span>
+                  <h3 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 'bold', margin: '0.25rem 0 0.75rem 0' }}>Padrão 23</h3>
+                  <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>
+                    Baseado na probabilidade do fechamento conjunto da 2ª e 3ª vela de um quadrante. Ideal para mercados em lateralização.
                   </p>
                 </div>
-
-                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>RATING E MATEMÁTICA</span>
-                  <strong style={{ color: 'white', fontSize: '0.95rem' }}>Recomendador IA</strong>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-                    Nosso módulo de recomendação vasculha todas as estratégias probabilisticamente e chaveia para o melhor setup de forma autônoma.
+                <div className="feature-card-premium">
+                  <span style={{ fontSize: '0.68rem', color: '#22C55E', fontWeight: 'bold' }}>INTELIGÊNCIA AUTOMÁTICA</span>
+                  <h3 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 'bold', margin: '0.25rem 0 0.75rem 0' }}>Recomendador IA</h3>
+                  <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>
+                    Varre historicamente todas as estratégias e seleciona dinamicamente a que possui maior índice de assertividade no momento.
                   </p>
                 </div>
               </div>
 
-              <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-                <button className="primary" onClick={() => setShowLanding(false)} style={{ padding: '0.8rem 2rem', borderRadius: '10px' }}>
-                  VER TODAS AS ESTRATÉGIAS EM OPERAÇÃO
+              <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+                <button className="cta-connect" onClick={() => setShowLanding(false)}>
+                  CONECTAR AO ROBÔ E EXPERIMENTAR ESTRATÉGIAS
                 </button>
               </div>
             </div>
@@ -1792,267 +2975,319 @@ export default function App() {
 
           {/* PRICING TAB */}
           {landingTab === 'pricing' && (
-            <div style={{ maxWidth: '900px', width: '100%', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <h2 style={{ fontSize: '2.2rem', fontWeight: '800', margin: 0 }}>Planos & Assinaturas</h2>
-                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                  Escolha o plano ideal para a sua banca. Licenças flexíveis com acesso ilimitado a todos os recursos.
+            <div style={{ position: 'relative', zIndex: 5, maxWidth: '1000px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '4rem', padding: '4rem 2rem' }}>
+              <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#8B5CF6', letterSpacing: '1.5px', textTransform: 'uppercase' }}>PLANOS & VALORES</span>
+                <h2 style={{ fontSize: '2.5rem', fontWeight: '900', margin: 0, fontFamily: "'Outfit', sans-serif" }}>Escolha Sua Licença</h2>
+                <p style={{ fontSize: '1.02rem', color: '#94A3B8', maxWidth: '600px' }}>
+                  Acesso total ao robô de trading de opções binárias com liberação imediata.
                 </p>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                {/* Monthly */}
-                <div className="glass-panel" style={{ padding: '2rem 1.5rem', borderRadius: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid var(--border-color)' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>LICENÇA MENSAL</span>
-                  <div style={{ margin: '0.5rem 0' }}>
-                    <strong style={{ fontSize: '2rem', color: 'white' }}>R$ 97</strong>
-                    <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/mês</span>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '2rem',
+                alignItems: 'center',
+                width: '100%'
+              }} className="pricing-grid-responsive">
+                <div className="price-card-premium">
+                  <span style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LICENÇA MENSAL</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                    <strong style={{ fontSize: '2.2rem', color: 'white', fontWeight: '800' }}>R$ 97</strong>
+                    <span style={{ fontSize: '0.9rem', color: '#94A3B8' }}>/mês</span>
                   </div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Acesso total por 30 dias</span>
-                  <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
-                  <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px', margin: 0, flexGrow: 1 }}>
+                  <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>Acesso total por 30 dias</span>
+                  <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)' }} />
+                  <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.78rem', color: '#94A3B8', display: 'flex', flexDirection: 'column', gap: '10px', margin: 0, flexGrow: 1 }}>
                     <li>Painel completo do ASTROBOT</li>
-                    <li>Todas as estratégias inclusas</li>
+                    <li>Todas as estratégias probabilísticas</li>
                     <li>Agendador de Horários (Ciclos)</li>
                     <li>Suporte prioritário via Telegram</li>
                   </ul>
-                  <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" className="secondary" style={{ padding: '0.75rem', fontSize: '0.8rem', fontWeight: 'bold', width: '100%', textDecoration: 'none', display: 'block', borderRadius: '10px' }}>
+                  <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" className="pricing-btn-secondary">
                     ASSINAR COM ADM
                   </a>
                 </div>
 
-                {/* Quarterly */}
-                <div className="glass-panel" style={{ padding: '2.5rem 1.5rem', borderRadius: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem', border: '2px solid var(--primary-light)', position: 'relative', transform: 'scale(1.03)', background: 'rgba(139, 92, 246, 0.03)' }}>
-                  <div style={{ position: 'absolute', top: '-12px', left: '50%', transform: 'translateX(-50%)', background: 'var(--primary)', color: 'white', fontSize: '0.65rem', fontWeight: 'bold', padding: '3px 12px', borderRadius: '20px', letterSpacing: '0.5px' }}>
+                <div className="price-card-premium price-card-premium-recommended">
+                  <div style={{ position: 'absolute', top: '-14px', left: '50%', transform: 'translateX(-50%)', background: '#8B5CF6', color: 'white', fontSize: '0.68rem', fontWeight: '800', padding: '4px 14px', borderRadius: '20px', letterSpacing: '0.5px' }}>
                     RECOMENDADO
                   </div>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--primary-light)', fontWeight: 'bold' }}>LICENÇA TRIMESTRAL</span>
-                  <div style={{ margin: '0.5rem 0' }}>
-                    <strong style={{ fontSize: '2rem', color: 'white' }}>R$ 247</strong>
-                    <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/90 dias</span>
+                  <span style={{ fontSize: '0.8rem', color: '#8B5CF6', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LICENÇA TRIMESTRAL</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                    <strong style={{ fontSize: '2.5rem', color: 'white', fontWeight: '800' }}>R$ 247</strong>
+                    <span style={{ fontSize: '0.9rem', color: '#94A3B8' }}>/90 dias</span>
                   </div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Economia de 15% em relação ao mensal</span>
-                  <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
-                  <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px', margin: 0, flexGrow: 1 }}>
+                  <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>Economia de 15% em relação ao mensal</span>
+                  <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)' }} />
+                  <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.78rem', color: '#94A3B8', display: 'flex', flexDirection: 'column', gap: '10px', margin: 0, flexGrow: 1 }}>
                     <li><strong>Tudo do plano mensal</strong></li>
-                    <li>Recomendador inteligente ativo</li>
-                    <li>Atualizações garantidas</li>
-                    <li>Suporte prioritário do ADM</li>
+                    <li>Recomendador inteligente de estratégias</li>
+                    <li>Atualizações automáticas da Vercel</li>
+                    <li>Suporte prioritário individual VIP</li>
                   </ul>
-                  <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" className="primary" style={{ padding: '0.75rem', fontSize: '0.8rem', fontWeight: 'bold', width: '100%', textDecoration: 'none', display: 'block', borderRadius: '10px' }}>
+                  <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" className="pricing-btn-primary">
                     ASSINAR COM ADM
                   </a>
                 </div>
 
-                {/* Annual */}
-                <div className="glass-panel" style={{ padding: '2rem 1.5rem', borderRadius: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid var(--border-color)' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>LICENÇA ANUAL</span>
-                  <div style={{ margin: '0.5rem 0' }}>
-                    <strong style={{ fontSize: '2rem', color: 'white' }}>R$ 697</strong>
-                    <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/ano</span>
+                <div className="price-card-premium">
+                  <span style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LICENÇA ANUAL</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                    <strong style={{ fontSize: '2.2rem', color: 'white', fontWeight: '800' }}>R$ 697</strong>
+                    <span style={{ fontSize: '0.9rem', color: '#94A3B8' }}>/ano</span>
                   </div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Melhor custo-benefício (Economia 40%)</span>
-                  <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
-                  <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px', margin: 0, flexGrow: 1 }}>
+                  <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>Melhor custo-benefício (40% de desconto)</span>
+                  <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)' }} />
+                  <ul style={{ textAlign: 'left', paddingLeft: '1rem', fontSize: '0.78rem', color: '#94A3B8', display: 'flex', flexDirection: 'column', gap: '10px', margin: 0, flexGrow: 1 }}>
                     <li><strong>Acesso total por 365 dias</strong></li>
-                    <li>Suporte individual VIP do ADM</li>
-                    <li>Mapeamento de estratégias exclusivas</li>
-                    <li>Acesso antecipado a novas versões</li>
+                    <li>Mapeamento de setups individuais</li>
+                    <li>Acesso antecipado a novos módulos de IA</li>
+                    <li>Suporte individual VIP do Administrador</li>
                   </ul>
-                  <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" className="secondary" style={{ padding: '0.75rem', fontSize: '0.8rem', fontWeight: 'bold', width: '100%', textDecoration: 'none', display: 'block', borderRadius: '10px' }}>
+                  <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" className="pricing-btn-secondary">
                     ASSINAR COM ADM
                   </a>
                 </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '1rem' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Após efetuar o pagamento com o administrador Lucas Machado, você receberá a sua chave CDKEY para ativação imediata.</span>
               </div>
             </div>
           )}
 
           {/* ADMIN TAB */}
           {landingTab === 'admin' && isAdminLoggedIn && (
-            <div style={{ maxWidth: '1000px', width: '100%', display: 'flex', flexDirection: 'column', gap: '2rem' }} className="login-container-animate">
+            <div style={{ position: 'relative', zIndex: 5, maxWidth: '1000px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '2rem', padding: '4rem 2rem' }} className="login-container-animate">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                   <h2 style={{ fontSize: '2.2rem', fontWeight: '800', margin: 0, background: 'linear-gradient(to right, white, var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                     Painel do Administrador
                   </h2>
-                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  <p style={{ fontSize: '0.9rem', color: '#94A3B8' }}>
                     Gerencie licenças, crie novas chaves e controle acessos.
                   </p>
                 </div>
-                <button 
-                  onClick={loadAdminKeys}
-                  disabled={loadingAdminKeys}
+                {adminSubTab === 'licenses' && (
+                  <button 
+                    onClick={loadAdminKeys}
+                    disabled={loadingAdminKeys}
+                    style={{
+                      padding: '0.6rem 1.25rem',
+                      fontSize: '0.82rem',
+                      fontWeight: 'bold',
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid var(--border-color)',
+                      color: 'white'
+                    }}
+                  >
+                    <RefreshCw size={14} className={loadingAdminKeys ? 'spin' : ''} />
+                    Atualizar Lista
+                  </button>
+                )}
+              </div>
+
+              {/* Admin Sub-Tabs */}
+              <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '2px', marginTop: '-0.5rem' }}>
+                <button
+                  onClick={() => setAdminSubTab('licenses')}
                   style={{
-                    padding: '0.6rem 1.25rem',
-                    fontSize: '0.82rem',
+                    background: 'transparent',
+                    border: 'none',
+                    color: adminSubTab === 'licenses' ? 'var(--primary-light)' : 'var(--text-muted)',
+                    borderBottom: adminSubTab === 'licenses' ? '2px solid var(--primary-light)' : '2px solid transparent',
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.85rem',
                     fontWeight: 'bold',
-                    borderRadius: '10px',
                     cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid var(--border-color)',
-                    color: 'white'
+                    transition: 'all 0.2s',
+                    outline: 'none'
                   }}
                 >
-                  <RefreshCw size={14} className={loadingAdminKeys ? 'spin' : ''} />
-                  Atualizar Lista
+                  🔑 Licenças & Chaves
+                </button>
+                <button
+                  onClick={() => setAdminSubTab('news')}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: adminSubTab === 'news' ? 'var(--primary-light)' : 'var(--text-muted)',
+                    borderBottom: adminSubTab === 'news' ? '2px solid var(--primary-light)' : '2px solid transparent',
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    outline: 'none'
+                  }}
+                >
+                  📰 Postar Notícias & Patches
                 </button>
               </div>
 
-              {/* Generate Key Row */}
-              <div className="glass-panel" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid rgba(139, 92, 246, 0.25)', boxShadow: '0 0 25px rgba(139, 92, 246, 0.05)' }}>
-                <h3 style={{ fontSize: '1.15rem', color: 'white', margin: '0 0 1.25rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <KeyRound size={18} style={{ color: 'var(--primary-light)' }} /> Gerador de Novas Licenças (CDKEY)
-                </h3>
-                
-                <form onSubmit={handleGenerateKeysAdmin} style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'flex-end' }}>
-                  <div style={{ flex: 1, minWidth: '200px' }}>
-                    <label style={{ fontSize: '0.72rem', fontWeight: 'bold', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
-                      VALIDADE EM DIAS
-                    </label>
-                    <select 
-                      value={generateDays} 
-                      onChange={(e) => setGenerateDays(e.target.value)}
-                      style={{ padding: '0.75rem', fontSize: '0.9rem', width: '100%', height: '42px', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'white', outline: 'none' }}
-                    >
-                      <option value="30">30 dias (Mensal)</option>
-                      <option value="90">90 dias (Trimestral)</option>
-                      <option value="365">365 dias (Anual)</option>
-                      <option value="7">7 dias (Teste)</option>
-                      <option value="1">1 dia (Demo VIP)</option>
-                    </select>
+              {adminSubTab === 'licenses' && (
+                <>
+                  {/* Generate Key Row */}
+                  <div className="glass-panel" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid rgba(139, 92, 246, 0.25)', boxShadow: '0 0 25px rgba(139, 92, 246, 0.05)' }}>
+                    <h3 style={{ fontSize: '1.15rem', color: 'white', margin: '0 0 1.25rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <KeyRound size={18} style={{ color: 'var(--primary-light)' }} /> Gerador de Novas Licenças (CDKEY)
+                    </h3>
+                    
+                    <form onSubmit={handleGenerateKeysAdmin} style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'flex-end' }}>
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <label style={{ fontSize: '0.72rem', fontWeight: 'bold', color: '#94A3B8', display: 'block', marginBottom: '0.5rem' }}>
+                          VALIDADE EM DIAS
+                        </label>
+                        <select 
+                          value={generateDays} 
+                          onChange={(e) => setGenerateDays(e.target.value)}
+                          style={{ padding: '0.75rem', fontSize: '0.9rem', width: '100%', height: '42px', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'white', outline: 'none' }}
+                        >
+                          <option value="30">30 dias (Mensal)</option>
+                          <option value="90">90 dias (Trimestral)</option>
+                          <option value="365">365 dias (Anual)</option>
+                          <option value="7">7 dias (Teste)</option>
+                          <option value="1">1 dia (Demo VIP)</option>
+                        </select>
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <label style={{ fontSize: '0.72rem', fontWeight: 'bold', color: '#94A3B8', display: 'block', marginBottom: '0.5rem' }}>
+                          QUANTIDADE DE CHAVES
+                        </label>
+                        <input 
+                          type="number" 
+                          min="1" 
+                          max="50" 
+                          value={generateCount} 
+                          onChange={(e) => setGenerateCount(e.target.value)}
+                          style={{ padding: '0.75rem', fontSize: '0.9rem', width: '100%', height: '42px', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'white', outline: 'none' }}
+                          required
+                        />
+                      </div>
+
+                      <button 
+                        type="submit" 
+                        className="primary" 
+                        disabled={generatingKeys}
+                        style={{ padding: '0.75rem 2rem', fontSize: '0.9rem', fontWeight: 'bold', height: '42px', borderRadius: '10px' }}
+                      >
+                        {generatingKeys ? 'GERANDO...' : 'GERAR CHAVES'}
+                      </button>
+                    </form>
                   </div>
 
-                  <div style={{ flex: 1, minWidth: '200px' }}>
-                    <label style={{ fontSize: '0.72rem', fontWeight: 'bold', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
-                      QUANTIDADE DE CHAVES
-                    </label>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      max="50" 
-                      value={generateCount} 
-                      onChange={(e) => setGenerateCount(e.target.value)}
-                      style={{ padding: '0.75rem', fontSize: '0.9rem', width: '100%', height: '42px', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'white', outline: 'none' }}
-                      required
-                    />
-                  </div>
+                  {/* Keys List */}
+                  <div className="glass-panel" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <h3 style={{ fontSize: '1.15rem', color: 'white', margin: 0 }}>
+                      Licenças Cadastradas ({adminKeysList.length})
+                    </h3>
 
-                  <button 
-                    type="submit" 
-                    className="primary" 
-                    disabled={generatingKeys}
-                    style={{ padding: '0.75rem 2rem', fontSize: '0.9rem', fontWeight: 'bold', height: '42px', borderRadius: '10px' }}
-                  >
-                    {generatingKeys ? 'GERANDO...' : 'GERAR CHAVES'}
-                  </button>
-                </form>
-              </div>
+                    {keysError && (
+                      <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', color: 'var(--danger)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                        ⚠️ {keysError}
+                      </div>
+                    )}
 
-              {/* Keys List */}
-              <div className="glass-panel" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <h3 style={{ fontSize: '1.15rem', color: 'white', margin: 0 }}>
-                  Licenças Cadastradas ({adminKeysList.length})
-                </h3>
-
-                {keysError && (
-                  <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', color: 'var(--danger)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                    ⚠️ {keysError}
-                  </div>
-                )}
-
-                {loadingAdminKeys ? (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                    Carregando chaves...
-                  </div>
-                ) : adminKeysList.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                    Nenhuma chave de ativação encontrada no Firebase.
-                  </div>
-                ) : (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-                          <th style={{ padding: '0.75rem 0.5rem' }}>CDKEY</th>
-                          <th style={{ padding: '0.75rem 0.5rem' }}>DURAÇÃO</th>
-                          <th style={{ padding: '0.75rem 0.5rem' }}>CRIADO EM</th>
-                          <th style={{ padding: '0.75rem 0.5rem' }}>STATUS</th>
-                          <th style={{ padding: '0.75rem 0.5rem' }}>ATIVADO EM</th>
-                          <th style={{ padding: '0.75rem 0.5rem' }}>EXPIRA EM</th>
-                          <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>AÇÕES</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {adminKeysList.map((k) => {
-                          let statusBadgeColor = 'rgba(245, 158, 11, 0.1)';
-                          let statusBorderColor = 'rgba(245, 158, 11, 0.3)';
-                          let statusTextColor = 'var(--warning)';
-                          let statusText = 'Pendente';
-
-                          if (k.status === 'active') {
-                            statusBadgeColor = 'rgba(16, 185, 129, 0.1)';
-                            statusBorderColor = 'rgba(16, 185, 129, 0.3)';
-                            statusTextColor = 'var(--success)';
-                            statusText = 'Ativa';
-                          } else if (k.status === 'expired') {
-                            statusBadgeColor = 'rgba(239, 68, 68, 0.1)';
-                            statusBorderColor = 'rgba(239, 68, 68, 0.3)';
-                            statusTextColor = 'var(--danger)';
-                            statusText = 'Expirada';
-                          }
-
-                          return (
-                            <tr key={k.key} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.03)', color: 'var(--text-secondary)' }}>
-                              <td style={{ padding: '0.75rem 0.5rem', fontFamily: 'var(--font-mono)', color: 'white', fontWeight: 'bold' }}>
-                                <span style={{ background: 'rgba(255,255,255,0.03)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>{k.key}</span>
-                              </td>
-                              <td style={{ padding: '0.75rem 0.5rem' }}>{k.durationDays} dias</td>
-                              <td style={{ padding: '0.75rem 0.5rem' }}>
-                                {k.createdAt ? new Date(k.createdAt).toLocaleDateString() : '-'}
-                              </td>
-                              <td style={{ padding: '0.75rem 0.5rem' }}>
-                                <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '12px', fontSize: '0.68rem', fontWeight: 'bold', background: statusBadgeColor, border: `1px solid ${statusBorderColor}`, color: statusTextColor }}>
-                                  {statusText}
-                                </span>
-                              </td>
-                              <td style={{ padding: '0.75rem 0.5rem' }}>
-                                {k.activatedAt ? new Date(k.activatedAt).toLocaleDateString() : '-'}
-                              </td>
-                              <td style={{ padding: '0.75rem 0.5rem' }}>
-                                {k.expiresAt ? new Date(k.expiresAt).toLocaleDateString() : '-'}
-                              </td>
-                              <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
-                                <button 
-                                  onClick={() => handleDeleteKeyAdmin(k.key)}
-                                  style={{
-                                    background: 'rgba(239, 68, 68, 0.15)',
-                                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                                    color: 'var(--danger)',
-                                    padding: '3px 8px',
-                                    borderRadius: '6px',
-                                    fontSize: '0.7rem',
-                                    cursor: 'pointer',
-                                    fontWeight: 'bold'
-                                  }}
-                                >
-                                  Excluir
-                                </button>
-                              </td>
+                    {loadingAdminKeys ? (
+                      <div style={{ textAlign: 'center', padding: '3rem', color: '#94A3B8' }}>
+                        Carregando chaves...
+                      </div>
+                    ) : adminKeysList.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '3rem', color: '#94A3B8', fontSize: '0.85rem' }}>
+                        Nenhuma chave de ativação encontrada no Firebase.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid var(--border-color)', color: '#94A3B8' }}>
+                              <th style={{ padding: '0.75rem 0.5rem' }}>CDKEY</th>
+                              <th style={{ padding: '0.75rem 0.5rem' }}>DURAÇÃO</th>
+                              <th style={{ padding: '0.75rem 0.5rem' }}>CRIADO EM</th>
+                              <th style={{ padding: '0.75rem 0.5rem' }}>STATUS</th>
+                              <th style={{ padding: '0.75rem 0.5rem' }}>ATIVADO EM</th>
+                              <th style={{ padding: '0.75rem 0.5rem' }}>EXPIRA EM</th>
+                              <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>AÇÕES</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                          </thead>
+                          <tbody>
+                            {adminKeysList.map((k) => {
+                              let statusBadgeColor = 'rgba(245, 158, 11, 0.1)';
+                              let statusBorderColor = 'rgba(245, 158, 11, 0.3)';
+                              let statusTextColor = 'var(--warning)';
+                              let statusText = 'Pendente';
+
+                              if (k.status === 'active') {
+                                statusBadgeColor = 'rgba(16, 185, 129, 0.1)';
+                                statusBorderColor = 'rgba(16, 185, 129, 0.3)';
+                                statusTextColor = 'var(--success)';
+                                statusText = 'Ativa';
+                              } else if (k.status === 'expired') {
+                                statusBadgeColor = 'rgba(239, 68, 68, 0.1)';
+                                statusBorderColor = 'rgba(239, 68, 68, 0.3)';
+                                statusTextColor = 'var(--danger)';
+                                statusText = 'Expirada';
+                              }
+
+                              return (
+                                <tr key={k.key} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.03)', color: 'var(--text-secondary)' }}>
+                                  <td style={{ padding: '0.75rem 0.5rem', fontFamily: 'var(--font-mono)', color: 'white', fontWeight: 'bold' }}>
+                                    <span style={{ background: 'rgba(255,255,255,0.03)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>{k.key}</span>
+                                  </td>
+                                  <td style={{ padding: '0.75rem 0.5rem' }}>{k.durationDays} dias</td>
+                                  <td style={{ padding: '0.75rem 0.5rem' }}>
+                                    {k.createdAt ? new Date(k.createdAt).toLocaleDateString() : '-'}
+                                  </td>
+                                  <td style={{ padding: '0.75rem 0.5rem' }}>
+                                    <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '12px', fontSize: '0.68rem', fontWeight: 'bold', background: statusBadgeColor, border: `1px solid ${statusBorderColor}`, color: statusTextColor }}>
+                                      {statusText}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: '0.75rem 0.5rem' }}>
+                                    {k.activatedAt ? new Date(k.activatedAt).toLocaleDateString() : '-'}
+                                  </td>
+                                  <td style={{ padding: '0.75rem 0.5rem' }}>
+                                    {k.expiresAt ? new Date(k.expiresAt).toLocaleDateString() : '-'}
+                                  </td>
+                                  <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                                    <button 
+                                      onClick={() => handleDeleteKeyAdmin(k.key)}
+                                      style={{
+                                        background: 'rgba(239, 68, 68, 0.15)',
+                                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                                        color: 'var(--danger)',
+                                        padding: '3px 8px',
+                                        borderRadius: '6px',
+                                        fontSize: '0.7rem',
+                                        cursor: 'pointer',
+                                        fontWeight: 'bold'
+                                      }}
+                                    >
+                                      Excluir
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
+
+              {adminSubTab === 'news' && (
+                <NewsEditor
+                  posts={posts}
+                  onPostsChange={fetchPosts}
+                  isAdmin={isAdminLoggedIn}
+                />
+              )}
             </div>
           )}
 
@@ -2060,20 +3295,90 @@ export default function App() {
 
         {/* Footer */}
         <footer style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '1.5rem 3rem',
-          borderTop: '1px solid var(--border-color)',
-          fontSize: '0.75rem',
-          color: 'var(--text-muted)',
-          background: 'rgba(5, 7, 12, 0.4)'
+          background: '#09090F',
+          borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+          padding: '4rem 2rem 3rem 2rem',
+          position: 'relative',
+          zIndex: 5,
+          color: '#94A3B8',
+          fontFamily: 'var(--font-sans)',
+          width: '100%',
+          boxSizing: 'border-box'
         }}>
-          <div>
-            &copy; 2026 ASTROBOT. Todos os direitos reservados.
-          </div>
-          <div style={{ display: 'flex', gap: '1.5rem' }}>
-            <span>Aviso de Risco: Opções binárias envolvem alto risco financeiro. Nunca invista capital que não possa perder.</span>
+          <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '3rem' }}>
+            
+            {/* Main Footer content row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '3rem' }} className="pricing-grid-responsive">
+              {/* Brand Col */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '300px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
+                  <span style={{ fontSize: '0.62rem', fontWeight: '800', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(217, 70, 239, 0.15) 100%)', border: '1px solid rgba(139, 92, 246, 0.45)', padding: '2px 8px', borderRadius: '20px', color: 'var(--primary-light)', textShadow: '0 0 5px rgba(139, 92, 246, 0.3)' }}>
+                    v2.5
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.82rem', lineHeight: '1.5', margin: 0 }}>
+                  AI Trading Engine de alto padrão projetado para automação probabilística na Deriv.
+                </p>
+                <div style={{ fontSize: '0.78rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', display: 'inline-block', boxShadow: '0 0 8px #22c55e' }} />
+                  Servidores 100% online
+                </div>
+              </div>
+
+              {/* Links Col 1 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: '150px' }}>
+                <strong style={{ color: '#ffffff', fontSize: '0.85rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Plataforma</strong>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem' }}>
+                  <button onClick={() => setLandingTab('home')} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', textAlign: 'left', padding: 0 }}>Início</button>
+                  <button onClick={() => setLandingTab('strategies')} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', textAlign: 'left', padding: 0 }}>Estratégias</button>
+                  <button onClick={() => setLandingTab('pricing')} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', textAlign: 'left', padding: 0 }}>Planos & Valores</button>
+                </div>
+              </div>
+
+              {/* Links Col 2 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: '150px' }}>
+                <strong style={{ color: '#ffffff', fontSize: '0.85rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Suporte & Social</strong>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem' }}>
+                  <a href="https://t.me/lucassmachado9" target="_blank" rel="noopener noreferrer" style={{ color: '#94A3B8', textDecoration: 'none' }}>Telegram ADM</a>
+                  <a href="https://discord.gg/" target="_blank" rel="noopener noreferrer" style={{ color: '#94A3B8', textDecoration: 'none' }}>Comunidade Discord</a>
+                  <a href="https://deriv.com" target="_blank" rel="noopener noreferrer" style={{ color: '#94A3B8', textDecoration: 'none' }}>Corretora Deriv</a>
+                </div>
+              </div>
+
+              {/* Links Col 3 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: '180px' }}>
+                <strong style={{ color: '#ffffff', fontSize: '0.85rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Legal</strong>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem' }}>
+                  <span style={{ cursor: 'pointer' }}>Política de Privacidade</span>
+                  <span style={{ cursor: 'pointer' }}>Termos de Uso</span>
+                  <span style={{ cursor: 'pointer' }}>Aviso de Risco</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Row */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+              paddingTop: '2rem',
+              fontSize: '0.78rem',
+              flexWrap: 'wrap',
+              gap: '1rem'
+            }}>
+              <div>
+                &copy; {new Date().getFullYear()} ASTROBOT. Todos os direitos reservados.
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>Powered by</span>
+                <span style={{ color: '#ffffff', fontWeight: 'bold', letterSpacing: '-0.25px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  ▲ Vercel Serverless
+                </span>
+              </div>
+            </div>
+
           </div>
         </footer>
 
@@ -2841,74 +4146,485 @@ export default function App() {
     );
   }
 
+  const netProfit = balance - initialBalance;
+  
+  const totalTrades = trades.length;
+  const wins = trades.filter(t => t.result === 'WIN').length;
+  const losses = trades.filter(t => t.result === 'LOSS').length;
+  const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
+  
+  const totalStake = trades.reduce((sum, t) => sum + (t.stake || 0), 0);
+  const roi = totalStake > 0 ? (netProfit / totalStake) * 100 : 0;
+
+  const dailyProfit = netProfit; // Match dailyProfit to netProfit for active session
+
+  // Calculate maximum drawdown
+  let maxBal = initialBalance;
+  let currentBal = initialBalance;
+  let maxDrawdown = 0;
+  trades.forEach(t => {
+    currentBal += (t.profit || 0);
+    if (currentBal > maxBal) {
+      maxBal = currentBal;
+    }
+    const dd = maxBal > 0 ? ((maxBal - currentBal) / maxBal) * 100 : 0;
+    if (dd > maxDrawdown) {
+      maxDrawdown = dd;
+    }
+  });
+
+  const getTimelineStep = () => {
+    if (!isRunning) return 0;
+    if (activeTradeCountdown) {
+      return 3; // Entrada Executada
+    }
+    const lastTrade = trades[trades.length - 1];
+    if (lastTrade && (Date.now() - lastTrade.epoch * 1000 < 10000)) {
+      return 4; // Resultado
+    }
+    if (settings.martingaleEnabled && lastTrade && lastTrade.result === 'LOSS') {
+      return 5; // Gestão Aplicada (Martingale)
+    }
+    if (bestStrategy) {
+      return 2; // Estratégia encontrada
+    }
+    return 1; // IA analisando
+  };
+
+  const keyDays = keyExpiresAt ? Math.max(0, Math.ceil((keyExpiresAt - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%' }}>
-      {/* Header bar */}
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', background: '#09090F' }}>
+      {/* Header bar - Premium Status Bar */}
       <header style={{
-        background: 'var(--bg-sidebar)',
+        background: 'rgba(14, 11, 24, 0.8)',
+        backdropFilter: 'var(--glass-blur)',
         borderBottom: '1px solid var(--border-color)',
-        padding: '0.75rem 1.5rem',
+        padding: '0.5rem 1.5rem',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '1rem'
+        position: 'sticky',
+        top: 0,
+        zIndex: 1000,
+        height: '64px'
       }}>
-        {/* Title logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '56px', width: 'auto', objectFit: 'contain' }} />
-          <span style={{ fontSize: '0.65rem', background: 'var(--primary-glow)', border: '1px solid var(--primary-light)', padding: '2px 6px', borderRadius: '20px', fontWeight: 'bold', color: 'var(--primary-light)' }}>
-            v2.5
-          </span>
+        {/* Left: Logo & Nav Links */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+          {/* Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '42px', width: 'auto', objectFit: 'contain' }} />
+            <span style={{ fontSize: '0.55rem', background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.4)', padding: '1px 6px', borderRadius: '20px', fontWeight: 'bold', color: 'var(--primary-light)' }}>
+              v2.5
+            </span>
+          </div>
+
+          {/* Nav links */}
+          <nav style={{ display: 'flex', gap: '1rem' }}>
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: Layers },
+              { id: 'scanner', label: 'Scanner', icon: Cpu },
+              { id: 'strategies', label: 'Estratégias', icon: Sparkles },
+              { id: 'reports', label: 'Relatórios', icon: TrendingUp },
+              { id: 'planning', label: 'Planejamento', icon: Target },
+              { id: 'automation', label: 'Automação', icon: Calendar },
+              { id: 'telegram', label: 'Telegram', icon: Send },
+              { id: 'news', label: 'Atualizações', icon: Newspaper },
+              ...(isAdminLoggedIn ? [{ id: 'admin', label: 'Admin', icon: ShieldCheck }] : [])
+            ].map((tab) => {
+              const IconComp = tab.icon;
+              const isActive = activePage === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActivePage(tab.id);
+                    setIsProfileDropdownOpen(false);
+                    setIsNotificationsOpen(false);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: isActive ? 'var(--primary-light)' : 'var(--text-secondary)',
+                    borderBottom: isActive ? '2px solid var(--primary-light)' : '2px solid transparent',
+                    padding: '0.5rem 0.25rem',
+                    fontSize: '0.8rem',
+                    fontWeight: isActive ? '700' : '500',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    borderRadius: '0px',
+                    transition: 'all 0.2s ease',
+                    height: 'auto'
+                  }}
+                >
+                  <IconComp size={13} />
+                  <span>{tab.label}</span>
+                  {tab.id === 'news' && (() => {
+                    const unread = getUnreadCount(posts);
+                    return unread > 0 ? (
+                      <span style={{
+                        background: 'var(--primary)',
+                        color: 'white',
+                        fontSize: '0.62rem',
+                        fontWeight: '800',
+                        borderRadius: '10px',
+                        padding: '1px 5px',
+                        marginLeft: '3px',
+                        display: 'inline-block',
+                        boxShadow: '0 0 8px rgba(139,92,246,0.6)'
+                      }}>
+                        {unread}
+                      </span>
+                    ) : null;
+                  })()}
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
-        {/* Live connections status badges */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          {keyExpiresAt && (
+        {/* Right: Balance, Account Type, Notifications, Profile Dropdown */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', position: 'relative' }}>
+          
+          {/* Balance Pill */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'rgba(255, 255, 255, 0.03)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            borderRadius: '20px',
+            padding: '4px 12px 4px 6px',
+            height: '32px'
+          }}>
             <div style={{
+              background: isDemo ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+              border: isDemo ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid rgba(16, 185, 129, 0.4)',
+              borderRadius: '20px',
+              padding: '1px 8px',
+              fontSize: '0.58rem',
+              fontWeight: 'bold',
+              color: isDemo ? 'var(--warning)' : 'var(--success)'
+            }}>
+              {isDemo ? 'DEMO' : 'REAL'}
+            </div>
+            <strong style={{ fontSize: '0.85rem', color: 'white', fontFamily: 'var(--font-mono)' }}>
+              ${balance.toFixed(2)}
+            </strong>
+          </div>
+
+          {/* Ping & Latency */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: '0.7rem',
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-mono)'
+          }}>
+            <Radio size={11} style={{ color: 'var(--primary-light)' }} />
+            <span>{latency}ms</span>
+          </div>
+
+          {/* Notifications Bell */}
+          <button
+            onClick={() => {
+              setIsNotificationsOpen(!isNotificationsOpen);
+              setIsProfileDropdownOpen(false);
+            }}
+            style={{
+              background: isNotificationsOpen ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.05)',
+              padding: '8px',
+              borderRadius: '50%',
+              color: isNotificationsOpen ? 'var(--primary-light)' : 'white',
+              cursor: 'pointer',
+              position: 'relative',
+              width: '32px',
+              height: '32px',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '0.4rem 0.8rem',
-              borderRadius: '8px',
-              border: '1px solid rgba(139, 92, 246, 0.3)',
-              background: 'rgba(139, 92, 246, 0.05)',
-              fontSize: '0.75rem',
-              color: 'white',
-              fontWeight: 'bold',
-              boxShadow: '0 0 10px rgba(139, 92, 246, 0.1)',
-              backdropFilter: 'blur(4px)'
+              justifyContent: 'center'
+            }}
+          >
+            <Bell size={14} />
+            {/* Unread news indicator */}
+            {getUnreadCount(posts) > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: '2px',
+                right: '2px',
+                width: '8px',
+                height: '8px',
+                background: 'var(--accent)',
+                borderRadius: '50%',
+                boxShadow: '0 0 6px var(--accent)'
+              }} />
+            )}
+          </button>
+
+          {/* Notifications Dropdown */}
+          {isNotificationsOpen && (
+            <div className="glass-panel" style={{
+              position: 'absolute',
+              top: '40px',
+              right: '42px',
+              width: '300px',
+              maxHeight: '400px',
+              overflowY: 'auto',
+              zIndex: 1100,
+              padding: '1rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+              background: 'rgba(14, 11, 24, 0.95)',
+              border: '1px solid rgba(139, 92, 246, 0.25)',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.6)'
             }}>
-              <KeyRound size={14} style={{ color: 'var(--primary-light)' }} />
-              <span>Licença: {Math.max(0, Math.ceil((keyExpiresAt - Date.now()) / (1000 * 60 * 60 * 24)))} dias restantes</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem' }}>
+                <strong style={{ fontSize: '0.75rem', color: 'white' }}>NOTIFICAÇÕES & NOVIDADES</strong>
+                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{getUnreadCount(posts)} não lidas</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {posts.length > 0 ? (
+                  posts.slice(0, 5).map((post, idx) => (
+                    <div key={idx} style={{ padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', borderLeft: '2px solid var(--primary-light)' }}>
+                      <strong style={{ fontSize: '0.7rem', color: 'white', display: 'block' }}>{post.title}</strong>
+                      <p style={{ fontSize: '0.62rem', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: '1.3' }}>{post.content}</p>
+                      <span style={{ fontSize: '0.5rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>{new Date(post.timestamp).toLocaleDateString()}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem 0', fontSize: '0.7rem' }}>
+                    Nenhuma novidade encontrada no momento.
+                  </div>
+                )}
+              </div>
             </div>
           )}
-          {connected ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              {/* Account Profile info */}
-              {accountInfo && (
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontWeight: 'bold', display: 'block' }}>
-                    {accountInfo.fullname}
-                  </span>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                    {accountInfo.email}
-                  </span>
+
+          {/* Profile User Dropdown Toggle */}
+          <button
+            onClick={() => {
+              setIsProfileDropdownOpen(!isProfileDropdownOpen);
+              setIsNotificationsOpen(false);
+            }}
+            style={{
+              background: isProfileDropdownOpen ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.05)',
+              padding: '4px 10px',
+              borderRadius: '20px',
+              color: 'white',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              height: '36px',
+              position: 'relative'
+            }}
+          >
+            {profileImage ? (
+              <img
+                src={profileImage}
+                alt="Profile"
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: '1px solid var(--primary-light)',
+                  boxShadow: '0 0 8px rgba(139, 92, 246, 0.4)'
+                }}
+              />
+            ) : (
+              <div style={{
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                background: 'rgba(139, 92, 246, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid var(--primary-light)'
+              }}>
+                <User size={12} style={{ color: 'var(--primary-light)' }} />
+              </div>
+            )}
+            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'white' }}>
+              {welcomeName ? welcomeName.split(' ')[0] : 'Usuário'}
+            </span>
+            <span style={{
+              background: 'linear-gradient(135deg, #FBBF24 0%, #D97706 100%)',
+              color: '#1E1B4B',
+              fontSize: '0.6rem',
+              fontWeight: '800',
+              padding: '1px 6px',
+              borderRadius: '10px',
+              boxShadow: '0 0 10px rgba(251, 191, 36, 0.3)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px'
+            }}>
+              VIP
+            </span>
+          </button>
+
+          {/* Profile Dropdown Menu */}
+          {isProfileDropdownOpen && (
+            <div className="glass-panel" style={{
+              position: 'absolute',
+              top: '40px',
+              right: '0px',
+              width: '240px',
+              zIndex: 1100,
+              padding: '0.85rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.65rem',
+              background: 'rgba(14, 11, 24, 0.95)',
+              border: '1px solid rgba(139, 92, 246, 0.25)',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.6)'
+            }}>
+              {/* User Info details */}
+              <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem', marginBottom: '0.25rem', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {profileImage ? (
+                  <img
+                    src={profileImage}
+                    alt="Profile"
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      border: '2px solid rgba(251, 191, 36, 0.6)',
+                      boxShadow: '0 0 10px rgba(251, 191, 36, 0.2)'
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    background: 'rgba(139, 92, 246, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '1px solid var(--primary-light)'
+                  }}>
+                    <User size={16} style={{ color: 'var(--primary-light)' }} />
+                  </div>
+                )}
+                <div>
+                  <strong style={{ fontSize: '0.75rem', color: 'white', display: 'block' }}>{welcomeName}</strong>
+                  <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', display: 'block' }}>{accountInfo?.email || 'Token Login'}</span>
+                  <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', display: 'block', marginTop: '2px', fontFamily: 'var(--font-mono)' }}>ID: {accountInfo?.loginid || 'Deriv'}</span>
                 </div>
-              )}
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(16, 185, 129, 0.08)', padding: '0.35rem 0.75rem', borderRadius: '20px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                <span className="pulse-dot-green"></span>
-                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--success)' }}>CONECTADO</span>
               </div>
 
-              {/* Latency Ping */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--text-secondary)', fontSize: '0.7rem', fontFamily: 'var(--font-mono)' }}>
-                <Radio size={12} />
-                <span>{latency}ms</span>
+              {/* Action Options */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <button
+                  onClick={() => {
+                    setIsProfileConfigured(false);
+                    setShowWelcome(true);
+                    setIsProfileDropdownOpen(false);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    justifyContent: 'flex-start',
+                    padding: '6px 8px',
+                    width: '100%',
+                    fontSize: '0.72rem',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <User size={12} style={{ color: 'var(--primary-light)' }} /> Editar Perfil VIP
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActivePage('settings');
+                    setIsProfileDropdownOpen(false);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    justifyContent: 'flex-start',
+                    padding: '6px 8px',
+                    width: '100%',
+                    fontSize: '0.72rem',
+                    color: activePage === 'settings' ? 'var(--primary-light)' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Cpu size={12} /> Configurações do Robô
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActivePage('logs');
+                    setIsProfileDropdownOpen(false);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    justifyContent: 'flex-start',
+                    padding: '6px 8px',
+                    width: '100%',
+                    fontSize: '0.72rem',
+                    color: activePage === 'logs' ? 'var(--primary-light)' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    borderRadius: '4px'
+                  }}
+                >
+                  <Layers size={12} /> Console de Logs
+                </button>
+
+                {/* Admin Panel button if isAdminLoggedIn */}
+                {isAdminLoggedIn && (
+                  <button
+                    onClick={() => {
+                      setLandingTab('admin');
+                      setShowLanding(true);
+                      setIsProfileDropdownOpen(false);
+                    }}
+                    style={{
+                      background: 'rgba(139, 92, 246, 0.1)',
+                      border: '1px solid rgba(139, 92, 246, 0.25)',
+                      justifyContent: 'flex-start',
+                      padding: '6px 8px',
+                      width: '100%',
+                      fontSize: '0.72rem',
+                      color: 'var(--primary-light)',
+                      cursor: 'pointer',
+                      borderRadius: '4px'
+                    }}
+                  >
+                    <ShieldCheck size={12} /> Painel Administrativo
+                  </button>
+                )}
               </div>
 
-              {/* Overlay Toggle Button */}
+              {/* License key expiration info */}
+              <div style={{ background: 'rgba(139, 92, 246, 0.05)', padding: '6px', borderRadius: '6px', fontSize: '0.62rem', border: '1px solid rgba(139, 92, 246, 0.15)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                  <span>Licença Expira:</span>
+                  <strong style={{ color: 'white' }}>{keyDays} dias</strong>
+                </div>
+              </div>
+
+              {/* HUD Toggle */}
               <button 
                 onClick={() => {
                   const isElectron = window && window.process && window.process.type === 'renderer';
@@ -2920,318 +4636,1002 @@ export default function App() {
                   }
                 }} 
                 style={{ 
-                  padding: '0.35rem 0.75rem', 
-                  borderRadius: '20px', 
-                  background: overlayActive ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)', 
-                  border: overlayActive ? '1px solid var(--primary-light)' : '1px solid rgba(255, 255, 255, 0.1)', 
-                  color: overlayActive ? 'var(--primary-light)' : 'var(--text-primary)',
+                  padding: '6px 8px', 
+                  borderRadius: '4px', 
+                  background: overlayActive ? 'rgba(139, 92, 246, 0.15)' : 'transparent', 
+                  border: 'none',
+                  color: overlayActive ? 'var(--primary-light)' : 'var(--text-secondary)',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
+                  justifyContent: 'flex-start',
                   fontSize: '0.72rem',
                   fontWeight: 'bold',
                   cursor: 'pointer',
-                  transition: 'all 0.2s'
+                  width: '100%'
                 }} 
-                title="Abrir Widget Flutuante"
               >
-                <Layers size={12} />
-                <span>{overlayActive ? 'Fechar Widget' : 'Widget Overlay'}</span>
+                <Layers size={12} style={{ marginRight: '6px' }} />
+                <span>{overlayActive ? 'Desativar HUD overlay' : 'Ativar HUD overlay'}</span>
               </button>
 
-              {/* Log out */}
-              <button onClick={handleDisconnect} style={{ padding: '0.4rem', borderRadius: '50%', color: 'var(--text-muted)' }} title="Desconectar">
-                <LogOut size={16} />
+              {/* Disconnect / Logout */}
+              <button
+                onClick={() => {
+                  setIsProfileDropdownOpen(false);
+                  handleDisconnect();
+                }}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                  color: 'var(--danger)',
+                  fontSize: '0.72rem',
+                  fontWeight: 'bold',
+                  padding: '6px',
+                  width: '100%',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  marginTop: '4px'
+                }}
+              >
+                <LogOut size={12} /> Desconectar Conta
               </button>
             </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(239, 68, 68, 0.08)', padding: '0.35rem 0.75rem', borderRadius: '20px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-              <span style={{ display: 'inline-block', width: '8px', height: '8px', backgroundColor: 'var(--danger)', borderRadius: '50%' }}></span>
-              <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--danger)' }}>DESCONECTADO</span>
-            </div>
           )}
+
         </div>
       </header>
 
-      {/* Dashboard Screen */}
-      <main className="dashboard-grid" style={{
-          flex: 1,
-          gridTemplateColumns: sidebarCollapsed ? '70px 1fr' : '280px 1fr',
-          transition: 'grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-        }}>
-          {/* Sidebar Settings */}
-          <section>
-            <Settings
-              settings={settings}
-              onChange={handleSettingsChange}
-              onStart={startBot}
-              onStop={stopBot}
-              isRunning={isRunning}
-              connected={connected}
-              authorized={authorized}
-              bestStrategy={bestStrategy}
-              collapsed={sidebarCollapsed}
-              onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-            />
-          </section>
+      {/* Main page router viewport */}
+      <div key={activePage} className="page-transition">
+      {(() => {
+        if (activePage === 'dashboard') {
+          return (
+            <main className="dashboard-grid" style={{
+              flex: 1,
+              display: 'grid',
+              gridTemplateColumns: sidebarCollapsed ? '1fr' : '1fr 340px',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              padding: '1.25rem',
+              gap: '1.25rem',
+              overflow: 'hidden',
+              position: 'relative'
+            }}>
+              {/* Floating Expand Sidebar Button */}
+              {sidebarCollapsed && (
+                <button
+                  onClick={() => setSidebarCollapsed(false)}
+                  style={{
+                    position: 'absolute',
+                    top: '20px',
+                    right: '20px',
+                    background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+                    border: 'none',
+                    color: 'white',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.68rem',
+                    fontWeight: 'bold',
+                    boxShadow: '0 0 10px rgba(139, 92, 246, 0.4)',
+                    cursor: 'pointer',
+                    zIndex: 100
+                  }}
+                >
+                  EXIBIR PAINEL
+                </button>
+              )}
 
-          {/* Main workspace */}
-          <section style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            {/* Top account stats row */}
-            <Stats
-              balance={balance}
-              initialBalance={initialBalance}
-              trades={trades}
-              stopLoss={settings.stopLoss}
-              takeProfit={settings.takeProfit}
-            />
-
-            {/* AI Recommendations Panel */}
-            <IntelligenceRecommender
-              bestStrategy={bestStrategy}
-              currentSymbol={settings.symbol}
-              sessionAssetStats={sessionAssetStats}
-              dbTrades={dbTrades}
-            />
-
-            {/* AI Interactive Suggestion Banner */}
-            {aiSuggestion && aiSuggestion.active && (
-              <div className="glass-panel" style={{
-                padding: '0.85rem 1.25rem',
-                background: 'rgba(99, 102, 241, 0.08)',
-                border: '1px solid rgba(99, 102, 241, 0.4)',
-                boxShadow: '0 8px 30px rgba(99, 102, 241, 0.15)',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '1rem',
-                animation: 'slideIn 0.3s ease',
-                transition: 'all 0.3s ease'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Cpu size={16} style={{ color: 'var(--primary-light)' }} className="pulse-primary" />
-                  <span style={{ fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                    Recomendação IA: A estratégia <strong>{aiSuggestion.strategyName}</strong> está com assertividade superior (<strong>{aiSuggestion.winRate.toFixed(1)}%</strong> vs {aiSuggestion.currentWinRate.toFixed(1)}%).
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button
-                    onClick={() => {
-                      setSettings(prev => ({ ...prev, selectedStrategy: aiSuggestion.strategyId }));
-                      setAiSuggestion(prev => ({ ...prev, active: false }));
-                      addLog({
-                        message: `Estratégia alterada manualmente para ${aiSuggestion.strategyName} após sugestão do robô.`,
-                        type: 'info',
-                        time: new Date().toLocaleTimeString()
-                      });
-                    }}
-                    style={{
-                      background: 'linear-gradient(to right, var(--primary), var(--accent))',
-                      color: 'white',
-                      border: 'none',
-                      padding: '0.35rem 0.75rem',
-                      borderRadius: '6px',
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Mudar Agora
-                  </button>
-                  <button
-                    onClick={() => setAiSuggestion(prev => ({ ...prev, active: false }))}
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      color: 'var(--text-secondary)',
-                      border: 'none',
-                      padding: '0.35rem 0.75rem',
-                      borderRadius: '6px',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Ignorar
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Glowing Active Trade Countdown Banner */}
-            {activeTradeCountdown && activeTradeCountdown.remaining > 0 && (
-              <div className="glass-panel" style={{
-                padding: '0.85rem 1.25rem',
-                background: 'rgba(139, 92, 246, 0.08)',
-                border: '1px solid rgba(139, 92, 246, 0.3)',
-                boxShadow: '0 0 15px rgba(139, 92, 246, 0.1)',
-                borderRadius: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.4rem',
-                transition: 'all 0.3s ease'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      color: activeTradeCountdown.contractType === 'CALL' ? 'var(--success)' : 'var(--danger)',
-                      fontWeight: 'bold',
-                      fontSize: '0.85rem'
-                    }}>
-                      {activeTradeCountdown.contractType === 'CALL' ? '▲ COMPRA (CALL)' : '▼ VENDA (PUT)'}
-                    </span>
-                    <span style={{ color: 'var(--text-secondary)' }}>no ativo</span>
-                    <strong>{activeTradeCountdown.symbol}</strong>
-                    <span style={{ color: 'var(--text-muted)' }}>| Entrada:</span>
-                    <strong style={{ fontFamily: 'var(--font-mono)' }}>${activeTradeCountdown.stake.toFixed(2)}</strong>
+              {/* Left Side: Chart, Timeline & Thermometers */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
+                
+                {/* AI recommendations or suggestion banner */}
+                {aiSuggestion && aiSuggestion.active && (
+                  <div className="glass-panel" style={{
+                    padding: '0.85rem 1.25rem',
+                    background: 'rgba(99, 102, 241, 0.08)',
+                    border: '1px solid rgba(99, 102, 241, 0.4)',
+                    boxShadow: '0 8px 30px rgba(99, 102, 241, 0.15)',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '1rem',
+                    animation: 'slideIn 0.3s ease',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Cpu size={16} style={{ color: 'var(--primary-light)' }} className="pulse-primary" />
+                      <span style={{ fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+                        Recomendação IA: A estratégia <strong>{aiSuggestion.strategyName}</strong> está com assertividade superior (<strong>{aiSuggestion.winRate.toFixed(1)}%</strong> vs {aiSuggestion.currentWinRate.toFixed(1)}%).
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        onClick={() => {
+                          setSettings(prev => ({ ...prev, selectedStrategy: aiSuggestion.strategyId }));
+                          setAiSuggestion(prev => ({ ...prev, active: false }));
+                          addLog({
+                            message: `Estratégia alterada manualmente para ${aiSuggestion.strategyName} após sugestão do robô.`,
+                            type: 'info',
+                            time: new Date().toLocaleTimeString()
+                          });
+                        }}
+                        style={{
+                          background: 'linear-gradient(to right, var(--primary), var(--accent))',
+                          color: 'white',
+                          border: 'none',
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '6px',
+                          fontSize: '0.75rem',
+                          fontWeight: 'bold',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Mudar Agora
+                      </button>
+                      <button
+                        onClick={() => setAiSuggestion(prev => ({ ...prev, active: false }))}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          color: 'var(--text-secondary)',
+                          border: 'none',
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '6px',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Ignorar
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <span style={{ color: 'var(--text-secondary)', marginRight: '4px' }}>Expiração em:</span>
-                    <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', color: 'var(--primary-light)' }}>
-                      {activeTradeCountdown.remaining}s
-                    </strong>
+                )}
+
+                {/* Active Trade Countdown Banner */}
+                {activeTradeCountdown && activeTradeCountdown.remaining > 0 && (
+                  <div className="glass-panel" style={{
+                    padding: '0.85rem 1.25rem',
+                    background: 'rgba(139, 92, 246, 0.08)',
+                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                    boxShadow: '0 0 15px rgba(139, 92, 246, 0.1)',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.4rem',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          color: activeTradeCountdown.contractType === 'CALL' ? 'var(--success)' : 'var(--danger)',
+                          fontWeight: 'bold',
+                          fontSize: '0.85rem'
+                        }}>
+                          {activeTradeCountdown.contractType === 'CALL' ? '▲ COMPRA (CALL)' : '▼ VENDA (PUT)'}
+                        </span>
+                        <span style={{ color: 'var(--text-secondary)' }}>no ativo</span>
+                        <strong>{activeTradeCountdown.symbol}</strong>
+                        <span style={{ color: 'var(--text-muted)' }}>| Entrada:</span>
+                        <strong style={{ fontFamily: 'var(--font-mono)' }}>${activeTradeCountdown.stake.toFixed(2)}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-secondary)', marginRight: '4px' }}>Expiração em:</span>
+                        <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', color: 'var(--primary-light)' }}>
+                          {activeTradeCountdown.remaining}s
+                        </strong>
+                      </div>
+                    </div>
+                    <div style={{ width: '100%', height: '5px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${Math.min(100, Math.max(0, (activeTradeCountdown.remaining / activeTradeCountdown.totalDuration) * 100))}%`,
+                        height: '100%',
+                        background: 'linear-gradient(to right, var(--primary), var(--accent))',
+                        borderRadius: '3px',
+                        transition: 'width 1s linear'
+                      }}></div>
+                    </div>
                   </div>
-                </div>
-                {/* Progress bar container */}
-                <div style={{ width: '100%', height: '5px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                )}
+
+                {/* Chart Wrapper Container */}
+                <div style={{ position: 'relative', width: '100%', height: '680px', borderRadius: '16px', overflow: 'hidden' }}>
+                  <Chart
+                    candles={candles}
+                    trades={trades}
+                    activeTrade={stateRef.current.lastContractDetails}
+                    granularity={settings.granularity}
+                    strategy={settings.selectedStrategy}
+                  />
+
+                  {/* Absolute HUD overlays on top of the Chart */}
                   <div style={{
-                    width: `${Math.min(100, Math.max(0, (activeTradeCountdown.remaining / activeTradeCountdown.totalDuration) * 100))}%`,
-                    height: '100%',
-                    background: 'linear-gradient(to right, var(--primary), var(--accent))',
-                    borderRadius: '3px',
-                    transition: 'width 1s linear'
-                  }}></div>
+                    position: 'absolute',
+                    top: '50px',
+                    left: '12px',
+                    display: 'flex',
+                    gap: '0.5rem',
+                    flexWrap: 'wrap',
+                    pointerEvents: 'none',
+                    zIndex: 10
+                  }}>
+                    {/* Probabilidade */}
+                    <div style={{ background: 'rgba(9, 9, 15, 0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '4px 8px', display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.5rem', color: 'var(--primary-light)', fontWeight: 'bold', textTransform: 'uppercase' }}>Probabilidade</span>
+                      <strong style={{ fontSize: '0.75rem', color: '#10b981', fontFamily: 'var(--font-mono)' }}>
+                        {bestStrategy ? `${bestStrategy.winRate.toFixed(1)}%` : '92.4%'}
+                      </strong>
+                    </div>
+
+                    {/* Estratégia */}
+                    <div style={{ background: 'rgba(9, 9, 15, 0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '4px 8px', display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.5rem', color: 'var(--primary-light)', fontWeight: 'bold', textTransform: 'uppercase' }}>Estratégia</span>
+                      <strong style={{ fontSize: '0.75rem', color: 'white' }}>
+                        {bestStrategy ? bestStrategy.name : settings.selectedStrategy.replace('_', ' ').toUpperCase()}
+                      </strong>
+                    </div>
+
+                    {/* Tendência */}
+                    <div style={{ background: 'rgba(9, 9, 15, 0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '4px 8px', display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.5rem', color: 'var(--primary-light)', fontWeight: 'bold', textTransform: 'uppercase' }}>Tendência</span>
+                      <strong style={{ fontSize: '0.75rem', color: (candles.length > 21) ? (calculateEMA(candles, 9)[candles.length - 1] > calculateEMA(candles, 21)[candles.length - 1] ? '#22c55e' : '#ef4444') : '#22c55e' }}>
+                        {(candles.length > 21) ? (calculateEMA(candles, 9)[candles.length - 1] > calculateEMA(candles, 21)[candles.length - 1] ? '▲ ALTA' : '▼ BAIXA') : '▲ COMPRA'}
+                      </strong>
+                    </div>
+
+                    {/* Próxima Vela */}
+                    <div style={{ background: 'rgba(9, 9, 15, 0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '4px 8px', display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.5rem', color: 'var(--primary-light)', fontWeight: 'bold', textTransform: 'uppercase' }}>Próxima Vela</span>
+                      <strong style={{ fontSize: '0.75rem', color: 'white' }}>
+                        {activeTradeCountdown ? 'EXECUÇÃO' : 'AGUARDANDO'}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Operations Timeline */}
+                <div style={{
+                  background: 'rgba(14, 11, 24, 0.45)',
+                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                  borderRadius: '12px',
+                  padding: '0.75rem 1.25rem',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+                }}>
+                  {(() => {
+                    const steps = [
+                      { label: 'Mercado', desc: 'Conexão ativa' },
+                      { label: 'IA analisando', desc: 'Média EMA 9/21' },
+                      { label: 'Estratégia', desc: 'Sinal probabilístico' },
+                      { label: 'Executado', desc: 'Contrato aberto' },
+                      { label: 'Resultado', desc: 'Ponto Spot' },
+                      { label: 'Gestão', desc: 'Gale / Soros' }
+                    ];
+                    
+                    const activeStep = getTimelineStep();
+
+                    return steps.map((step, idx) => {
+                      const isActive = idx <= activeStep;
+                      const isCurrent = idx === activeStep;
+
+                      return (
+                        <React.Fragment key={idx}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1, position: 'relative' }}>
+                            <div style={{
+                              width: '18px',
+                              height: '18px',
+                              borderRadius: '50%',
+                              background: isCurrent ? 'var(--primary-light)' : (isActive ? 'var(--success)' : 'rgba(255,255,255,0.05)'),
+                              border: isCurrent ? '2px solid white' : (isActive ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255,255,255,0.1)'),
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.6rem',
+                              fontWeight: 'bold',
+                              color: isCurrent || isActive ? 'white' : '#64748b',
+                              boxShadow: isCurrent ? '0 0 10px var(--primary)' : (isActive ? '0 0 8px rgba(16, 185, 129, 0.3)' : 'none'),
+                              transition: 'all 0.3s ease',
+                              zIndex: 2
+                            }}>
+                              {idx + 1}
+                            </div>
+                            <span style={{ fontSize: '0.65rem', fontWeight: isCurrent ? 'bold' : '600', color: isCurrent ? 'white' : (isActive ? '#cbd5e1' : '#64748b'), textAlign: 'center' }}>{step.label}</span>
+                          </div>
+                          {idx < steps.length - 1 && (
+                            <div style={{
+                              height: '2px',
+                              flex: 1,
+                              background: idx < activeStep ? 'var(--success)' : 'rgba(255,255,255,0.05)',
+                              boxShadow: idx < activeStep ? '0 0 4px rgba(16, 185, 129, 0.4)' : 'none',
+                              marginTop: '-16px',
+                              transition: 'all 0.3s ease',
+                              zIndex: 1
+                            }} />
+                          )}
+                        </React.Fragment>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* Motor de Estratégias Thermometers Row */}
+                {(() => {
+                  const getStratWinrate = (id, fallback) => {
+                    const found = strategiesStats.find(s => s.id === id);
+                    return found && found.totalTrades > 0 ? found.winRate : fallback;
+                  };
+
+                  const thermoList = [
+                    { name: 'MHI Minority', id: 'mhi_minority', def: 78.4 },
+                    { name: 'Marubozu', id: 'marubozu', def: 72.8 },
+                    { name: 'Padrão R7', id: 'r7', def: 69.5 },
+                    { name: 'Padrão R10', id: 'r10', def: 64.2 },
+                    { name: 'Três Mosqueteiros', id: 'three_musketeers', def: 81.3 }
+                  ];
+
+                  return (
+                    <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(14, 11, 24, 0.45)', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Cpu size={14} style={{ color: 'var(--primary-light)' }} />
+                        <span style={{ fontSize: '0.72rem', fontWeight: 'bold', color: 'var(--text-primary)', letterSpacing: '0.5px' }}>MOTOR DE ESTRATÉGIAS // EFICIÊNCIA PROBABILÍSTICA ATUAL</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.85rem' }}>
+                        {thermoList.map((t) => {
+                          const wr = getStratWinrate(t.id, t.def);
+                          const color = wr >= 75 ? 'var(--success)' : wr >= 65 ? 'var(--primary-light)' : 'var(--warning)';
+
+                          return (
+                            <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem' }}>
+                                <span style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>{t.name}</span>
+                                <strong style={{ color: color, fontFamily: 'var(--font-mono)' }}>{wr.toFixed(1)}%</strong>
+                              </div>
+                              <div style={{
+                                height: '6px',
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                borderRadius: '10px',
+                                border: '1px solid rgba(255,255,255,0.05)',
+                                overflow: 'hidden',
+                                position: 'relative'
+                              }}>
+                                <div style={{
+                                  width: `${wr}%`,
+                                  height: '100%',
+                                  background: color,
+                                  boxShadow: `0 0 8px ${color}`,
+                                  borderRadius: '10px',
+                                  transition: 'width 0.5s ease-in-out'
+                                }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+              </div>
+
+              {/* Right Sidebar Control Panel */}
+              <div style={{ display: sidebarCollapsed ? 'none' : 'flex', flexDirection: 'column' }}>
+                {/* Vertical Control Panel Box */}
+                <div className="glass-panel" style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1rem',
+                  padding: '1.25rem',
+                  background: 'rgba(14, 11, 24, 0.6)'
+                }}>
+                  
+                  {/* Status Indicator */}
+                  <div>
+                    <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', display: 'block', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status Operacional</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                      <span className={isRunning ? 'pulse-dot-green' : 'pulse-dot-red'} />
+                      <strong style={{ fontSize: '1rem', color: isRunning ? 'var(--success)' : 'var(--text-muted)' }}>
+                        {isRunning ? 'BOT OPERANDO' : 'ROBÔ PAUSADO'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* AI Neural Core Visualizer */}
+                  <div style={{
+                    position: 'relative',
+                    height: '175px',
+                    borderRadius: '10px',
+                    overflow: 'hidden',
+                    background: 'radial-gradient(circle at center, rgba(14, 11, 24, 0.4) 0%, rgba(9, 9, 15, 0.9) 100%)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    boxShadow: isRunning ? '0 0 24px rgba(139, 92, 246, 0.2)' : 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'flex-end',
+                    padding: '10px'
+                  }}>
+                    {/* Background Strands Animation */}
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1, pointerEvents: 'none' }}>
+                      <Strands
+                        colors={(() => {
+                          if (trades.length > 0) {
+                            const last = trades[trades.length - 1];
+                            if (last.profit > 0) return ["#10B981", "#34D399", "#059669"]; // Green theme
+                            if (last.profit < 0) return ["#EF4444", "#F87171", "#DC2626"]; // Red theme
+                          }
+                          return ["#8b5cf6", "#06B6D4", "#d946ef"]; // Default theme
+                        })()}
+                        count={isRunning ? 4 : 2}
+                        speed={isRunning ? 0.75 : 0.25}
+                        amplitude={isRunning ? 0.8 : 0.3}
+                        intensity={isRunning ? 0.7 : 0.3}
+                        glow={isRunning ? 2.8 : 1.2}
+                        thickness={isRunning ? 0.7 : 0.4}
+                        spread={1.2}
+                      />
+                    </div>
+                    
+                    {/* Text Overlay */}
+                    <div style={{ zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                          {isRunning ? 'Núcleo Neural Operacional' : 'Núcleo Neural Ocioso'}
+                        </span>
+                        <strong style={{ fontSize: '0.68rem', color: isRunning ? 'var(--primary-light)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {isRunning ? 'Analisando Mercado...' : 'Modo Standby'}
+                        </strong>
+                      </div>
+                      
+                      {isRunning && (
+                        <div style={{
+                          fontSize: '0.5rem',
+                          background: 'rgba(139, 92, 246, 0.15)',
+                          border: '1px solid rgba(139, 92, 246, 0.4)',
+                          color: 'var(--primary-light)',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontWeight: 'bold',
+                          animation: 'pulse 2s infinite'
+                        }}>
+                          LIVE
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Giant Action Button */}
+                  <button
+                    onClick={isRunning ? stopBot : startBot}
+                    style={{
+                      width: '100%',
+                      padding: '0.9rem',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: isRunning 
+                        ? 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)' 
+                        : 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+                      color: 'white',
+                      fontWeight: '900',
+                      fontSize: '0.95rem',
+                      letterSpacing: '1px',
+                      cursor: 'pointer',
+                      boxShadow: isRunning 
+                        ? '0 0 20px rgba(239, 68, 68, 0.4)' 
+                        : '0 0 20px rgba(139, 92, 246, 0.3)',
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    {isRunning ? 'PARAR OPERAÇÕES' : 'INICIAR BOT'}
+                  </button>
+
+                  {/* Speed Connection Status Badges */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Brain size={12} style={{ color: isRunning ? 'var(--success)' : 'var(--text-muted)' }} />
+                      <span style={{ fontSize: '0.62rem', fontWeight: 'bold' }}>IA: {isRunning ? 'ONLINE' : 'OFFLINE'}</span>
+                    </div>
+                    
+                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Radio size={12} style={{ color: connected ? 'var(--success)' : 'var(--danger)' }} />
+                      <span style={{ fontSize: '0.62rem', fontWeight: 'bold' }}>DERIV: {connected ? 'SYNCED' : 'ERR'}</span>
+                    </div>
+                  </div>
+
+                  {/* Financial & Parameter Specs */}
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontWeight: 'bold', textTransform: 'uppercase' }}>Painel da Sessão</span>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.72rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Estratégia Atual:</span>
+                        <strong style={{ color: 'white' }}>{settings.autoPilot ? 'Piloto Auto' : (bestStrategy?.name || settings.selectedStrategy.replace('_', ' ').toUpperCase())}</strong>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Probabilidade:</span>
+                        <strong style={{ color: 'var(--success)' }}>{bestStrategy ? `${bestStrategy.winRate.toFixed(1)}%` : '92.4%'}</strong>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Próxima Entrada:</span>
+                        <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>{activeTradeCountdown && activeTradeCountdown.remaining > 0 ? `${activeTradeCountdown.remaining}s` : (isRunning ? 'Analisando...' : 'Pausado')}</strong>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Meta de Lucro:</span>
+                        <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>${Number(settings.takeProfit || 0).toFixed(2)}</strong>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Stop Loss:</span>
+                        <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>${Number(settings.stopLoss || 0).toFixed(2)}</strong>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Saldo Atual:</span>
+                        <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>${balance.toFixed(2)}</strong>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Lucro da Sessão:</span>
+                        <strong style={{ color: netProfit >= 0 ? 'var(--success)' : 'var(--danger)', fontFamily: 'var(--font-mono)' }}>{netProfit >= 0 ? '+' : ''}${netProfit.toFixed(2)}</strong>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Drawdown Máx:</span>
+                        <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>{maxDrawdown.toFixed(1)}%</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AI Assistant messages console */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.65rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Brain size={11} style={{ color: 'var(--primary-light)' }} />
+                      <span style={{ fontSize: '0.55rem', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Assistente Virtual IA</span>
+                    </div>
+                    <div style={{
+                      background: 'rgba(9, 9, 15, 0.45)',
+                      borderRadius: '6px',
+                      padding: '7px 9px',
+                      fontSize: '0.62rem',
+                      color: '#94a3b8',
+                      lineHeight: '1.35',
+                      borderLeft: '2px solid rgba(139, 92, 246, 0.3)',
+                      maxHeight: '62px',
+                      overflowY: 'auto'
+                    }}>
+                      {(() => {
+                        if (!isRunning) {
+                          return "Aguardando início das operações. Volatilidade estável detectada.";
+                        }
+                        if (activeTradeCountdown) {
+                          return `Sinal de ${activeTradeCountdown.contractType} detectado em ${activeTradeCountdown.symbol}. Executando ordem...`;
+                        }
+                        if (bestStrategy) {
+                          return `"${bestStrategy.name}" lidera com ${bestStrategy.winRate.toFixed(1)}% de assertividade. Monitorando entradas.`;
+                        }
+                        return "Escaneando dados históricos e EMAs 9/21. Permaneça conectado.";
+                      })()}
+                    </div>
+                  </div>
+
                 </div>
               </div>
-            )}
+            </main>
+          );
+        }
 
-            {/* Visual Workspace: Grid containing Chart + Strategies */}
-            <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '1.25rem', height: '360px' }}>
-              <Chart
-                candles={candles}
-                trades={trades}
-                activeTrade={stateRef.current.lastContractDetails}
-                granularity={settings.granularity}
+        if (activePage === 'scanner') {
+          return (
+            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
+              <Scanner
+                settings={settings}
+                onChange={handleSettingsChange}
+                connected={connected}
+                isRunning={isRunning}
               />
+            </main>
+          );
+        }
 
-              <StrategyList
-                strategies={strategiesStats.length > 0 ? strategiesStats : [
-                  { id: 'ma_crossover', name: 'Cruzamento de Médias (9/21)', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Média Móvel Rápida EMA 9 sobre EMA 21.' },
-                  { id: 'mhi_minority', name: 'MHI Padrão (Minoria)', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Analisa últimas 3 velas do ciclo M5, opera minoria.' },
-                  { id: 'mhi_majority', name: 'MHI Maioria', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Analisa últimas 3 velas do ciclo M5, opera maioria.' },
-                  { id: 'twin_towers', name: 'Torres Gêmeas', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Compara cor de velas pos 1 e 5 em ciclo de 5.' },
-                  { id: 'three_musketeers', name: 'Três Mosqueteiros', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Detecta 3 velas iguais, entra reversão na 4ª.' },
-                  { id: 'padrao_23', name: 'Padrão 23', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Analisa a 1ª vela do ciclo de 5 minutos. Entra na 2ª vela prevendo a mesma cor.' },
-                  { id: 'padrao_3x1', name: 'Padrão 3x1', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Analisa as 3 primeiras velas do ciclo de 5 minutos. Entra na 5ª vela na cor da minoria.' },
-                  { id: 'padrao_impar', name: 'Padrão Ímpar', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Analisa a 3ª vela do ciclo de 5 minutos. Entra na 1ª vela do próximo ciclo na mesma cor.' },
-                  { id: 'r7', name: 'Padrão R7', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Analisa a 9ª vela do ciclo de 10 minutos anterior. Entra na 7ª vela do ciclo atual na mesma cor.' },
-                  { id: 'pullback', name: 'Pullback na Média (EMA 20)', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Entrada de tendência em toques na Média Móvel EMA 20.' },
-                  { id: 'reversal', name: 'Reversão (Hammer / Shooting)', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Entrada contra a tendência ao identificar velas de exaustão Hammer/Shooting Star.' },
-                  { id: 'pivot_123', name: 'Pivô de 1-2-3', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Entrada no rompimento do Pivô de Alta (ponto 2) ou Pivô de Baixa.' },
-                  { id: 'ross_hook', name: '123 de Ross', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Entrada no rompimento do Ross Hook após a formação e rompimento de um pivô 1-2-3.' },
-                  { id: 'r10', name: 'Padrão R10', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Analisa as primeiras 3 velas do ciclo de 10 min e entra contra a maioria na 10ª vela.' },
-                  { id: 'marubozu', name: 'Marubozu', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Vela sem pavios e corpo gigante. Entrada a favor do forte fluxo de tendência.' },
-                  { id: 'bos_choch', name: 'BOS + ChoCH', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'SMC: Quebra de Estrutura (BOS) após Mudança de Caractere (ChoCH) identificada.' },
-                  { id: 'master_candle', name: 'Vela Mestra (Master Candle)', winRate: 0, totalTrades: 0, wins: 0, losses: 0, description: 'Vela com grande amplitude que contém as 4 velas seguintes. Rompimento de extremidades.' }
-                ]}
+        if (activePage === 'strategies') {
+          return (
+            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
+              <StrategiesCatalog
+                strategies={strategiesStats}
                 selectedStrategyId={settings.selectedStrategy}
                 onSelectStrategy={(id) => setSettings(prev => ({ ...prev, selectedStrategy: id }))}
                 liveSignals={liveSignals}
                 autoPilot={settings.autoPilot}
               />
-            </div>
+            </main>
+          );
+        }
 
-            {/* Tab selector for Logs vs Background Scanner vs Scheduler */}
-            <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', gap: '1.5rem', marginBottom: '0.25rem' }}>
-              <button 
-                onClick={() => setBottomTab('logs')}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: bottomTab === 'logs' ? '2px solid var(--primary-light)' : '2px solid transparent',
-                  color: bottomTab === 'logs' ? 'var(--text-primary)' : 'var(--text-muted)',
-                  padding: '0.5rem 0.25rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
+        if (activePage === 'reports') {
+          return (
+            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
+              <Reports
+                dbTrades={dbTrades}
+                onClearDb={() => {
+                  clearDbTrades();
+                  setDbTrades([]);
                 }}
-              >
-                Painel de Operações e Logs
-              </button>
-              <button 
-                onClick={() => setBottomTab('scanner')}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: bottomTab === 'scanner' ? '2px solid var(--primary-light)' : '2px solid transparent',
-                  color: bottomTab === 'scanner' ? 'var(--text-primary)' : 'var(--text-muted)',
-                  padding: '0.5rem 0.25rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                Scanner de Ativos (Background)
-              </button>
-              <button 
-                onClick={() => setBottomTab('automation')}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: bottomTab === 'automation' ? '2px solid var(--primary-light)' : '2px solid transparent',
-                  color: bottomTab === 'automation' ? 'var(--text-primary)' : 'var(--text-muted)',
-                  padding: '0.5rem 0.25rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                Agendador & Ciclos (Automação)
-              </button>
-            </div>
+              />
+            </main>
+          );
+        }
 
-            {/* Content area: Logs, Scanner or Scheduler */}
-            <section style={{ height: '380px', minHeight: '380px' }}>
-              {bottomTab === 'logs' && (
-                <Logs
-                  trades={trades}
-                  logs={logs}
-                  onClearLogs={handleClearLogs}
-                  dbTrades={dbTrades}
-                  onClearDb={() => {
-                    clearDbTrades();
-                    setDbTrades([]);
-                  }}
-                />
-              )}
-              {bottomTab === 'scanner' && (
-                <Scanner
+        if (activePage === 'planning') {
+          return (
+            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
+              <Planning
+                dbTrades={dbTrades}
+                onClearDb={() => {
+                  clearDbTrades();
+                  setDbTrades([]);
+                }}
+              />
+            </main>
+          );
+        }
+
+        if (activePage === 'automation') {
+          return (
+            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
+              <Scheduler
+                schedulerState={schedulerState}
+                onToggleScheduler={setSchedulerState}
+                cycles={cycles}
+                onSaveCycles={setCycles}
+                activeCycleId={activeCycleId}
+                onTriggerCycleManually={handleTriggerCycleManually}
+                schedulerLogs={schedulerLogs}
+                onClearSchedulerLogs={handleClearSchedulerLogs}
+                onStopBot={stopBot}
+              />
+            </main>
+          );
+        }
+
+        if (activePage === 'settings') {
+          return (
+            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto', display: 'flex', justifyContent: 'center' }}>
+              <div style={{ maxWidth: '800px', width: '100%' }}>
+                <Settings
                   settings={settings}
                   onChange={handleSettingsChange}
-                  connected={connected}
+                  onStart={startBot}
+                  onStop={stopBot}
                   isRunning={isRunning}
-                />
-              )}
-              {bottomTab === 'automation' && (
-                <Scheduler
+                  connected={connected}
+                  authorized={authorized}
+                  bestStrategy={bestStrategy}
+                  collapsed={false}
+                  onToggleCollapse={() => {}}
                   schedulerState={schedulerState}
                   onToggleScheduler={setSchedulerState}
-                  cycles={cycles}
-                  onSaveCycles={setCycles}
-                  activeCycleId={activeCycleId}
-                  onTriggerCycleManually={handleTriggerCycleManually}
-                  schedulerLogs={schedulerLogs}
-                  onClearSchedulerLogs={handleClearSchedulerLogs}
+                  onSaveSettings={handleSaveSettings}
                 />
-              )}
-            </section>
-          </section>
-        </main>
+              </div>
+            </main>
+          );
+        }
+
+        if (activePage === 'logs') {
+          return (
+            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
+              <Logs
+                trades={trades}
+                logs={logs}
+                onClearLogs={handleClearLogs}
+                dbTrades={dbTrades}
+                onClearDb={() => {
+                  clearDbTrades();
+                  setDbTrades([]);
+                }}
+              />
+            </main>
+          );
+        }
+
+        if (activePage === 'telegram') {
+          return (
+            <main style={{ padding: '1.25rem 2rem', flex: 1, overflowY: 'auto' }}>
+              <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.6rem', fontWeight: '800', margin: 0, background: 'linear-gradient(to right, white, var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Telegram Remote</h2>
+                  <p style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '4px' }}>Monitore e controle o ASTROBOT pelo celular, 24 horas por dia.</p>
+                </div>
+                <TelegramConfig
+                  settings={settings}
+                  onSaveTelegramSettings={(cfg) => {
+                    // Config is saved to localStorage inside TelegramConfig;
+                    // notify Electron main process if running
+                    const isElectron = window && window.process && window.process.type === 'renderer';
+                    if (isElectron) {
+                      try {
+                        const { ipcRenderer } = window.require('electron');
+                        ipcRenderer.send('update-telegram-config', cfg);
+                      } catch (err) {
+                        console.error('IPC send failed:', err);
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </main>
+          );
+        }
+
+        if (activePage === 'news') {
+          return (
+            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
+              <NewsFeed
+                posts={posts}
+                loading={postsLoading}
+              />
+            </main>
+          );
+        }
+
+        if (activePage === 'admin' && isAdminLoggedIn) {
+          return (
+            <main style={{ padding: '2rem 1.25rem', flex: 1, overflowY: 'auto', display: 'flex', justifyContent: 'center' }}>
+              <div style={{ maxWidth: '1000px', width: '100%', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <h2 style={{ fontSize: '2.2rem', fontWeight: '800', margin: 0, background: 'linear-gradient(to right, white, var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                      Painel do Administrador
+                    </h2>
+                    <p style={{ fontSize: '0.9rem', color: '#94A3B8' }}>
+                      Gerencie licenças, crie novas chaves e controle acessos.
+                    </p>
+                  </div>
+                  {adminSubTab === 'licenses' && (
+                    <button 
+                      onClick={loadAdminKeys}
+                      disabled={loadingAdminKeys}
+                      style={{
+                        padding: '0.6rem 1.25rem',
+                        fontSize: '0.82rem',
+                        fontWeight: 'bold',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid var(--border-color)',
+                        color: 'white'
+                      }}
+                    >
+                      <RefreshCw size={14} className={loadingAdminKeys ? 'spin' : ''} />
+                      Atualizar Lista
+                    </button>
+                  )}
+                </div>
+
+                {/* Admin Sub-Tabs */}
+                <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '2px', marginTop: '-0.5rem' }}>
+                  <button
+                    onClick={() => setAdminSubTab('licenses')}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: adminSubTab === 'licenses' ? 'var(--primary-light)' : 'var(--text-muted)',
+                      borderBottom: adminSubTab === 'licenses' ? '2px solid var(--primary-light)' : '2px solid transparent',
+                      padding: '0.5rem 1rem',
+                      fontSize: '0.85rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      outline: 'none'
+                    }}
+                  >
+                    🔑 Licenças & Chaves
+                  </button>
+                  <button
+                    onClick={() => setAdminSubTab('news')}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: adminSubTab === 'news' ? 'var(--primary-light)' : 'var(--text-muted)',
+                      borderBottom: adminSubTab === 'news' ? '2px solid var(--primary-light)' : '2px solid transparent',
+                      padding: '0.5rem 1rem',
+                      fontSize: '0.85rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      outline: 'none'
+                    }}
+                  >
+                    📰 Postar Notícias & Patches
+                  </button>
+                </div>
+
+                {adminSubTab === 'licenses' && (
+                  <>
+                    {/* Generate Key Row */}
+                    <div className="glass-panel" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid rgba(139, 92, 246, 0.25)', boxShadow: '0 0 25px rgba(139, 92, 246, 0.05)' }}>
+                      <h3 style={{ fontSize: '1.15rem', color: 'white', margin: '0 0 1.25rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <KeyRound size={18} style={{ color: 'var(--primary-light)' }} /> Gerador de Novas Licenças (CDKEY)
+                      </h3>
+                      
+                      <form onSubmit={handleGenerateKeysAdmin} style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'flex-end' }}>
+                        <div style={{ flex: 1, minWidth: '200px' }}>
+                          <label style={{ fontSize: '0.72rem', fontWeight: 'bold', color: '#94A3B8', display: 'block', marginBottom: '0.5rem' }}>
+                            VALIDADE EM DIAS
+                          </label>
+                          <select 
+                            value={generateDays} 
+                            onChange={(e) => setGenerateDays(e.target.value)}
+                            style={{ padding: '0.75rem', fontSize: '0.9rem', width: '100%', height: '42px', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'white', outline: 'none' }}
+                          >
+                            <option value="30">30 dias (Mensal)</option>
+                            <option value="90">90 dias (Trimestral)</option>
+                            <option value="365">365 dias (Anual)</option>
+                            <option value="7">7 dias (Teste)</option>
+                            <option value="1">1 dia (Demo VIP)</option>
+                          </select>
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: '200px' }}>
+                          <label style={{ fontSize: '0.72rem', fontWeight: 'bold', color: '#94A3B8', display: 'block', marginBottom: '0.5rem' }}>
+                            QUANTIDADE DE CHAVES
+                          </label>
+                          <input 
+                            type="number" 
+                            min="1" 
+                            max="50" 
+                            value={generateCount} 
+                            onChange={(e) => setGenerateCount(e.target.value)}
+                            style={{ padding: '0.75rem', fontSize: '0.9rem', width: '100%', height: '42px', background: 'rgba(15, 23, 42, 0.5)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'white', outline: 'none' }}
+                            required
+                          />
+                        </div>
+
+                        <button 
+                          type="submit" 
+                          className="primary" 
+                          disabled={generatingKeys}
+                          style={{ padding: '0.75rem 2rem', fontSize: '0.9rem', fontWeight: 'bold', height: '42px', borderRadius: '10px' }}
+                        >
+                          {generatingKeys ? 'GERANDO...' : 'GERAR CHAVES'}
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Keys List */}
+                    <div className="glass-panel" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <h3 style={{ fontSize: '1.15rem', color: 'white', margin: 0 }}>
+                        Licenças Cadastradas ({adminKeysList.length})
+                      </h3>
+
+                      {keysError && (
+                        <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', color: 'var(--danger)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                          ⚠️ {keysError}
+                        </div>
+                      )}
+
+                      {loadingAdminKeys ? (
+                        <div style={{ textAlign: 'center', padding: '3rem', color: '#94A3B8' }}>
+                          Carregando chaves...
+                        </div>
+                      ) : adminKeysList.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '3rem', color: '#94A3B8', fontSize: '0.85rem' }}>
+                          Nenhuma chave de ativação encontrada no Firebase.
+                        </div>
+                      ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid var(--border-color)', color: '#94A3B8' }}>
+                                <th style={{ padding: '0.75rem 0.5rem' }}>CDKEY</th>
+                                <th style={{ padding: '0.75rem 0.5rem' }}>DURAÇÃO</th>
+                                <th style={{ padding: '0.75rem 0.5rem' }}>CRIADO EM</th>
+                                <th style={{ padding: '0.75rem 0.5rem' }}>STATUS</th>
+                                <th style={{ padding: '0.75rem 0.5rem' }}>ATIVADO EM</th>
+                                <th style={{ padding: '0.75rem 0.5rem' }}>EXPIRA EM</th>
+                                <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>AÇÕES</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {adminKeysList.map((k) => {
+                                let statusBadgeColor = 'rgba(245, 158, 11, 0.1)';
+                                let statusBorderColor = 'rgba(245, 158, 11, 0.3)';
+                                let statusTextColor = 'var(--warning)';
+                                let statusText = 'Pendente';
+
+                                if (k.status === 'active') {
+                                  statusBadgeColor = 'rgba(16, 185, 129, 0.1)';
+                                  statusBorderColor = 'rgba(16, 185, 129, 0.3)';
+                                  statusTextColor = 'var(--success)';
+                                  statusText = 'Ativa';
+                                } else if (k.status === 'expired') {
+                                  statusBadgeColor = 'rgba(239, 68, 68, 0.1)';
+                                  statusBorderColor = 'rgba(239, 68, 68, 0.3)';
+                                  statusTextColor = 'var(--danger)';
+                                  statusText = 'Expirada';
+                                }
+
+                                return (
+                                  <tr key={k.key} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.03)', color: 'var(--text-secondary)' }}>
+                                    <td style={{ padding: '0.75rem 0.5rem', fontFamily: 'var(--font-mono)', color: 'white', fontWeight: 'bold' }}>
+                                      <span style={{ background: 'rgba(255,255,255,0.03)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>{k.key}</span>
+                                    </td>
+                                    <td style={{ padding: '0.75rem 0.5rem' }}>{k.durationDays} dias</td>
+                                    <td style={{ padding: '0.75rem 0.5rem' }}>
+                                      {k.createdAt ? new Date(k.createdAt).toLocaleDateString() : '-'}
+                                    </td>
+                                    <td style={{ padding: '0.75rem 0.5rem' }}>
+                                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '12px', fontSize: '0.68rem', fontWeight: 'bold', background: statusBadgeColor, border: `1px solid ${statusBorderColor}`, color: statusTextColor }}>
+                                        {statusText}
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: '0.75rem 0.5rem' }}>
+                                      {k.activatedAt ? new Date(k.activatedAt).toLocaleDateString() : '-'}
+                                    </td>
+                                    <td style={{ padding: '0.75rem 0.5rem' }}>
+                                      {k.expiresAt ? new Date(k.expiresAt).toLocaleDateString() : '-'}
+                                    </td>
+                                    <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                                      <button 
+                                        onClick={() => handleDeleteKeyAdmin(k.key)}
+                                        style={{
+                                          background: 'rgba(239, 68, 68, 0.15)',
+                                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                                          color: 'var(--danger)',
+                                          padding: '3px 8px',
+                                          borderRadius: '6px',
+                                          fontSize: '0.7rem',
+                                          cursor: 'pointer',
+                                          fontWeight: 'bold'
+                                        }}
+                                      >
+                                        Excluir
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {adminSubTab === 'news' && (
+                  <NewsEditor
+                    posts={posts}
+                    onPostsChange={fetchPosts}
+                    isAdmin={isAdminLoggedIn}
+                  />
+                )}
+              </div>
+            </main>
+          );
+        }
+
+        return null;
+      })()}
+      </div>
+
+      {/* Futuristic simulated NeuralLoader training sequence */}
+      {isInitializing && (
+        <NeuralLoader
+          onComplete={() => {
+            setIsInitializing(false);
+            startBot(true);
+          }}
+        />
+      )}
     </div>
   );
 }
