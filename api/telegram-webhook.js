@@ -77,33 +77,45 @@ export default async function handler(req, res) {
     const text = message.text.trim();
     const chatId = String(message.chat.id);
 
-    // Find user in Firestore that has telegramConfig.chatId === chatId
-    const usersRef = db.collection('users');
-    let snapshot = await usersRef.where('telegramConfig.chatId', '==', chatId).get();
+    const emailQuery = req.query.email;
+    let userDocFound = null;
 
-    // Fallback: search by numeric chatId if the first query returned empty
-    if (snapshot.empty && !isNaN(Number(chatId))) {
-      snapshot = await usersRef.where('telegramConfig.chatId', '==', Number(chatId)).get();
+    if (emailQuery) {
+      const cleanEmail = emailQuery.trim().toLowerCase();
+      const userDoc = await db.collection('users').doc(cleanEmail).get();
+      if (userDoc.exists) {
+        userDocFound = userDoc;
+      }
     }
 
-    if (snapshot.empty) {
+    if (!userDocFound) {
+      // Fallback: Find user in Firestore that has telegramConfig.chatId === chatId
+      const usersRef = db.collection('users');
+      let snapshot = await usersRef.where('telegramConfig.chatId', '==', chatId).get();
+
+      // Fallback: search by numeric chatId if the first query returned empty
+      if (snapshot.empty && !isNaN(Number(chatId))) {
+        snapshot = await usersRef.where('telegramConfig.chatId', '==', Number(chatId)).get();
+      }
+
+      if (!snapshot.empty) {
+        userDocFound = snapshot.docs[0];
+      }
+    }
+
+    if (!userDocFound) {
       console.log(`Mensagem de chat ID desconhecido: ${chatId}`);
       return res.status(200).json({ success: true, message: 'Chat ID não vinculado a nenhum usuário.' });
     }
 
-    // Write command to all matching users' queue (usually just one)
-    const batch = db.batch();
-    snapshot.forEach(doc => {
-      batch.update(doc.ref, {
-        pendingCommand: {
-          text: text,
-          timestamp: Date.now(),
-          processed: false
-        }
-      });
+    // Write command to the user's queue
+    await userDocFound.ref.update({
+      pendingCommand: {
+        text: text,
+        timestamp: Date.now(),
+        processed: false
+      }
     });
-
-    await batch.commit();
 
     return res.status(200).json({
       success: true,

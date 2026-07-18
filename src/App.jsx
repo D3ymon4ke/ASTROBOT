@@ -6410,6 +6410,7 @@ export default function App() {
                 </div>
                 <TelegramConfig
                   settings={settings}
+                  userEmail={userEmail}
                   onSaveTelegramSettings={(cfg) => {
                     // Config is saved to localStorage inside TelegramConfig;
                     // Sincronizar com o banco de dados no Vercel/Firestore

@@ -4,7 +4,8 @@ import { sendTelegramMessage } from '../utils/telegram';
 
 export default function TelegramConfig({
   settings,
-  onSaveTelegramSettings
+  onSaveTelegramSettings,
+  userEmail
 }) {
   const DEFAULT_CONFIG = {
     enabled: false,
@@ -82,7 +83,7 @@ export default function TelegramConfig({
                                 window.location.protocol === 'file:' ||
                                 (window.process && window.process.type === 'renderer');
       const baseDomain = isLocalOrElectron ? 'https://astrobot-seven.vercel.app' : window.location.origin;
-      const webhookUrl = `${baseDomain}/api/telegram-webhook`;
+      const webhookUrl = `${baseDomain}/api/telegram-webhook?email=${encodeURIComponent(userEmail || '')}`;
       fetch(`https://api.telegram.org/bot${config.token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`)
         .then(res => res.json())
         .then(resData => {
