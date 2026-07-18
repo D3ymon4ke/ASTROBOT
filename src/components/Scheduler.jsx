@@ -31,6 +31,7 @@ export default function Scheduler({
     martingaleMultiplier: 2.0,
     enableMasterCandleSecondary: false,
     disableSlowStrategies: false,
+    disableMaCrossover: false,
     minProbability: 90,
     icon: '🤖',
     color: '#8b5cf6' // Purple
@@ -40,6 +41,7 @@ export default function Scheduler({
   const sanitizedCycles = (cycles || []).map(c => ({
     ...defaultCycle,
     ...c,
+    selectedStrategy: 'autopilot',
     days: c.days || defaultCycle.days,
     icon: c.icon || defaultCycle.icon,
     color: c.color || defaultCycle.color,
@@ -56,6 +58,104 @@ export default function Scheduler({
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [wizardData, setWizardData] = useState(defaultCycle);
+
+  // Scheduling Generator Modal States
+  const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
+  const [generatorData, setGeneratorData] = useState({
+    stakeValue: 1.0,
+    takeProfit: 10.0,
+    stopLoss: 20.0,
+    periods: {
+      dawn: true,
+      morning: true,
+      afternoon: true,
+      night: true
+    },
+    enableMasterCandleSecondary: false,
+    disableSlowStrategies: true,
+    disableMaCrossover: false
+  });
+
+  const handleGenerateTimeline = () => {
+    const newCycles = [];
+    const periodsSelected = generatorData.periods;
+    
+    const stake = parseFloat(generatorData.stakeValue) || 1.0;
+    const tp = parseFloat(generatorData.takeProfit) || 10.0;
+    const sl = parseFloat(generatorData.stopLoss) || 20.0;
+    
+    const periodConfigs = {
+      dawn: [
+        { time: '01:25', name: 'Madrugada - Reversão', icon: '🌙', color: '#8b5cf6', strategy: 'reversal' },
+        { time: '03:40', name: 'Madrugada - Baixo Ruído', icon: '🌌', color: '#06b6d4', strategy: 'mhi_minority' },
+        { time: '05:15', name: 'Madrugada - Transição', icon: '🌅', color: '#10b981', strategy: 'twin_towers' }
+      ],
+      morning: [
+        { time: '07:30', name: 'Manhã - Tendência', icon: '⚡', color: '#f59e0b', strategy: 'ma_crossover' },
+        { time: '09:45', name: 'Manhã - Alta Liquidez', icon: '🚀', color: '#8b5cf6', strategy: 'autopilot' },
+        { time: '11:15', name: 'Manhã - Consolidação', icon: '🎯', color: '#10b981', strategy: 'three_musketeers' }
+      ],
+      afternoon: [
+        { time: '13:30', name: 'Tarde - Pullback EMA20', icon: '📈', color: '#06b6d4', strategy: 'pullback' },
+        { time: '15:45', name: 'Tarde - Consistência', icon: '🤖', color: '#ec4899', strategy: 'autopilot' },
+        { time: '17:15', name: 'Tarde - Fim de Turno', icon: '🌇', color: '#ef4444', strategy: 'padrao_23' }
+      ],
+      night: [
+        { time: '19:30', name: 'Noite - Padrão MHI', icon: '🛡️', color: '#8b5cf6', strategy: 'mhi_majority' },
+        { time: '21:15', name: 'Noite - Volatilidade', icon: '⚡', color: '#f59e0b', strategy: 'padrao_3x1' },
+        { time: '23:30', name: 'Noite - Encerramento', icon: '🌙', color: '#ec4899', strategy: 'autopilot' }
+      ]
+    };
+    
+    const targetAssets = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_50', '1HZ50V'];
+    let generatedCount = 0;
+    
+    Object.keys(periodConfigs).forEach(periodKey => {
+      if (periodsSelected[periodKey]) {
+        periodConfigs[periodKey].forEach(cfg => {
+          const assetIndex = generatedCount % targetAssets.length;
+          const symbol = targetAssets[assetIndex];
+          
+          const strategy = 'autopilot';
+          const name = `${cfg.name} (Auto)`;
+          
+          newCycles.push({
+            id: 'cycle_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+            name: name,
+            startTime: cfg.time,
+            days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
+            timezone: 'GMT-3',
+            symbol: symbol,
+            granularity: '60',
+            selectedStrategy: strategy,
+            stakeValue: stake,
+            takeProfit: tp,
+            stopLoss: sl,
+            martingaleLevels: 2,
+            martingaleMultiplier: 2.0,
+            enableMasterCandleSecondary: !!generatorData.enableMasterCandleSecondary,
+            disableSlowStrategies: !!generatorData.disableSlowStrategies,
+            disableMaCrossover: !!generatorData.disableMaCrossover,
+            minProbability: 92,
+            icon: cfg.icon,
+            color: cfg.color,
+            active: true,
+            status: 'Aguardando'
+          });
+          generatedCount++;
+        });
+      }
+    });
+    
+    if (newCycles.length === 0) {
+      alert('Selecione pelo menos um período para gerar.');
+      return;
+    }
+    
+    const updatedCycles = [...sanitizedCycles, ...newCycles];
+    onSaveCycles(updatedCycles);
+    setIsGeneratorOpen(false);
+  };
 
   // Filter States for Logs
   const [logSearch, setLogSearch] = useState('');
@@ -125,6 +225,88 @@ export default function Scheduler({
     }
   }, [cycles.length, selectedCycleId]);
 
+  const parseTimezoneOffset = (tzString) => {
+    if (!tzString || tzString === 'UTC') return 0;
+    const match = tzString.match(/GMT([+-])(\d+)/);
+    if (match) {
+      const sign = match[1] === '+' ? 1 : -1;
+      const hours = parseInt(match[2]);
+      return sign * hours;
+    }
+    return 0;
+  };
+
+  const getCycleTimeParts = (timezone, dateObj = new Date()) => {
+    const offsetHours = parseTimezoneOffset(timezone);
+    const targetDate = new Date(dateObj.getTime() + (offsetHours * 3600000));
+    
+    const hh = targetDate.getUTCHours().toString().padStart(2, '0');
+    const mm = targetDate.getUTCMinutes().toString().padStart(2, '0');
+    const ss = targetDate.getUTCSeconds().toString().padStart(2, '0');
+    const dayIndex = targetDate.getUTCDay();
+    const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    
+    return {
+      hh: targetDate.getUTCHours(),
+      mm: targetDate.getUTCMinutes(),
+      ss: targetDate.getUTCSeconds(),
+      hhmm: `${hh}:${mm}`,
+      timeString: `${hh}:${mm}:${ss}`,
+      currentDayName: dayNames[dayIndex]
+    };
+  };
+
+  const getNextCycle = () => {
+    if (!sanitizedCycles || sanitizedCycles.length === 0) return null;
+    const activeCycles = sanitizedCycles.filter(c => c.active && c.status === 'Aguardando');
+    if (activeCycles.length === 0) return null;
+
+    const now = new Date();
+    
+    const sorted = [...activeCycles].sort((a, b) => {
+      const aParts = getCycleTimeParts(a.timezone || 'GMT-3', now);
+      const bParts = getCycleTimeParts(b.timezone || 'GMT-3', now);
+      
+      const [aH, aM] = a.startTime.split(':').map(Number);
+      const [bH, bM] = b.startTime.split(':').map(Number);
+      
+      const getDiffMinutes = (currDayName, currH, currM, targetH, targetM, targetDays) => {
+        const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        const currDayIndex = dayNames.indexOf(currDayName);
+        const activeDays = targetDays && targetDays.length > 0 ? targetDays : ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+        
+        let minDiffMinutes = Infinity;
+        for (const targetDay of activeDays) {
+          const targetDayIndex = dayNames.indexOf(targetDay);
+          if (targetDayIndex === -1) continue;
+          
+          let dayDiff = targetDayIndex - currDayIndex;
+          if (dayDiff < 0) {
+            dayDiff += 7;
+          }
+          
+          let timeDiff = (targetH * 60 + targetM) - (currH * 60 + currM);
+          if (dayDiff === 0 && timeDiff <= 0) {
+            dayDiff = 7;
+          }
+          
+          const totalDiff = dayDiff * 24 * 60 + timeDiff;
+          if (totalDiff < minDiffMinutes) {
+            minDiffMinutes = totalDiff;
+          }
+        }
+        return minDiffMinutes;
+      };
+
+      const aDiff = getDiffMinutes(aParts.currentDayName, aParts.hh, aParts.mm, aH, aM, a.days);
+      const bDiff = getDiffMinutes(bParts.currentDayName, bParts.hh, bParts.mm, bH, bM, b.days);
+      
+      return aDiff - bDiff;
+    });
+
+    return sorted[0];
+  };
+
   // Next cycle countdown logic
   useEffect(() => {
     const timer = setInterval(() => {
@@ -133,14 +315,40 @@ export default function Scheduler({
         setNextCycleCountdown('--:--:--');
         return;
       }
+      
       const now = new Date();
+      const parts = getCycleTimeParts(next.timezone || 'GMT-3', now);
       const [h, m] = next.startTime.split(':').map(Number);
-      const target = new Date();
-      target.setHours(h, m, 0, 0);
-      if (target < now) target.setDate(target.getDate() + 1);
+      
+      const getDiffSeconds = (currDayName, currH, currM, currS, targetH, targetM, targetDays) => {
+        const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        const currDayIndex = dayNames.indexOf(currDayName);
+        const activeDays = targetDays && targetDays.length > 0 ? targetDays : ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+        
+        let minDiffSeconds = Infinity;
+        for (const targetDay of activeDays) {
+          const targetDayIndex = dayNames.indexOf(targetDay);
+          if (targetDayIndex === -1) continue;
+          
+          let dayDiff = targetDayIndex - currDayIndex;
+          if (dayDiff < 0) {
+            dayDiff += 7;
+          }
+          
+          let timeDiffSecs = (targetH * 3600 + targetM * 60) - (currH * 3600 + currM * 60 + currS);
+          if (dayDiff === 0 && timeDiffSecs <= 0) {
+            dayDiff = 7;
+          }
+          
+          const totalDiffSecs = dayDiff * 24 * 3600 + timeDiffSecs;
+          if (totalDiffSecs < minDiffSeconds) {
+            minDiffSeconds = totalDiffSecs;
+          }
+        }
+        return minDiffSeconds;
+      };
 
-      const diffMs = target - now;
-      const diffSecs = Math.floor(diffMs / 1000);
+      const diffSecs = getDiffSeconds(parts.currentDayName, parts.hh, parts.mm, parts.ss, h, m, next.days);
       
       const hrs = Math.floor(diffSecs / 3600);
       const mins = Math.floor((diffSecs % 3600) / 60);
@@ -153,30 +361,6 @@ export default function Scheduler({
 
     return () => clearInterval(timer);
   }, [cycles]);
-
-  const getNextCycle = () => {
-    if (!sanitizedCycles || sanitizedCycles.length === 0) return null;
-    const activeCycles = sanitizedCycles.filter(c => c.active && c.status === 'Aguardando');
-    if (activeCycles.length === 0) return null;
-
-    const now = new Date();
-    const sorted = [...activeCycles].sort((a, b) => {
-      const [aH, aM] = a.startTime.split(':').map(Number);
-      const [bH, bM] = b.startTime.split(':').map(Number);
-      
-      const aDate = new Date();
-      aDate.setHours(aH, aM, 0, 0);
-      if (aDate < now) aDate.setDate(aDate.getDate() + 1);
-
-      const bDate = new Date();
-      bDate.setHours(bH, bM, 0, 0);
-      if (bDate < now) bDate.setDate(bDate.getDate() + 1);
-
-      return aDate - bDate;
-    });
-
-    return sorted[0];
-  };
 
   const getCleanSymbolName = (symbolCode) => {
     const asset = assets.find(a => a.symbol === symbolCode);
@@ -375,6 +559,27 @@ export default function Scheduler({
               <span className="slider" style={{ borderRadius: '22px' }}></span>
             </label>
           </div>
+
+          {/* Scheduling Generator Button */}
+          <button
+            onClick={() => setIsGeneratorOpen(true)}
+            className="action-button-glow"
+            style={{
+              padding: '0.65rem 1.2rem',
+              borderRadius: '10px',
+              fontSize: '0.8rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'rgba(139, 92, 246, 0.12)',
+              border: '1px solid rgba(139, 92, 246, 0.4)',
+              color: 'var(--primary-light)'
+            }}
+          >
+            <Sliders size={16} /> Gerador de Agendamento
+          </button>
 
           {/* Add New Mission Button */}
           <button
@@ -1127,6 +1332,232 @@ export default function Scheduler({
 
       </div>
 
+      {/* SCHEDULING GENERATOR MODAL */}
+      {isGeneratorOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(9, 6, 18, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 2000,
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            background: 'rgba(15, 11, 28, 0.95)',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
+            boxShadow: '0 0 50px rgba(139, 92, 246, 0.2)',
+            borderRadius: '20px',
+            width: '480px',
+            maxWidth: '90%',
+            maxHeight: '92vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            position: 'relative'
+          }}>
+            {/* Header */}
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Sliders size={18} style={{ color: 'var(--primary-light)' }} /> Gerador de Linha do Tempo
+                </h3>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                  Gere missões automaticamente em horários de maior probabilidade.
+                </span>
+              </div>
+              <button
+                onClick={() => setIsGeneratorOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
+              {/* Numeric Parameters */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>VALOR DA ENTRADA</label>
+                  <input
+                    type="number"
+                    value={generatorData.stakeValue}
+                    onChange={(e) => setGeneratorData(prev => ({ ...prev, stakeValue: e.target.value }))}
+                    style={{
+                      fontSize: '0.78rem',
+                      padding: '0.55rem',
+                      background: '#09090f',
+                      color: 'white',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      width: '100%'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>STOP WIN ($)</label>
+                  <input
+                    type="number"
+                    value={generatorData.takeProfit}
+                    onChange={(e) => setGeneratorData(prev => ({ ...prev, takeProfit: e.target.value }))}
+                    style={{
+                      fontSize: '0.78rem',
+                      padding: '0.55rem',
+                      background: '#09090f',
+                      color: 'white',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      width: '100%'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>STOP LOSS ($)</label>
+                  <input
+                    type="number"
+                    value={generatorData.stopLoss}
+                    onChange={(e) => setGeneratorData(prev => ({ ...prev, stopLoss: e.target.value }))}
+                    style={{
+                      fontSize: '0.78rem',
+                      padding: '0.55rem',
+                      background: '#09090f',
+                      color: 'white',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      width: '100%'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Period Selectors */}
+              <div>
+                <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', letterSpacing: '0.5px' }}>PERÍODOS DE OPERAÇÃO</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  {[
+                    { key: 'dawn', label: 'Madrugada', desc: '00:00 às 06:00', icon: '🌙' },
+                    { key: 'morning', label: 'Manhã', desc: '06:00 às 12:00', icon: '🌅' },
+                    { key: 'afternoon', label: 'Tarde', desc: '12:00 às 18:00', icon: '🌇' },
+                    { key: 'night', label: 'Noite', desc: '18:00 às 00:00', icon: '🌌' }
+                  ].map(p => {
+                    const isSelected = generatorData.periods[p.key];
+                    return (
+                      <div
+                        key={p.key}
+                        onClick={() => setGeneratorData(prev => ({
+                          ...prev,
+                          periods: { ...prev.periods, [p.key]: !prev.periods[p.key] }
+                        }))}
+                        style={{
+                          padding: '10px 12px',
+                          background: isSelected ? 'rgba(139, 92, 246, 0.08)' : 'rgba(255, 255, 255, 0.01)',
+                          border: isSelected ? '1px solid var(--primary-light)' : '1px solid rgba(255, 255, 255, 0.05)',
+                          borderRadius: '12px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{ fontSize: '1.2rem' }}>{p.icon}</div>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: isSelected ? 'white' : '#cbd5e1' }}>{p.label}</div>
+                          <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>{p.desc}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Additional Options */}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '2px', letterSpacing: '0.5px' }}>CONFIGURAÇÕES ADICIONAIS</label>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                  <span style={{ color: '#cbd5e1' }}>Vela Master como secundária</span>
+                  <label className="switch">
+                    <input 
+                      type="checkbox" 
+                      checked={generatorData.enableMasterCandleSecondary} 
+                      onChange={(e) => setGeneratorData(prev => ({ ...prev, enableMasterCandleSecondary: e.target.checked }))} 
+                    />
+                    <span className="slider"></span>
+                  </label>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                  <span style={{ color: '#cbd5e1' }}>Desativar estratégias lentas</span>
+                  <label className="switch">
+                    <input 
+                      type="checkbox" 
+                      checked={generatorData.disableSlowStrategies} 
+                      onChange={(e) => setGeneratorData(prev => ({ ...prev, disableSlowStrategies: e.target.checked }))} 
+                    />
+                    <span className="slider"></span>
+                  </label>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                  <span style={{ color: '#cbd5e1' }}>Desativar cruzamento de médias</span>
+                  <label className="switch">
+                    <input 
+                      type="checkbox" 
+                      checked={generatorData.disableMaCrossover} 
+                      onChange={(e) => setGeneratorData(prev => ({ ...prev, disableMaCrossover: e.target.checked }))} 
+                    />
+                    <span className="slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ padding: '1rem 1.5rem', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                onClick={() => setIsGeneratorOpen(false)}
+                style={{
+                  padding: '0.55rem 1rem',
+                  fontSize: '0.75rem',
+                  fontWeight: '800',
+                  color: 'white',
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleGenerateTimeline}
+                className="action-button-glow"
+                style={{
+                  padding: '0.55rem 1.25rem',
+                  fontSize: '0.75rem',
+                  fontWeight: '800',
+                  color: 'white',
+                  background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  boxShadow: '0 0 12px rgba(139, 92, 246, 0.3)'
+                }}
+              >
+                Gerar Linha do Tempo 🚀
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* STEPPER WIZARD MODAL */}
       {isWizardOpen && (
         <div style={{
@@ -1419,15 +1850,21 @@ export default function Scheduler({
                         <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                           Estratégia Principal
                         </label>
-                        <select
-                          value={wizardData.selectedStrategy}
-                          onChange={(e) => setWizardData({ ...wizardData, selectedStrategy: e.target.value })}
-                          style={{ height: '38px', fontSize: '0.85rem' }}
-                        >
-                          {strategies.map(s => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                          ))}
-                        </select>
+                        <div style={{
+                          padding: '0.6rem 0.8rem',
+                          fontSize: '0.85rem',
+                          background: 'rgba(139, 92, 246, 0.1)',
+                          border: '1px solid rgba(139, 92, 246, 0.3)',
+                          borderRadius: '8px',
+                          color: 'var(--primary-light)',
+                          fontWeight: 'bold',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          height: '38px'
+                        }}>
+                          🤖 Piloto Automático
+                        </div>
                       </div>
                     </div>
 
@@ -1561,6 +1998,21 @@ export default function Scheduler({
                             type="checkbox"
                             checked={wizardData.disableSlowStrategies}
                             onChange={(e) => setWizardData({ ...wizardData, disableSlowStrategies: e.target.checked })}
+                          />
+                          <span className="slider" style={{ borderRadius: '18px' }}></span>
+                        </label>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                        <div>
+                          <strong style={{ fontSize: '0.75rem', color: 'white', display: 'block' }}>Excluir Cruzamento de Médias</strong>
+                          <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Pula Cruzamento de Médias no piloto automático</span>
+                        </div>
+                        <label className="switch" style={{ width: '34px', height: '18px' }}>
+                          <input
+                            type="checkbox"
+                            checked={wizardData.disableMaCrossover}
+                            onChange={(e) => setWizardData({ ...wizardData, disableMaCrossover: e.target.checked })}
                           />
                           <span className="slider" style={{ borderRadius: '18px' }}></span>
                         </label>

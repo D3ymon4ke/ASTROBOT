@@ -12,13 +12,16 @@ import Scanner from './components/Scanner';
 import Scheduler from './components/Scheduler';
 import NewsEditor from './components/NewsEditor';
 import NewsFeed, { getUnreadCount } from './components/NewsFeed';
+import DownloadsEditor from './components/DownloadsEditor';
+import DownloadsFeed from './components/DownloadsFeed';
 import Reports from './components/Reports';
 import NeuralLoader from './components/NeuralLoader';
 import StrategiesCatalog from './components/StrategiesCatalog';
 import Planning from './components/Planning';
 import Strands from './components/Strands';
+import LightPillar from './components/LightPillar';
 import TelegramConfig from './components/TelegramConfig';
-import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, TrendingUp, Zap, CheckCircle, Menu, X, Percent, TrendingDown, Target, Newspaper, Bell, User, Camera, Upload, Send } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, TrendingUp, Zap, CheckCircle, Menu, X, Percent, TrendingDown, Target, Newspaper, Bell, User, Camera, Upload, Send, Download } from 'lucide-react';
 import { loadDbTrades, saveDbTrade, clearDbTrades } from './utils/db';
 import { playWinSound, playLossSound } from './utils/sound';
 import {
@@ -49,8 +52,183 @@ const presetAvatars = [
   `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g4" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%2310B981"/><stop offset="100%" stop-color="%23047857"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(%23g4)"/><circle cx="50" cy="35" r="14" fill="%23ffffff" opacity="0.9"/><path d="M26,74 C26,58 38,50 50,50 C62,50 74,58 74,74" fill="%23ffffff" opacity="0.9"/><circle cx="50" cy="35" r="7" fill="url(%23g4)"/><circle cx="50" cy="35" r="2" fill="%23ffffff"/></svg>`
 ];
 
+const DIAGNOSTIC_STEPS = [
+  { text: 'Inicializando Motor Neural...', progress: '██████□□□□' },
+  { text: 'Conectando à Deriv...', progress: '████████□□' },
+  { text: 'Carregando Estratégias...', progress: '██████████' },
+  { text: 'Sincronizando Scanner...', progress: '██████████' },
+  { text: 'Preparando Dashboard...', progress: '██████████' },
+  { text: 'Entrando...', progress: '██████████' }
+];
+
+const LiveSimulatedChart = () => {
+  const [candles, setCandles] = useState([
+    { open: 120, close: 125, high: 128, low: 118, type: 'green' },
+    { open: 125, close: 122, high: 127, low: 120, type: 'red' },
+    { open: 122, close: 130, high: 132, low: 121, type: 'green' },
+    { open: 130, close: 135, high: 138, low: 128, type: 'green' },
+    { open: 135, close: 131, high: 136, low: 129, type: 'red' },
+    { open: 131, close: 138, high: 140, low: 130, type: 'green' },
+    { open: 138, close: 145, high: 148, low: 136, type: 'green' },
+    { open: 145, close: 142, high: 146, low: 140, type: 'red' },
+    { open: 142, close: 148, high: 152, low: 141, type: 'green' }
+  ]);
+  const [lastPrice, setLastPrice] = useState(148.24);
+  const [priceChange, setPriceChange] = useState(2.41);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const isUp = Math.random() > 0.45;
+      const change = parseFloat((Math.random() * 1.5).toFixed(2));
+      const nextPrice = isUp ? parseFloat((lastPrice + change).toFixed(2)) : parseFloat((lastPrice - change).toFixed(2));
+      setLastPrice(nextPrice);
+      
+      const pctChange = parseFloat(((nextPrice - 142) / 142 * 100).toFixed(2));
+      setPriceChange(pctChange);
+
+      setCandles(prev => {
+        const list = [...prev];
+        const lastCandle = list[list.length - 1];
+        
+        if (Math.random() > 0.65) {
+          list.shift();
+          const open = lastCandle.close;
+          const close = nextPrice;
+          const high = Math.max(open, close) + parseFloat((Math.random() * 0.8).toFixed(2));
+          const low = Math.min(open, close) - parseFloat((Math.random() * 0.8).toFixed(2));
+          list.push({ open, close, high, low, type: close >= open ? 'green' : 'red' });
+        } else {
+          lastCandle.close = nextPrice;
+          lastCandle.high = Math.max(lastCandle.high, nextPrice);
+          lastCandle.low = Math.min(lastCandle.low, nextPrice);
+          lastCandle.type = nextPrice >= lastCandle.open ? 'green' : 'red';
+        }
+        return list;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lastPrice]);
+
+  const minScale = 110;
+  const heightFactor = 3;
+
+  const ema9Path = candles.map((c, i) => {
+    const x = i * 45 + 25;
+    const y = 180 - (c.close - minScale) * heightFactor;
+    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+  }).join(' ');
+
+  const ema21Path = candles.map((c, i) => {
+    const x = i * 45 + 25;
+    const y = 180 - ((c.open + c.close)/2 - minScale) * heightFactor;
+    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+  }).join(' ');
+
+  const yVal = 180 - (lastPrice - minScale) * heightFactor;
+
+  return (
+    <div className="mock-chart-card">
+      <div className="mock-chart-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block', animation: 'navLinePulse 1.5s infinite ease-in-out' }} />
+          <strong style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>Volatility 100 (1s) Index</strong>
+          <span style={{ fontSize: '0.62rem', background: 'rgba(16, 185, 129, 0.12)', color: '#10b981', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>1m</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '1rem', fontWeight: '800', color: 'white', fontFamily: 'var(--font-mono)' }}>${lastPrice.toFixed(2)}</span>
+          <span style={{ fontSize: '0.72rem', fontWeight: 'bold', color: priceChange >= 0 ? '#10b981' : '#ef4444', fontFamily: 'var(--font-mono)' }}>
+            {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
+          </span>
+        </div>
+      </div>
+
+      <div className="mock-chart-body" style={{ height: '220px', position: 'relative', overflow: 'hidden', padding: '10px 0' }}>
+        <div className="mock-chart-grid-overlay" />
+
+        <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 2 }}>
+          <path d={ema9Path} fill="none" stroke="#8b5cf6" strokeWidth="2" opacity="0.8" style={{ transition: 'd 0.3s ease' }} />
+          <path d={ema21Path} fill="none" stroke="#38bdf8" strokeWidth="1.5" opacity="0.6" style={{ transition: 'd 0.3s ease' }} />
+
+          <line 
+            x1="0" 
+            y1={yVal} 
+            x2="540" 
+            y2={yVal} 
+            stroke="rgba(255,255,255,0.15)" 
+            strokeWidth="1" 
+            strokeDasharray="3 3"
+            style={{ transition: 'y1 0.3s ease, y2 0.3s ease' }}
+          />
+
+          <line 
+            x1={8 * 45 + 25} 
+            y1="0" 
+            x2={8 * 45 + 25} 
+            y2="220" 
+            stroke="rgba(255,255,255,0.15)" 
+            strokeWidth="1" 
+            strokeDasharray="3 3"
+          />
+
+          <circle 
+            cx={8 * 45 + 25} 
+            cy={yVal} 
+            r="4" 
+            fill="#8b5cf6" 
+            style={{ transition: 'cy 0.3s ease', filter: 'drop-shadow(0 0 6px #8b5cf6)' }}
+          />
+        </svg>
+
+        <div style={{ display: 'flex', gap: '30px', paddingLeft: '15px', height: '100%', alignItems: 'flex-end', zIndex: 1, position: 'relative' }}>
+          {candles.map((candle, idx) => {
+            const openY = 180 - (candle.open - minScale) * heightFactor;
+            const closeY = 180 - (candle.close - minScale) * heightFactor;
+            const highY = 180 - (candle.high - minScale) * heightFactor;
+            const lowY = 180 - (candle.low - minScale) * heightFactor;
+
+            const top = Math.min(openY, closeY);
+            const bottom = Math.max(openY, closeY);
+            const bodyHeight = Math.max(2, bottom - top);
+            
+            const isGreen = candle.type === 'green';
+            const color = isGreen ? '#10b981' : '#ef4444';
+            const bgGlow = isGreen ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+
+            return (
+              <div key={idx} style={{ width: '15px', height: '100%', position: 'relative' }}>
+                <div style={{
+                  position: 'absolute',
+                  left: '7px',
+                  top: `${highY}px`,
+                  height: `${Math.max(1, lowY - highY)}px`,
+                  width: '1px',
+                  background: color,
+                  opacity: 0.6,
+                  transition: 'all 0.3s ease'
+                }} />
+                <div style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: `${top}px`,
+                  height: `${bodyHeight}px`,
+                  width: '100%',
+                  background: color,
+                  borderRadius: '2px',
+                  boxShadow: `0 0 10px ${bgGlow}`,
+                  transition: 'all 0.3s ease'
+                }} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const isOverlayMode = window.location.search.includes('overlay=true');
+  const isElectron = typeof window !== 'undefined' && window.process && window.process.type === 'renderer';
 
   // Connection states
   const [rememberMe, setRememberMe] = useState(() => {
@@ -152,8 +330,35 @@ export default function App() {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setTempProfileImage(reader.result);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const max_size = 128;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > max_size) {
+              height *= max_size / width;
+              width = max_size;
+            }
+          } else {
+            if (height > max_size) {
+              width *= max_size / height;
+              height = max_size;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          setTempProfileImage(compressedDataUrl);
+        };
+        img.src = event.target.result;
       };
       reader.readAsDataURL(file);
     }
@@ -186,7 +391,7 @@ export default function App() {
       setShowWelcome(false);
     }, 1500);
   };
-  const [showLanding, setShowLanding] = useState(true);
+  const [showLanding, setShowLanding] = useState(!isElectron);
   const [landingTab, setLandingTab] = useState('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [overlayActive, setOverlayActive] = useState(false);
@@ -200,6 +405,11 @@ export default function App() {
   const [posts, setPosts] = useState([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [postsFetched, setPostsFetched] = useState(false);
+
+  // Downloads state
+  const [downloads, setDownloads] = useState([]);
+  const [downloadsLoading, setDownloadsLoading] = useState(false);
+  const [downloadsFetched, setDownloadsFetched] = useState(false);
 
   // Simulated Live Demo Dashboard states for Landing Page
   const [demoProfit, setDemoProfit] = useState(142.50);
@@ -267,9 +477,12 @@ export default function App() {
   // User Authentication States
   const [userEmail, setUserEmail] = useState('');
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
-  const [userEmailInput, setUserEmailInput] = useState('');
-  const [userPasswordInput, setUserPasswordInput] = useState('');
+  const [userEmailInput, setUserEmailInput] = useState(() => localStorage.getItem('astrobot_saved_email') || '');
+  const [userPasswordInput, setUserPasswordInput] = useState(() => localStorage.getItem('astrobot_saved_password') || '');
   const [userRegisterKeyInput, setUserRegisterKeyInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberLogin, setRememberLogin] = useState(true);
+  const [loginSequenceIndex, setLoginSequenceIndex] = useState(null);
 
   // Administrative Panel States
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -278,7 +491,7 @@ export default function App() {
   const [adminPassword, setAdminPassword] = useState('');
   const [adminLoginError, setAdminLoginError] = useState('');
   const [adminLoggingIn, setAdminLoggingIn] = useState(false);
-  const [adminSubTab, setAdminSubTab] = useState('licenses'); // 'licenses' | 'news'
+  const [adminSubTab, setAdminSubTab] = useState('licenses'); // 'licenses' | 'news' | 'downloads'
 
   const [adminKeysList, setAdminKeysList] = useState([]);
   const [loadingAdminKeys, setLoadingAdminKeys] = useState(false);
@@ -326,6 +539,19 @@ export default function App() {
     localStorage.removeItem('astrobot_expires_at');
     localStorage.removeItem('astrobot_admin_token');
     
+    // Clear profile details
+    localStorage.removeItem('astrobot_custom_name');
+    localStorage.removeItem('astrobot_profile_image');
+    localStorage.removeItem('astrobot_profile_configured');
+
+    // Also clear Deriv credentials and settings
+    localStorage.removeItem('deriv_token');
+    localStorage.removeItem('deriv_app_id');
+    localStorage.removeItem('deriv_is_demo');
+    localStorage.removeItem('astrobot_settings');
+    localStorage.removeItem('astrobot_telegram_config');
+    localStorage.removeItem('astrobot_scheduler_cycles');
+    
     // Disconnect and clear states
     derivAPI.disconnect();
     setUserEmail('');
@@ -336,7 +562,15 @@ export default function App() {
     setIsAdminLoggedIn(false);
     setAccountInfo(null);
     setWelcomeName('');
-    setShowLanding(true);
+    setProfileImage('');
+    setIsProfileConfigured(false);
+    setShowWelcome(false);
+    setShowLanding(!isElectron);
+    
+    // Clear token inputs in state
+    setToken('');
+    setAppId('1098');
+    setIsDemo(true);
   };
 
   // Auth login handler
@@ -371,73 +605,100 @@ export default function App() {
 
       if (response.ok && result.success) {
         const user = result.user;
-        
-        setUserEmail(user.email);
-        setCdKey(user.cdkey);
-        setKeyExpiresAt(user.expiresAt);
-        setIsKeyValid(user.licenseStatus === 'active');
 
-        if (user.email === 'deymonmachado@gmail.com') {
-          setIsAdminLoggedIn(true);
+        // Remember login credentials
+        if (rememberLogin) {
+          localStorage.setItem('astrobot_saved_email', userEmailInput.trim());
+          localStorage.setItem('astrobot_saved_password', userPasswordInput.trim());
+        } else {
+          localStorage.removeItem('astrobot_saved_email');
+          localStorage.removeItem('astrobot_saved_password');
         }
 
-        // Apply loaded settings if present
-        if (user.settings && Object.keys(user.settings).length > 0) {
-          setSettings(prev => ({ ...prev, ...user.settings }));
-          localStorage.setItem('astrobot_settings', JSON.stringify(user.settings));
-          
-          if (user.settings.token) {
-            localStorage.setItem('deriv_token', user.settings.token);
-          }
-          if (user.settings.appId) {
-            localStorage.setItem('deriv_app_id', user.settings.appId);
-          }
-          if (user.settings.isDemo !== undefined) {
-            localStorage.setItem('deriv_is_demo', user.settings.isDemo.toString());
-            setIsDemo(user.settings.isDemo);
-          }
-        }
+        // Trigger AI System Diagnostic sequence (1.5 seconds total)
+        setLoginSequenceIndex(0);
+        let currentStep = 0;
+        const interval = setInterval(() => {
+          currentStep++;
+          if (currentStep < DIAGNOSTIC_STEPS.length) {
+            setLoginSequenceIndex(currentStep);
+          } else {
+            clearInterval(interval);
+            setLoginSequenceIndex(null);
 
-        if (user.telegramConfig && Object.keys(user.telegramConfig).length > 0) {
-          localStorage.setItem('astrobot_telegram_config', JSON.stringify(user.telegramConfig));
-        }
+            // Commit final authenticated state
+            setUserEmail(user.email);
+            setCdKey(user.cdkey);
+            setKeyExpiresAt(user.expiresAt);
+            setIsKeyValid(user.licenseStatus === 'active');
 
-        if (user.cycles && user.cycles.length > 0) {
-          setCycles(user.cycles);
-          localStorage.setItem('astrobot_scheduler_cycles', JSON.stringify(user.cycles));
-        }
+            if (user.email === 'deymonmachado@gmail.com') {
+              setIsAdminLoggedIn(true);
+            }
 
-        if (user.profile) {
-          if (user.profile.fullname) {
-            setWelcomeName(user.profile.fullname);
-            localStorage.setItem('astrobot_custom_name', user.profile.fullname);
+            // Apply loaded settings if present
+            if (user.settings && Object.keys(user.settings).length > 0) {
+              setSettings(prev => ({ ...prev, ...user.settings }));
+              localStorage.setItem('astrobot_settings', JSON.stringify(user.settings));
+              
+              if (user.settings.token) {
+                localStorage.setItem('deriv_token', user.settings.token);
+              }
+              if (user.settings.appId) {
+                localStorage.setItem('deriv_app_id', user.settings.appId);
+              }
+              if (user.settings.isDemo !== undefined) {
+                localStorage.setItem('deriv_is_demo', user.settings.isDemo.toString());
+                setIsDemo(user.settings.isDemo);
+              }
+            }
+
+            if (user.telegramConfig && Object.keys(user.telegramConfig).length > 0) {
+              localStorage.setItem('astrobot_telegram_config', JSON.stringify(user.telegramConfig));
+            }
+
+            if (user.cycles && user.cycles.length > 0) {
+              const migratedCycles = user.cycles.map(c => ({
+                ...c,
+                selectedStrategy: 'autopilot'
+              }));
+              setCycles(migratedCycles);
+              localStorage.setItem('astrobot_scheduler_cycles', JSON.stringify(migratedCycles));
+            }
+
+            if (user.profile) {
+              if (user.profile.fullname) {
+                setWelcomeName(user.profile.fullname);
+                localStorage.setItem('astrobot_custom_name', user.profile.fullname);
+              }
+              if (user.profile.profileImage) {
+                setProfileImage(user.profile.profileImage);
+                localStorage.setItem('astrobot_profile_image', user.profile.profileImage);
+              }
+              if (user.profile.fullname || user.profile.profileImage) {
+                setIsProfileConfigured(true);
+                localStorage.setItem('astrobot_profile_configured', 'true');
+              }
+            }
+
+            addLog({
+              message: `[Sistema] Bem-vindo! Login realizado com sucesso.`,
+              type: 'success',
+              time: new Date().toLocaleTimeString()
+            });
+
+            // Trigger automatic connection to Deriv if token is present
+            const savedToken = user.settings?.token || localStorage.getItem('deriv_token');
+            const savedAppId = user.settings?.appId || localStorage.getItem('deriv_app_id') || '1098';
+            const savedIsDemo = user.settings?.isDemo !== undefined ? user.settings.isDemo : (localStorage.getItem('deriv_is_demo') !== 'false');
+
+            if (savedToken && user.licenseStatus === 'active') {
+              setTimeout(() => {
+                derivAPI.connect(savedToken, savedAppId, savedIsDemo);
+              }, 1000);
+            }
           }
-          if (user.profile.profileImage) {
-            setProfileImage(user.profile.profileImage);
-            localStorage.setItem('astrobot_profile_image', user.profile.profileImage);
-          }
-          if (user.profile.fullname || user.profile.profileImage) {
-            setIsProfileConfigured(true);
-            localStorage.setItem('astrobot_profile_configured', 'true');
-          }
-        }
-
-        addLog({
-          message: `[Sistema] Bem-vindo! Login realizado com sucesso.`,
-          type: 'success',
-          time: new Date().toLocaleTimeString()
-        });
-
-        // Trigger automatic connection to Deriv if token is present
-        const savedToken = user.settings?.token || localStorage.getItem('deriv_token');
-        const savedAppId = user.settings?.appId || localStorage.getItem('deriv_app_id') || '1098';
-        const savedIsDemo = user.settings?.isDemo !== undefined ? user.settings.isDemo : (localStorage.getItem('deriv_is_demo') !== 'false');
-
-        if (savedToken && user.licenseStatus === 'active') {
-          setTimeout(() => {
-            derivAPI.connect(savedToken, savedAppId, savedIsDemo);
-          }, 1000);
-        }
+        }, 250);
 
       } else {
         setActivationError(result.message || 'E-mail ou senha incorretos.');
@@ -502,10 +763,9 @@ export default function App() {
 
 
 
-  // Poll for remote Telegram commands in Web mode
+  // Poll for remote Telegram commands in all modes (Web and Electron)
   useEffect(() => {
-    const isElectron = window && window.process && window.process.type === 'renderer';
-    if (isElectron || !userEmail) return;
+    if (!userEmail) return;
 
     const pollInterval = setInterval(async () => {
       try {
@@ -541,13 +801,28 @@ export default function App() {
     return () => clearInterval(pollInterval);
   }, [userEmail]);
 
-  // Validate license on mount and periodically
+  // Synchronize Telegram configuration to Electron main process on startup/login
+  useEffect(() => {
+    const isElectron = window && window.process && window.process.type === 'renderer';
+    if (!isElectron || !userEmail) return;
+
+    const raw = localStorage.getItem('astrobot_telegram_config');
+    if (raw) {
+      try {
+        const cfg = JSON.parse(raw);
+        const { ipcRenderer } = window.require('electron');
+        ipcRenderer.send('update-telegram-config', cfg);
+      } catch (err) {
+        console.error('Failed to sync Telegram config to Electron:', err);
+      }
+    }
+  }, [userEmail]);
+
+  // Validate license periodically based on keyExpiresAt state
   useEffect(() => {
     const checkLicense = () => {
-      const expires = localStorage.getItem('astrobot_expires_at');
-      if (expires) {
-        const expiresMs = parseInt(expires);
-        if (Date.now() > expiresMs) {
+      if (keyExpiresAt) {
+        if (Date.now() > keyExpiresAt) {
           setIsKeyValid(false);
         } else {
           setIsKeyValid(true);
@@ -558,9 +833,9 @@ export default function App() {
     };
 
     checkLicense();
-    const interval = setInterval(checkLicense, 60000); // Check every minute
+    const interval = setInterval(checkLicense, 30000); // Check every 30 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [keyExpiresAt]);
 
   const handleActivateKey = async (e) => {
     if (e) e.preventDefault();
@@ -664,6 +939,52 @@ export default function App() {
     } finally {
       setPostsLoading(false);
       setPostsFetched(true);
+    }
+  };
+
+  const fetchDownloads = async () => {
+    setDownloadsLoading(true);
+    try {
+      const isLocalOrElectron = window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.protocol === 'file:' ||
+        (window.process && window.process.type === 'renderer');
+      const base = isLocalOrElectron ? 'https://astrobot-seven.vercel.app/api' : '/api';
+      const res = await fetch(`${base}/downloads`);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDownloads(data.downloads || []);
+        localStorage.setItem('astrobot_cached_downloads', JSON.stringify(data.downloads || []));
+      } else {
+        throw new Error('API response failed');
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar downloads online, carregando cache local:', err);
+      try {
+        const cached = localStorage.getItem('astrobot_cached_downloads');
+        if (cached) {
+          setDownloads(JSON.parse(cached));
+        } else {
+          const defaultDownloads = [
+            {
+              id: 'initial_download',
+              version: '2.5.0',
+              downloadUrl: 'https://github.com/D3ymon4ke/ASTROBOT/releases/download/v2.5.0/ASTROBOT-Setup-2.5.0.exe',
+              changelog: '### ASTROBOT v2.5.0 Desktop\n\n* **Melhoria Gráfica**: Gráficos com zoom dinâmico e crosshair integrado.\n* **Persistência**: Novo sistema de salvamento de histórico de operações local (`trades_db.json`).\n* **Motor de Execução**: Sincronização em tempo real de latência de 12ms.\n* **Gerenciador de Relatórios**: Agrupamento por mês, snapshot no banco de dados e comparador de desempenho.',
+              os: 'Windows',
+              active: true,
+              createdAt: Date.now()
+            }
+          ];
+          setDownloads(defaultDownloads);
+          localStorage.setItem('astrobot_cached_downloads', JSON.stringify(defaultDownloads));
+        }
+      } catch (cacheErr) {
+        // ignore
+      }
+    } finally {
+      setDownloadsLoading(false);
+      setDownloadsFetched(true);
     }
   };
 
@@ -797,9 +1118,17 @@ export default function App() {
     }
   }, [landingTab, isAdminLoggedIn]);
 
-  // Fetch posts on mount to calculate badge count
+  // Fetch downloads when navigating to downloads tab
+  useEffect(() => {
+    if (activePage === 'downloads' && !downloadsFetched) {
+      fetchDownloads();
+    }
+  }, [activePage, downloadsFetched]);
+
+  // Fetch posts and downloads on mount to calculate badge counts & load cache
   useEffect(() => {
     fetchPosts();
+    fetchDownloads();
   }, []);
 
   // Scheduler / Automation States
@@ -811,7 +1140,13 @@ export default function App() {
     const saved = localStorage.getItem('astrobot_scheduler_cycles');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.map(c => ({
+            ...c,
+            selectedStrategy: 'autopilot'
+          }));
+        }
       } catch (e) {
         // ignore
       }
@@ -867,7 +1202,10 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('astrobot_scheduler_cycles', JSON.stringify(cycles));
-  }, [cycles]);
+    if (userEmail) {
+      syncSettingsToDb({ cycles });
+    }
+  }, [cycles, userEmail]);
 
   useEffect(() => {
     if (activeCycleId) {
@@ -1227,9 +1565,9 @@ export default function App() {
       setInitialBalance(info.balance);
       setAccountInfo(info);
       
-      const customName = localStorage.getItem('astrobot_custom_name');
-      const customImage = localStorage.getItem('astrobot_profile_image');
-      const isConfigured = localStorage.getItem('astrobot_profile_configured') === 'true';
+      const customName = localStorage.getItem('astrobot_custom_name') || welcomeName;
+      const customImage = localStorage.getItem('astrobot_profile_image') || profileImage;
+      const isConfigured = (localStorage.getItem('astrobot_profile_configured') === 'true') || isProfileConfigured;
 
       setWelcomeName(customName || info.fullname || info.email || 'Usuário');
       if (customImage) {
@@ -1261,6 +1599,48 @@ export default function App() {
       derivAPI.disconnect();
     };
   }, []);
+
+  // Auto Reconnection Logic when Deriv disconnects unexpectedly
+  useEffect(() => {
+    if (!authorized || connected) return;
+
+    const savedToken = token || localStorage.getItem('deriv_token');
+    const savedAppId = appId || localStorage.getItem('deriv_app_id') || '1098';
+    const savedIsDemo = isDemo;
+    
+    if (!savedToken) return;
+
+    addLog({
+      message: `[Conexão] Conexão com a Deriv perdida ou erro detectado. Tentando reconectar automaticamente...`,
+      type: 'warning',
+      time: new Date().toLocaleTimeString()
+    });
+
+    const attemptReconnect = async () => {
+      try {
+        addLog({
+          message: `[Conexão] Tentando reconectar à Deriv...`,
+          type: 'info',
+          time: new Date().toLocaleTimeString()
+        });
+        await derivAPI.connect(savedToken, savedAppId, savedIsDemo);
+      } catch (err) {
+        addLog({
+          message: `[Conexão] Falha na reconexão automática: ${err.message || String(err)}. Nova tentativa em 10 segundos...`,
+          type: 'error',
+          time: new Date().toLocaleTimeString()
+        });
+      }
+    };
+
+    // Try immediately
+    attemptReconnect();
+
+    // Repeat check every 10 seconds until connected
+    const reconnectInterval = setInterval(attemptReconnect, 10000);
+
+    return () => clearInterval(reconnectInterval);
+  }, [authorized, connected, token, appId, isDemo]);
 
   // Handle active trade countdown tick
   useEffect(() => {
@@ -1362,9 +1742,15 @@ export default function App() {
 
     // Find the best strategy (excluding master_candle which is only secondary)
     const baseFiltered = stats.filter(s => s.id !== 'master_candle');
-    const filteredStats = currentSettings.autoPilot && currentSettings.disableSlowStrategies
-      ? baseFiltered.filter(s => s.id !== 'pullback' && s.id !== 'reversal')
-      : baseFiltered;
+    let filteredStats = baseFiltered;
+    if (currentSettings.autoPilot) {
+      if (currentSettings.disableSlowStrategies) {
+        filteredStats = filteredStats.filter(s => s.id !== 'pullback' && s.id !== 'reversal');
+      }
+      if (currentSettings.disableMaCrossover) {
+        filteredStats = filteredStats.filter(s => s.id !== 'ma_crossover');
+      }
+    }
     const sorted = [...filteredStats].sort((a, b) => b.winRate - a.winRate);
     const bestStrategy = sorted.length > 0 && sorted[0].winRate > 0 ? sorted[0] : null;
 
@@ -2104,12 +2490,35 @@ export default function App() {
   useEffect(() => {
     if (!schedulerState) return;
 
+    const parseTimezoneOffset = (tzString) => {
+      if (!tzString || tzString === 'UTC') return 0;
+      const match = tzString.match(/GMT([+-])(\d+)/);
+      if (match) {
+        const sign = match[1] === '+' ? 1 : -1;
+        const hours = parseInt(match[2]);
+        return sign * hours;
+      }
+      return 0;
+    };
+
+    const getCycleTimeParts = (timezone, dateObj = new Date()) => {
+      const offsetHours = parseTimezoneOffset(timezone);
+      const targetDate = new Date(dateObj.getTime() + (offsetHours * 3600000));
+      const hh = targetDate.getUTCHours().toString().padStart(2, '0');
+      const mm = targetDate.getUTCMinutes().toString().padStart(2, '0');
+      const dayIndex = targetDate.getUTCDay();
+      const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+      return {
+        hhmm: `${hh}:${mm}`,
+        currentDayName: dayNames[dayIndex]
+      };
+    };
+
     const interval = setInterval(() => {
       // Don't start any cycle if one is already running
       if (stateRef.current.activeCycleId) return;
 
       const now = new Date();
-      const currentHHMM = now.toTimeString().slice(0, 5); // "HH:MM"
       const currentSeconds = now.getSeconds();
 
       // Only evaluate in the first 10 seconds of a minute to avoid duplicate triggers
@@ -2117,9 +2526,18 @@ export default function App() {
 
       // Find if any cycle is scheduled for this minute
       const pendingCycle = cycles.find(cycle => {
-        return cycle.active && 
-               cycle.status === 'Aguardando' && 
-               cycle.startTime === currentHHMM;
+        if (!cycle.active || cycle.status !== 'Aguardando') return false;
+
+        const parts = getCycleTimeParts(cycle.timezone || 'GMT-3', now);
+        
+        // Match day
+        const days = cycle.days || ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+        const dayMatches = days.includes(parts.currentDayName);
+        
+        // Match hour/minute
+        const timeMatches = cycle.startTime === parts.hhmm;
+
+        return dayMatches && timeMatches;
       });
 
       if (pendingCycle) {
@@ -2137,9 +2555,15 @@ export default function App() {
 
   // Get active recommendation (excluding master_candle which is only secondary)
   const baseFilteredForRec = strategiesStats.filter(s => s.id !== 'master_candle');
-  const filteredStatsForRec = settings.autoPilot && settings.disableSlowStrategies
-    ? baseFilteredForRec.filter(s => s.id !== 'pullback' && s.id !== 'reversal')
-    : baseFilteredForRec;
+  let filteredStatsForRec = baseFilteredForRec;
+  if (settings.autoPilot) {
+    if (settings.disableSlowStrategies) {
+      filteredStatsForRec = filteredStatsForRec.filter(s => s.id !== 'pullback' && s.id !== 'reversal');
+    }
+    if (settings.disableMaCrossover) {
+      filteredStatsForRec = filteredStatsForRec.filter(s => s.id !== 'ma_crossover');
+    }
+  }
   const sortedStats = [...filteredStatsForRec].sort((a, b) => b.winRate - a.winRate);
   const bestStrategy = sortedStats.length > 0 && sortedStats[0].winRate > 0 ? sortedStats[0] : null;
 
@@ -3691,211 +4115,406 @@ export default function App() {
 
   if (!userEmail) {
     return (
-      <div style={{
-        width: '100vw',
-        height: '100vh',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        background: 'var(--bg-main)',
-        padding: '2rem',
-        overflow: 'auto',
-        position: 'relative'
-      }}>
-        {/* Sleek animated background elements */}
-        <div style={{
-          position: 'absolute',
-          width: '400px',
-          height: '400px',
-          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
-          top: '10%',
-          left: '10%',
-          filter: 'blur(50px)',
-          zIndex: 0
-        }} />
-        <div style={{
-          position: 'absolute',
-          width: '500px',
-          height: '500px',
-          background: 'radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, transparent 70%)',
-          bottom: '10%',
-          right: '10%',
-          filter: 'blur(60px)',
-          zIndex: 0
-        }} />
+      <div className="login-split-page-wrapper">
+        
+        {/* Left Column (60%) */}
+        <div className="login-left-column" style={{ overflow: 'hidden' }}>
+          
+          {/* Background LightPillar effect */}
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1, pointerEvents: 'none' }}>
+            <LightPillar
+              topColor="#5227FF"
+              bottomColor="#FF9FFC"
+              intensity={1.0}
+              rotationSpeed={0.3}
+              glowAmount={0.005}
+              pillarWidth={3.0}
+              pillarHeight={0.4}
+              noiseIntensity={0.5}
+              pillarRotation={0}
+              interactive={false}
+              mixBlendMode="normal"
+            />
+          </div>
 
-        <div className="login-container-animate" style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '1.5rem',
-          padding: '3rem 2.5rem',
-          borderRadius: '24px',
-          background: 'rgba(14, 11, 24, 0.75)',
-          border: '1px solid var(--border-active)',
-          boxShadow: 'var(--shadow-neon)',
-          backdropFilter: 'blur(20px)',
-          maxWidth: '480px',
-          width: '100%',
-          position: 'relative',
-          zIndex: 1
-        }}>
-          {/* Header */}
-          <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
-            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '48px', marginBottom: '1rem' }} />
-            <h2 style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff', margin: '0 0 0.25rem 0' }}>
-              {authMode === 'login' ? 'Bem-vindo ao ASTROBOT' : 'Crie sua Conta'}
+          {/* Header block with Logo and name */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', position: 'relative', zIndex: 2 }}>
+            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '54px', width: 'auto', filter: 'drop-shadow(0 0 10px rgba(139, 92, 246, 0.35))' }} />
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#ffffff', margin: 0, letterSpacing: '-0.5px', fontFamily: "'Outfit', sans-serif" }}>
+                ASTROBOT
+              </h1>
+              <p style={{ fontSize: '0.78rem', color: 'var(--primary-light)', margin: 0, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Artificial Trading Intelligence
+              </p>
+            </div>
+          </div>
+
+          {/* Slogan */}
+          <div style={{ margin: '1.5rem 0', position: 'relative', zIndex: 2 }}>
+            <h2 style={{ fontSize: '1.9rem', fontWeight: '800', lineHeight: '1.3', color: '#ffffff', background: 'linear-gradient(135deg, #ffffff 40%, #c084fc 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 }}>
+              A inteligência analisa o mercado.<br/>Você apenas acompanha os resultados.
             </h2>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0 }}>
-              {authMode === 'login' 
-                ? 'Conecte-se para gerenciar suas operações em tempo real.' 
-                : 'Registre-se usando sua chave de licença ativa (CDKEY).'}
-            </p>
           </div>
 
-          {/* Form */}
-          <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div>
-              <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.5px' }}>
-                E-MAIL
-              </label>
-              <input
-                type="email"
-                placeholder="seuemail@exemplo.com"
-                value={userEmailInput}
-                onChange={(e) => setUserEmailInput(e.target.value)}
-                style={{ 
-                  padding: '0.8rem', 
-                  fontSize: '0.92rem', 
-                  background: 'rgba(15, 23, 42, 0.6)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  color: 'white',
-                  width: '100%',
-                  outline: 'none'
-                }}
-                required
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.5px' }}>
-                SENHA
-              </label>
-              <input
-                type="password"
-                placeholder={authMode === 'login' ? 'Insira sua senha' : 'Crie uma senha segura'}
-                value={userPasswordInput}
-                onChange={(e) => setUserPasswordInput(e.target.value)}
-                style={{ 
-                  padding: '0.8rem', 
-                  fontSize: '0.92rem', 
-                  background: 'rgba(15, 23, 42, 0.6)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  color: 'white',
-                  width: '100%',
-                  outline: 'none'
-                }}
-                required
-              />
-            </div>
-
-            {authMode === 'register' && (
-              <div>
-                <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.5px' }}>
-                  CHAVE DE LICENÇA (CDKEY)
-                </label>
-                <input
-                  type="text"
-                  placeholder="ASTRO-XXXX-XXXX-XXXX"
-                  value={userRegisterKeyInput}
-                  onChange={(e) => setUserRegisterKeyInput(e.target.value.toUpperCase())}
-                  style={{ 
-                    padding: '0.8rem', 
-                    fontSize: '0.92rem', 
-                    fontFamily: 'var(--font-mono)', 
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '10px',
-                    color: 'white',
-                    width: '100%',
-                    outline: 'none',
-                    textAlign: 'center',
-                    letterSpacing: '1px'
-                  }}
-                  required
-                />
-              </div>
-            )}
-
-            {activationError && (
-              <div style={{
-                background: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
-                color: 'var(--danger)',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                fontSize: '0.78rem',
-                textAlign: 'center',
-                fontWeight: 'bold'
-              }}>
-                ⚠️ {activationError}
-              </div>
-            )}
-
-            {activationSuccess && (
-              <div style={{
-                background: 'rgba(16, 185, 129, 0.08)',
-                border: '1px solid rgba(16, 185, 129, 0.25)',
-                color: 'var(--success)',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                fontSize: '0.78rem',
-                textAlign: 'center',
-                fontWeight: 'bold'
-              }}>
-                ✓ {activationSuccess}
-              </div>
-            )}
-
-            <button 
-              type="submit" 
-              className="primary" 
-              disabled={activating}
-              style={{ padding: '0.9rem', fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', width: '100%', borderRadius: '10px' }}
-            >
-              {activating 
-                ? (authMode === 'login' ? 'ENTRANDO...' : 'REGISTRANDO...') 
-                : (authMode === 'login' ? 'ACESSAR CONTA' : 'REGISTRAR E ATIVAR')}
-            </button>
-          </form>
-
-          {/* Toggle Tab */}
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-            {authMode === 'login' ? (
-              <>
-                Não tem uma conta?{' '}
-                <span 
-                  onClick={() => { setAuthMode('register'); setActivationError(''); }}
-                  style={{ color: 'var(--primary-light)', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                  Registre-se aqui
-                </span>
-              </>
-            ) : (
-              <>
-                Já possui uma conta?{' '}
-                <span 
-                  onClick={() => { setAuthMode('login'); setActivationError(''); }}
-                  style={{ color: 'var(--primary-light)', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                  Faça login
-                </span>
-              </>
-            )}
+          {/* Interactive simulated live chart */}
+          <div style={{ position: 'relative', zIndex: 2, width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <LiveSimulatedChart />
           </div>
+
+          {/* Live indicators / Status cards grid */}
+          <div className="status-cards-grid" style={{ position: 'relative', zIndex: 2 }}>
+            <div className="status-card-custom">
+              <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>MOTOR NEURAL</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                <span className="pulse-dot-green" />
+                <strong style={{ fontSize: '0.78rem', color: 'var(--success)' }}>ONLINE</strong>
+              </div>
+            </div>
+            
+            <div className="status-card-custom">
+              <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>SCANNER DE IA</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#38BDF8', display: 'inline-block' }} />
+                <strong style={{ fontSize: '0.78rem', color: '#38BDF8' }}>ATIVO</strong>
+              </div>
+            </div>
+
+            <div className="status-card-custom">
+              <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ATIVOS DE MERCADO</span>
+              <strong style={{ fontSize: '0.85rem', color: 'white', marginTop: '2px', fontFamily: 'var(--font-mono)' }}>8 MONITORADOS</strong>
+            </div>
+
+            <div className="status-card-custom">
+              <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ASSERTIVIDADE MÉDIA</span>
+              <strong style={{ fontSize: '0.85rem', color: '#10b981', marginTop: '2px', fontFamily: 'var(--font-mono)' }}>91.8%</strong>
+            </div>
+          </div>
+
+          {/* Benefits list at bottom */}
+          <div className="benefits-row" style={{ position: 'relative', zIndex: 2 }}>
+            <div className="benefit-item">
+              <CheckCircle size={12} />
+              <span>Scanner Inteligente</span>
+            </div>
+            <div className="benefit-item">
+              <CheckCircle size={12} />
+              <span>Automação Completa</span>
+            </div>
+            <div className="benefit-item">
+              <CheckCircle size={12} />
+              <span>IA em Tempo Real</span>
+            </div>
+            <div className="benefit-item">
+              <CheckCircle size={12} />
+              <span>Gestão de Banca</span>
+            </div>
+            <div className="benefit-item">
+              <CheckCircle size={12} />
+              <span>Planejamento Financeiro</span>
+            </div>
+            <div className="benefit-item">
+              <CheckCircle size={12} />
+              <span>Agendador Inteligente</span>
+            </div>
+            <div className="benefit-item">
+              <CheckCircle size={12} />
+              <span>Telegram Integrado</span>
+            </div>
+            <div className="benefit-item">
+              <CheckCircle size={12} />
+              <span>Relatórios Avançados</span>
+            </div>
+          </div>
+
         </div>
+
+        {/* Right Column (40%) */}
+        <div className="login-right-column" style={{ position: 'relative' }}>
+          {/* Back to landing page button */}
+          {!isElectron && (
+            <button
+              onClick={() => setShowLanding(true)}
+              style={{
+                position: 'absolute',
+                top: '1.5rem',
+                left: '1.5rem',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontWeight: 'bold',
+                outline: 'none',
+                transition: 'color 0.2s',
+                zIndex: 10
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = 'white'}
+              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+            >
+              ← Voltar para Página Inicial
+            </button>
+          )}
+
+          <div className="auth-card-premium">
+            
+            {/* Header */}
+            <div style={{ textAlign: 'center' }}>
+              <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '48px', marginBottom: '0.75rem', filter: 'drop-shadow(0 0 10px rgba(139, 92, 246, 0.25))' }} />
+              <h2 style={{ fontSize: '1.45rem', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0', fontFamily: 'var(--font-sans)', letterSpacing: '-0.3px' }}>
+                {authMode === 'login' ? 'Acessar Plataforma' : 'Criar Conta VIP'}
+              </h2>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+                {authMode === 'login' 
+                  ? 'Insira suas credenciais para inicializar o motor.' 
+                  : 'Ative sua licença CDKEY para registrar seu acesso.'}
+              </p>
+            </div>
+
+            {/* Diagnostic animation console if accessing */}
+            {loginSequenceIndex !== null ? (
+              <div className="diagnostic-console">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.25rem', borderBottom: '1px solid rgba(139, 92, 246, 0.15)', paddingBottom: '0.5rem' }}>
+                  <Cpu size={14} className="spin" style={{ color: 'var(--primary-light)' }} />
+                  <span style={{ fontSize: '0.62rem', fontWeight: 'bold', letterSpacing: '0.5px' }}>DIAGNÓSTICO DE SISTEMAS</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', textAlign: 'left' }}>
+                  {DIAGNOSTIC_STEPS.slice(0, loginSequenceIndex + 1).map((step, idx) => {
+                    const isCurrent = idx === loginSequenceIndex;
+                    return (
+                      <div key={idx} className="diagnostic-line" style={{ opacity: isCurrent ? 1 : 0.65 }}>
+                        <span style={{ color: idx < loginSequenceIndex ? 'var(--success)' : 'var(--primary-light)' }}>
+                          {idx < loginSequenceIndex ? '✓' : '▶'}
+                        </span>
+                        <span className={isCurrent ? 'diagnostic-text' : ''} style={{ color: '#ffffff' }}>
+                          {step.text}
+                        </span>
+                        <span className="diagnostic-progress" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>
+                          {step.progress}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              /* Regular form */
+              <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+                <div className="auth-input-group">
+                  <label style={{ fontSize: '0.65rem', fontWeight: '800', color: 'var(--text-muted)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                    E-mail Institucional
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="seuemail@exemplo.com"
+                    value={userEmailInput}
+                    onChange={(e) => setUserEmailInput(e.target.value)}
+                    className="auth-input-field"
+                    required
+                  />
+                </div>
+
+                <div className="auth-input-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: 'var(--text-muted)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      Senha de Acesso
+                    </label>
+                    {authMode === 'login' && (
+                      <span 
+                        onClick={() => alert('Para redefinir sua senha, entre em contato direto com o suporte administrador no Telegram: @lucassmachado9')}
+                        style={{ fontSize: '0.65rem', color: 'var(--primary-light)', cursor: 'pointer', textDecoration: 'underline', fontWeight: '600' }}
+                      >
+                        Esqueci minha senha
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Sua senha secreta"
+                      value={userPasswordInput}
+                      onChange={(e) => setUserPasswordInput(e.target.value)}
+                      className="auth-input-field"
+                      style={{ paddingRight: '2.5rem' }}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="auth-input-icon-right"
+                    >
+                      {showPassword ? <X size={16} /> : <KeyRound size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {authMode === 'register' && (
+                  <div className="auth-input-group">
+                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: 'var(--text-muted)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      Chave de Ativação (CDKEY)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ASTRO-XXXX-XXXX-XXXX"
+                      value={userRegisterKeyInput}
+                      onChange={(e) => setUserRegisterKeyInput(e.target.value.toUpperCase())}
+                      className="auth-input-field"
+                      style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', letterSpacing: '1px' }}
+                      required
+                    />
+                  </div>
+                )}
+
+                {/* Remember Me Checkbox */}
+                {authMode === 'login' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '2px 0' }}>
+                    <input
+                      type="checkbox"
+                      id="rememberLogin"
+                      checked={rememberLogin}
+                      onChange={(e) => setRememberLogin(e.target.checked)}
+                      style={{
+                        width: '14px',
+                        height: '14px',
+                        accentColor: 'var(--primary)',
+                        cursor: 'pointer'
+                      }}
+                    />
+                    <label htmlFor="rememberLogin" style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                      Lembrar minhas credenciais
+                    </label>
+                  </div>
+                )}
+
+                {activationError && (
+                  <div style={{
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    color: 'var(--danger)',
+                    padding: '0.65rem',
+                    borderRadius: '8px',
+                    fontSize: '0.72rem',
+                    textAlign: 'center',
+                    fontWeight: 'bold'
+                  }}>
+                    ⚠️ {activationError}
+                  </div>
+                )}
+
+                {activationSuccess && (
+                  <div style={{
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    color: 'var(--success)',
+                    padding: '0.65rem',
+                    borderRadius: '8px',
+                    fontSize: '0.72rem',
+                    textAlign: 'center',
+                    fontWeight: 'bold'
+                  }}>
+                    ✓ {activationSuccess}
+                  </div>
+                )}
+
+                <button 
+                  type="submit" 
+                  className="primary" 
+                  disabled={activating}
+                  style={{ 
+                    padding: '0.85rem', 
+                    fontWeight: 'bold', 
+                    fontSize: '0.9rem', 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    alignItems: 'center', 
+                    gap: '0.5rem', 
+                    width: '100%', 
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+                    border: 'none',
+                    boxShadow: '0 0 15px rgba(139, 92, 246, 0.2)',
+                    marginTop: '0.5rem'
+                  }}
+                >
+                  {activating 
+                    ? (authMode === 'login' ? 'VERIFICANDO...' : 'PROCESSANDO...') 
+                    : (authMode === 'login' ? 'ACESSAR PLATAFORMA' : 'ATIVAR E ENTRAR')}
+                </button>
+
+                {/* Google Login Placeholder Button */}
+                {authMode === 'login' && (
+                  <button
+                    type="button"
+                    className="google-btn-custom"
+                    onClick={() => alert('O Login com Google está indisponível temporariamente na sua região.')}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-5.136 4.114-3.555 0-6.44-2.885-6.44-6.44s2.885-6.44 6.44-6.44c1.633 0 3.114.61 4.256 1.629l3.078-3.078C19.263 2.217 15.932 1 12.24 1 5.92 1 1 5.92 1 12.24s4.92 11.24 11.24 11.24c6.32 0 11.24-4.92 11.24-11.24 0-.702-.078-1.393-.195-2.055H12.24z"/>
+                    </svg>
+                    <span>Entrar com o Google</span>
+                  </button>
+                )}
+              </form>
+            )}
+
+            {/* Toggle auth mode links */}
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.25rem', textAlign: 'center' }}>
+              {authMode === 'login' ? (
+                <>
+                  Primeiro acesso?{' '}
+                  <span 
+                    onClick={() => { setAuthMode('register'); setActivationError(''); }}
+                    style={{ color: 'var(--primary-light)', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Ative sua CDKEY aqui
+                  </span>
+                </>
+              ) : (
+                <>
+                  Já tem uma conta registrada?{' '}
+                  <span 
+                    onClick={() => { setAuthMode('login'); setActivationError(''); }}
+                    style={{ color: 'var(--primary-light)', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Acesse sua conta
+                  </span>
+                </>
+              )}
+            </div>
+
+          </div>
+
+          {/* Footer Bar inside right column */}
+          <div style={{ 
+            position: 'absolute', 
+            bottom: '1.25rem', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '12px', 
+            fontSize: '0.62rem', 
+            color: 'var(--text-muted)',
+            borderTop: '1px solid rgba(255, 255, 255, 0.03)',
+            paddingTop: '0.75rem',
+            width: '80%',
+            justifyContent: 'center'
+          }}>
+            <span>ASTROBOT v2.5.0</span>
+            <span>•</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#22c55e' }} />
+              ONLINE
+            </span>
+            <span>•</span>
+            <span>LATÊNCIA: 23ms</span>
+            <span>•</span>
+            <span>© 2026</span>
+          </div>
+
+        </div>
+
       </div>
     );
   }
@@ -4290,10 +4909,7 @@ export default function App() {
 
             <button
               onClick={() => {
-                derivAPI.disconnect();
-                setAuthorized(false);
-                setAccountInfo(null);
-                setWelcomeName('');
+                handleLogout();
               }}
               style={{
                 background: 'transparent',
@@ -4653,6 +5269,7 @@ export default function App() {
               { id: 'automation', label: 'Automação', icon: Calendar },
               { id: 'telegram', label: 'Telegram', icon: Send },
               { id: 'news', label: 'Atualizações', icon: Newspaper },
+              { id: 'downloads', label: 'Downloads', icon: Download },
               ...(isAdminLoggedIn ? [{ id: 'admin', label: 'Admin', icon: ShieldCheck }] : [])
             ].map((tab) => {
               const IconComp = tab.icon;
@@ -5040,8 +5657,7 @@ export default function App() {
                 {isAdminLoggedIn && (
                   <button
                     onClick={() => {
-                      setLandingTab('admin');
-                      setShowLanding(true);
+                      setActivePage('admin');
                       setIsProfileDropdownOpen(false);
                     }}
                     style={{
@@ -5824,6 +6440,17 @@ export default function App() {
           );
         }
 
+        if (activePage === 'downloads') {
+          return (
+            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
+              <DownloadsFeed
+                downloads={downloads}
+                loading={downloadsLoading}
+              />
+            </main>
+          );
+        }
+
         if (activePage === 'admin' && isAdminLoggedIn) {
           return (
             <main style={{ padding: '2rem 1.25rem', flex: 1, overflowY: 'auto', display: 'flex', justifyContent: 'center' }}>
@@ -5896,6 +6523,23 @@ export default function App() {
                     }}
                   >
                     📰 Postar Notícias & Patches
+                  </button>
+                  <button
+                    onClick={() => setAdminSubTab('downloads')}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: adminSubTab === 'downloads' ? 'var(--primary-light)' : 'var(--text-muted)',
+                      borderBottom: adminSubTab === 'downloads' ? '2px solid var(--primary-light)' : '2px solid transparent',
+                      padding: '0.5rem 1rem',
+                      fontSize: '0.85rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      outline: 'none'
+                    }}
+                  >
+                    💾 Gerenciar Downloads
                   </button>
                 </div>
 
@@ -6056,6 +6700,14 @@ export default function App() {
                   <NewsEditor
                     posts={posts}
                     onPostsChange={fetchPosts}
+                    isAdmin={isAdminLoggedIn}
+                  />
+                )}
+
+                {adminSubTab === 'downloads' && (
+                  <DownloadsEditor
+                    downloads={downloads}
+                    onDownloadsChange={fetchDownloads}
                     isAdmin={isAdminLoggedIn}
                   />
                 )}

@@ -985,3 +985,261 @@ input:checked + .slider:before {
   display: contents; /* invisible wrapper — does not break layout */
 }
 
+/* =============================================
+   REDESIGNED SPLIT LOGIN PAGE
+   ============================================= */
+.login-split-page-wrapper {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  background: #06040a;
+  overflow: hidden;
+  position: relative;
+  font-family: var(--font-sans);
+}
+
+@media (max-width: 1024px) {
+  .login-split-page-wrapper {
+    grid-template-columns: 1fr;
+  }
+}
+
+.login-left-column {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 3.5rem;
+  position: relative;
+  z-index: 5;
+  background: radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
+  border-right: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+@media (max-width: 1024px) {
+  .login-left-column {
+    display: none; /* Hide left column on tablets and mobile for focus on auth form */
+  }
+}
+
+.login-right-column {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 2.5rem;
+  position: relative;
+  z-index: 5;
+  background: radial-gradient(circle at 90% 80%, rgba(217, 70, 239, 0.05) 0%, transparent 50%), #0b0813;
+}
+
+/* Simulated Live Chart styling */
+.mock-chart-card {
+  background: rgba(14, 11, 24, 0.6);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(139, 92, 246, 0.05);
+  backdrop-filter: blur(12px);
+  width: 100%;
+  max-width: 540px;
+  margin: 1.5rem 0;
+  position: relative;
+}
+
+.mock-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.mock-chart-grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 30px 30px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Status Cards Grid */
+.status-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1rem;
+  width: 100%;
+  max-width: 580px;
+  margin-top: 1rem;
+}
+
+.status-card-custom {
+  background: rgba(14, 11, 24, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: all 0.3s ease;
+}
+
+.status-card-custom:hover {
+  background: rgba(139, 92, 246, 0.04);
+  border-color: rgba(139, 92, 246, 0.2);
+  transform: translateY(-2px);
+}
+
+.benefits-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  max-width: 600px;
+  margin-top: 1.5rem;
+}
+
+.benefit-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.benefit-item svg {
+  color: var(--success);
+}
+
+/* Auth card premium */
+.auth-card-premium {
+  width: 100%;
+  max-width: 440px;
+  background: rgba(15, 12, 26, 0.65);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 24px;
+  padding: 3rem 2.5rem;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(139, 92, 246, 0.1);
+  backdrop-filter: blur(25px);
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.auth-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  position: relative;
+}
+
+.auth-input-field {
+  padding: 0.85rem 1rem !important;
+  font-size: 0.95rem !important;
+  background: rgba(8, 6, 12, 0.8) !important;
+  border: 1px solid rgba(139, 92, 246, 0.2) !important;
+  border-radius: 12px !important;
+  color: white !important;
+  outline: none !important;
+  transition: all 0.2s ease !important;
+}
+
+.auth-input-field:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15) !important;
+}
+
+.auth-input-icon-right {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.auth-input-icon-right:hover {
+  color: white;
+}
+
+.google-btn-custom {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 0.8rem;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.google-btn-custom:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+/* Diagnostic Animation Console styles */
+.diagnostic-console {
+  background: rgba(5, 3, 10, 0.95);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 12px;
+  padding: 1.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--primary-light);
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: 0 0 25px rgba(139, 92, 246, 0.25);
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+.diagnostic-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diagnostic-text {
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  border-right: 2px solid var(--primary-light);
+  animation: typingBlink 0.75s step-end infinite;
+}
+
+@keyframes typingBlink {
+  from, to { border-color: transparent }
+  50% { border-color: var(--primary-light); }
+}
+
+.diagnostic-progress {
+  color: var(--accent);
+  letter-spacing: 1px;
+}
+
+

@@ -77,7 +77,12 @@ export default function TelegramConfig({
     
     // Register the Vercel webhook automatically on Telegram if config is enabled
     if (config.enabled && config.token) {
-      const webhookUrl = `https://astrobot-seven.vercel.app/api/telegram-webhook`;
+      const isLocalOrElectron = window.location.hostname === 'localhost' || 
+                                window.location.hostname === '127.0.0.1' || 
+                                window.location.protocol === 'file:' ||
+                                (window.process && window.process.type === 'renderer');
+      const baseDomain = isLocalOrElectron ? 'https://astrobot-seven.vercel.app' : window.location.origin;
+      const webhookUrl = `${baseDomain}/api/telegram-webhook`;
       fetch(`https://api.telegram.org/bot${config.token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`)
         .then(res => res.json())
         .then(resData => {

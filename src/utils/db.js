@@ -68,3 +68,68 @@ export const clearDbTrades = () => {
     console.error("Error clearing database:", err);
   }
 };
+
+// Monthly Reports Database Operations
+export const loadMonthlyReports = () => {
+  try {
+    if (fs && dbPath) {
+      const monthlyPath = path.join(path.dirname(dbPath), 'monthly_reports_db.json');
+      if (fs.existsSync(monthlyPath)) {
+        const data = fs.readFileSync(monthlyPath, 'utf-8');
+        return JSON.parse(data);
+      }
+    } else {
+      const data = localStorage.getItem('astrobot_monthly_reports_db');
+      if (data) {
+        return JSON.parse(data);
+      }
+    }
+  } catch (err) {
+    console.error("Error reading monthly database:", err);
+  }
+  return [];
+};
+
+export const saveMonthlyReport = (report) => {
+  try {
+    const reports = loadMonthlyReports();
+    const existingIndex = reports.findIndex(r => r.id === report.id);
+    const newReport = {
+      ...report,
+      createdAt: report.createdAt || Date.now()
+    };
+    if (existingIndex >= 0) {
+      reports[existingIndex] = newReport;
+    } else {
+      reports.push(newReport);
+    }
+
+    if (fs && dbPath) {
+      const monthlyPath = path.join(path.dirname(dbPath), 'monthly_reports_db.json');
+      fs.writeFileSync(monthlyPath, JSON.stringify(reports, null, 2), 'utf-8');
+    } else {
+      localStorage.setItem('astrobot_monthly_reports_db', JSON.stringify(reports));
+    }
+    return reports;
+  } catch (err) {
+    console.error("Error saving monthly report:", err);
+  }
+  return [];
+};
+
+export const deleteMonthlyReport = (id) => {
+  try {
+    const reports = loadMonthlyReports();
+    const updated = reports.filter(r => r.id !== id);
+    if (fs && dbPath) {
+      const monthlyPath = path.join(path.dirname(dbPath), 'monthly_reports_db.json');
+      fs.writeFileSync(monthlyPath, JSON.stringify(updated, null, 2), 'utf-8');
+    } else {
+      localStorage.setItem('astrobot_monthly_reports_db', JSON.stringify(updated));
+    }
+    return updated;
+  } catch (err) {
+    console.error("Error deleting monthly report:", err);
+  }
+  return [];
+};

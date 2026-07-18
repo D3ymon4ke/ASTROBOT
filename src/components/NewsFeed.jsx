@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Newspaper, Pin, ChevronDown, ChevronUp, Calendar, Tag } from 'lucide-react';
+import desktopIcon from '../assets/icon.png';
 
 const TAG_INFO = {
   patch: { label: '🔧 Patch Notes', color: '#8b5cf6' },
@@ -33,6 +34,11 @@ function PostCard({ post, isRead, onMarkRead }) {
   const date = new Date(post.createdAt).toLocaleDateString('pt-BR', {
     day: '2-digit', month: 'long', year: 'numeric'
   });
+  
+  const isVersionPost = post.tag === 'patch' || 
+    /v\d+/i.test(post.title) || 
+    /vers[ãa]o/i.test(post.title) || 
+    post.title.toLowerCase().includes('desktop');
 
   const handleExpand = () => {
     setExpanded(v => !v);
@@ -83,7 +89,7 @@ function PostCard({ post, isRead, onMarkRead }) {
       <div style={{ padding: '1rem 1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
           {!post.coverImage && !isRead && (
-            <span style={{ background: 'rgba(139,92,246,0.9)', color: 'white', fontSize: '0.6rem', fontWeight: '800', padding: '2px 8px', borderRadius: '10px', letterSpacing: '0.5px' }}>
+            <span style={{ background: 'rgba(139,92,246,0.9)', color: 'white', fontSize: '0.6' + 'rem', fontWeight: '800', padding: '2px 8px', borderRadius: '10px', letterSpacing: '0.5px' }}>
               NOVO
             </span>
           )}
@@ -106,9 +112,25 @@ function PostCard({ post, isRead, onMarkRead }) {
           </span>
         </div>
 
-        <h3 style={{ fontSize: '1rem', fontWeight: '800', color: 'white', margin: '0 0 0.4rem 0', lineHeight: '1.3' }}>
-          {post.title}
-        </h3>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: '800', color: 'white', margin: '0 0 0.4rem 0', lineHeight: '1.3', flex: 1 }}>
+            {post.title}
+          </h3>
+          {isVersionPost && (
+            <img 
+              src={desktopIcon} 
+              alt="ASTROBOT Desktop" 
+              style={{ 
+                width: '32px', 
+                height: '32px', 
+                borderRadius: '8px', 
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                boxShadow: '0 0 10px rgba(139, 92, 246, 0.2)',
+                flexShrink: 0 
+              }} 
+            />
+          )}
+        </div>
 
         {!expanded && (
           <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>

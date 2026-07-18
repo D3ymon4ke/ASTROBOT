@@ -157,11 +157,23 @@ try {
 
 let telegramOffset = 0;
 let telegramTimeoutId = null;
+let webhookDeleted = false;
 
 async function pollTelegram() {
   if (!telegramConfig || !telegramConfig.enabled || !telegramConfig.token || !telegramConfig.chatId) {
     telegramTimeoutId = setTimeout(pollTelegram, 5000);
     return;
+  }
+
+  // Delete webhook if not done yet to ensure getUpdates doesn't return 409 Conflict
+  if (!webhookDeleted) {
+    try {
+      const delUrl = `https://api.telegram.org/bot${telegramConfig.token}/deleteWebhook`;
+      await fetch(delUrl);
+      webhookDeleted = true;
+    } catch (err) {
+      // Ignore network errors
+    }
   }
 
   try {
@@ -238,6 +250,7 @@ ipcMain.on('restore-main-window', () => {
 
 ipcMain.on('update-telegram-config', (event, config) => {
   telegramConfig = config;
+  webhookDeleted = false;
   try {
     fs.writeFileSync(telegramConfigPath, JSON.stringify(config, null, 2), 'utf8');
   } catch (err) {

@@ -79,7 +79,12 @@ export default async function handler(req, res) {
 
     // Find user in Firestore that has telegramConfig.chatId === chatId
     const usersRef = db.collection('users');
-    const snapshot = await usersRef.where('telegramConfig.chatId', '==', chatId).get();
+    let snapshot = await usersRef.where('telegramConfig.chatId', '==', chatId).get();
+
+    // Fallback: search by numeric chatId if the first query returned empty
+    if (snapshot.empty && !isNaN(Number(chatId))) {
+      snapshot = await usersRef.where('telegramConfig.chatId', '==', Number(chatId)).get();
+    }
 
     if (snapshot.empty) {
       console.log(`Mensagem de chat ID desconhecido: ${chatId}`);
