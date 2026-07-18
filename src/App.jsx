@@ -1982,6 +1982,69 @@ export default function App() {
     setShowLanding(true);
   };
 
+  const [switchingAccount, setSwitchingAccount] = useState(false);
+
+  const toggleAccountType = async () => {
+    if (switchingAccount) return;
+    if (isRunning) {
+      addLog({
+        message: '[Aviso] Pare o robô antes de alternar o tipo de conta (Demo/Real).',
+        type: 'warning',
+        time: new Date().toLocaleTimeString()
+      });
+      return;
+    }
+
+    setSwitchingAccount(true);
+    const newIsDemo = !isDemo;
+    
+    addLog({
+      message: `[Conexão] Alternando para conta ${newIsDemo ? 'DEMO' : 'REAL'}...`,
+      type: 'warning',
+      time: new Date().toLocaleTimeString()
+    });
+
+    try {
+      derivAPI.disconnect();
+      setAuthorized(false);
+      setAccountInfo(null);
+      setCandles([]);
+
+      const savedToken = localStorage.getItem('deriv_token') || '';
+      const savedAppId = localStorage.getItem('deriv_app_id') || '1098';
+
+      setIsDemo(newIsDemo);
+      localStorage.setItem('deriv_is_demo', newIsDemo ? 'true' : 'false');
+
+      syncSettingsToDb({
+        settings: {
+          ...settings,
+          isDemo: newIsDemo,
+          token: savedToken,
+          appId: savedAppId
+        }
+      });
+
+      if (savedToken) {
+        await derivAPI.connect(savedToken, savedAppId, newIsDemo);
+      } else {
+        addLog({
+          message: '[Conexão] Token não encontrado para reconexão automática.',
+          type: 'error',
+          time: new Date().toLocaleTimeString()
+        });
+      }
+    } catch (err) {
+      addLog({
+        message: `[Conexão] Erro ao alternar conta: ${err.message || String(err)}`,
+        type: 'error',
+        time: new Date().toLocaleTimeString()
+      });
+    } finally {
+      setSwitchingAccount(false);
+    }
+  };
+
   // Start / Stop Bot handlers
   const startBot = (force = false) => {
     if (force !== true && !isRunning && !isInitializing) {
@@ -4754,16 +4817,35 @@ export default function App() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', position: 'relative' }}>
           
           {/* Balance Pill */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            borderRadius: '20px',
-            padding: '4px 12px 4px 6px',
-            height: '32px'
-          }}>
+          <button 
+            onClick={toggleAccountType}
+            disabled={switchingAccount}
+            title={switchingAccount ? "Alternando tipo de conta..." : "Clique para alternar para conta " + (isDemo ? "REAL" : "DEMO")}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.05)',
+              borderRadius: '20px',
+              padding: '4px 12px 4px 6px',
+              height: '32px',
+              cursor: isRunning ? 'not-allowed' : 'pointer',
+              opacity: switchingAccount ? 0.6 : 1,
+              transition: 'all 0.2s ease',
+              outline: 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (!isRunning && !switchingAccount) {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)';
+                e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.4)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)';
+            }}
+          >
             <div style={{
               background: isDemo ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
               border: isDemo ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid rgba(16, 185, 129, 0.4)',
@@ -4771,14 +4853,17 @@ export default function App() {
               padding: '1px 8px',
               fontSize: '0.58rem',
               fontWeight: 'bold',
-              color: isDemo ? 'var(--warning)' : 'var(--success)'
+              color: isDemo ? 'var(--warning)' : 'var(--success)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
             }}>
-              {isDemo ? 'DEMO' : 'REAL'}
+              {switchingAccount ? 'CARREGANDO...' : (isDemo ? 'DEMO' : 'REAL')}
             </div>
             <strong style={{ fontSize: '0.85rem', color: 'white', fontFamily: 'var(--font-mono)' }}>
               ${balance.toFixed(2)}
             </strong>
-          </div>
+          </button>
 
           {/* Ping & Latency */}
           <div style={{
