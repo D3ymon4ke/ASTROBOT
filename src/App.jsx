@@ -336,6 +336,7 @@ export default function App() {
     localStorage.removeItem('astrobot_user_email');
     localStorage.removeItem('astrobot_cdkey');
     localStorage.removeItem('astrobot_expires_at');
+    localStorage.removeItem('astrobot_admin_token');
     
     // Disconnect and clear states
     derivAPI.disconnect();
@@ -344,6 +345,7 @@ export default function App() {
     setKeyExpiresAt(null);
     setIsKeyValid(false);
     setAuthorized(false);
+    setIsAdminLoggedIn(false);
     setAccountInfo(null);
     setWelcomeName('');
   };
@@ -390,6 +392,11 @@ export default function App() {
         setCdKey(user.cdkey);
         setKeyExpiresAt(user.expiresAt);
         setIsKeyValid(user.licenseStatus === 'active');
+
+        if (user.email === 'deymonmachado@gmail.com') {
+          setIsAdminLoggedIn(true);
+          localStorage.setItem('astrobot_admin_token', 'lucas_astro_admin');
+        }
 
         // Apply loaded settings if present
         if (user.settings && Object.keys(user.settings).length > 0) {
@@ -543,6 +550,11 @@ export default function App() {
           setCdKey(user.cdkey);
           setKeyExpiresAt(user.expiresAt);
           setIsKeyValid(user.licenseStatus === 'active');
+
+          if (user.email === 'deymonmachado@gmail.com') {
+            setIsAdminLoggedIn(true);
+            localStorage.setItem('astrobot_admin_token', 'lucas_astro_admin');
+          }
 
           if (user.settings && Object.keys(user.settings).length > 0) {
             setSettings(prev => ({ ...prev, ...user.settings }));
@@ -2554,39 +2566,10 @@ export default function App() {
             >
               Suporte ADM
             </a>
-            {isAdminLoggedIn && (
-              <button 
-                onClick={() => setLandingTab('admin')}
-                className={`nav-link ${landingTab === 'admin' ? 'nav-link-active' : ''}`}
-              >
-                <Lock size={13} /> Área Admin
-              </button>
-            )}
           </nav>
 
           {/* Call-to-Actions (Aligned right) */}
           <div className="navbar-right-ctas" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, justifyContent: 'flex-end', minWidth: '240px' }}>
-            {isAdminLoggedIn ? (
-              <button 
-                className="btn-admin-logout"
-                onClick={() => {
-                  localStorage.removeItem('astrobot_admin_token');
-                  setIsAdminLoggedIn(false);
-                  setLandingTab('home');
-                }}
-              >
-                <LogOut size={14} /> Sair Admin
-              </button>
-            ) : (
-              <button 
-                className="btn-admin-toggle"
-                onClick={() => setShowAdminLoginModal(true)}
-                title="Área do Administrador"
-              >
-                <Lock size={15} />
-              </button>
-            )}
-
             <button 
               className="cta-connect"
               onClick={() => setShowLanding(false)}
@@ -3743,97 +3726,6 @@ export default function App() {
           </div>
         </footer>
 
-        {/* Admin Login Modal */}
-        {showAdminLoginModal && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(5, 7, 12, 0.9)',
-            backdropFilter: 'blur(10px)',
-            zIndex: 10000,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: '2rem'
-          }}>
-            <div className="glass-panel" style={{
-              maxWidth: '400px',
-              width: '100%',
-              padding: '2.5rem 2rem',
-              borderRadius: '20px',
-              border: '1px solid var(--border-active)',
-              boxShadow: 'var(--shadow-neon)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1.5rem',
-              position: 'relative'
-            }}>
-              {/* Modal Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Lock size={16} style={{ color: 'var(--primary-light)' }} /> Admin Login
-                </h3>
-                <button 
-                  onClick={() => {
-                    setShowAdminLoginModal(false);
-                    setAdminLoginError('');
-                  }}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer', fontWeight: 'bold', outline: 'none', padding: 0 }}
-                >
-                  &times;
-                </button>
-              </div>
-
-              {adminLoginError && (
-                <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', color: 'var(--danger)', padding: '0.6rem', borderRadius: '8px', fontSize: '0.78rem', textAlign: 'center', fontWeight: 'bold' }}>
-                  ⚠️ {adminLoginError}
-                </div>
-              )}
-
-              <form onSubmit={handleAdminLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
-                    E-MAIL DO ADMINISTRADOR
-                  </label>
-                  <input 
-                    type="email" 
-                    placeholder="admin@exemplo.com"
-                    value={adminEmail} 
-                    onChange={(e) => setAdminEmail(e.target.value)}
-                    style={{ padding: '0.75rem', fontSize: '0.9rem', width: '100%', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'white', outline: 'none' }}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
-                    SENHA DO ADMINISTRADOR
-                  </label>
-                  <input 
-                    type="password" 
-                    placeholder="••••••••"
-                    value={adminPassword} 
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    style={{ padding: '0.75rem', fontSize: '0.9rem', width: '100%', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border-color)', borderRadius: '10px', color: 'white', outline: 'none' }}
-                    required
-                  />
-                </div>
-
-                <button 
-                  type="submit" 
-                  className="primary" 
-                  disabled={adminLoggingIn}
-                  style={{ padding: '0.75rem', fontSize: '0.9rem', fontWeight: 'bold', borderRadius: '10px', marginTop: '0.5rem', width: '100%' }}
-                >
-                  {adminLoggingIn ? 'AUTENTICANDO...' : 'ENTRAR COMO ADMIN'}
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
