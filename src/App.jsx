@@ -348,6 +348,7 @@ export default function App() {
     setIsAdminLoggedIn(false);
     setAccountInfo(null);
     setWelcomeName('');
+    setShowLanding(true);
   };
 
   // Auth login handler
@@ -5122,7 +5123,7 @@ export default function App() {
               <button
                 onClick={() => {
                   setIsProfileDropdownOpen(false);
-                  handleDisconnect();
+                  handleLogout();
                 }}
                 style={{
                   background: 'rgba(239, 68, 68, 0.08)',
