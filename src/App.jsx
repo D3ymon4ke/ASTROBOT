@@ -1664,7 +1664,8 @@ export default function App() {
       if (sync.trades) {
         setTrades(sync.trades);
         stateRef.current.trades = sync.trades;
-        const updatedDb = saveDbTrades(sync.trades);
+        const isDemoMode = sync.settings?.isDemo !== undefined ? sync.settings.isDemo : (localStorage.getItem('deriv_is_demo') !== 'false');
+        const updatedDb = saveDbTrades(sync.trades, isDemoMode);
         setDbTrades(updatedDb);
       }
       if (sync.logs) setLogs(sync.logs);
@@ -1741,7 +1742,8 @@ export default function App() {
 
   // Load persistent trades database on mount
   useEffect(() => {
-    setDbTrades(loadDbTrades());
+    const savedIsDemo = localStorage.getItem('deriv_is_demo') !== 'false';
+    setDbTrades(loadDbTrades(savedIsDemo));
   }, []);
 
   // Handle Tick Updates (just in case they are needed, though we operate mostly on OHLC closed candles)
@@ -1890,6 +1892,7 @@ export default function App() {
 
       setIsDemo(newIsDemo);
       localStorage.setItem('deriv_is_demo', newIsDemo ? 'true' : 'false');
+      setDbTrades(loadDbTrades(newIsDemo));
 
       syncSettingsToDb({
         settings: {
@@ -5796,8 +5799,9 @@ export default function App() {
             <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
               <Reports
                 dbTrades={dbTrades}
+                isDemo={isDemo}
                 onClearDb={() => {
-                  clearDbTrades();
+                  clearDbTrades(isDemo);
                   setDbTrades([]);
                 }}
               />

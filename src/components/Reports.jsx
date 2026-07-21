@@ -230,7 +230,7 @@ const calculateStats = (tradesList) => {
   };
 };
 
-export default function Reports({ dbTrades = [], onClearDb }) {
+export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
   const [selectedMonth, setSelectedMonth] = useState('all'); // 'all' or key like '2026-07'
   const [monthlyReports, setMonthlyReports] = useState([]);
   const [viewingArchivedReport, setViewingArchivedReport] = useState(null);
@@ -243,10 +243,10 @@ export default function Reports({ dbTrades = [], onClearDb }) {
   const [exportHover, setExportHover] = useState(null);
   const [toast, setToast] = useState(null);
 
-  // Load saved monthly reports on mount
+  // Load saved monthly reports on mount and when isDemo changes
   useEffect(() => {
-    setMonthlyReports(loadMonthlyReports());
-  }, []);
+    setMonthlyReports(loadMonthlyReports(isDemo));
+  }, [isDemo]);
 
   // Show auto-dismiss toast
   const showToast = (message, type = 'success') => {
@@ -331,7 +331,7 @@ export default function Reports({ dbTrades = [], onClearDb }) {
       stats: stats,
       trades: filteredTrades
     };
-    const updated = saveMonthlyReport(report);
+    const updated = saveMonthlyReport(report, isDemo);
     setMonthlyReports(updated);
     showToast(`Relatório de ${report.monthLabel} salvo com sucesso!`);
   };
@@ -339,7 +339,7 @@ export default function Reports({ dbTrades = [], onClearDb }) {
   // Delete saved month from database
   const handleDeleteSavedMonth = (id, label) => {
     if (confirm(`Tem certeza de que deseja apagar permanentemente o arquivo de ${label}?`)) {
-      const updated = deleteMonthlyReport(id);
+      const updated = deleteMonthlyReport(id, isDemo);
       setMonthlyReports(updated);
       if (viewingArchivedReport && viewingArchivedReport.id === id) {
         setViewingArchivedReport(null);

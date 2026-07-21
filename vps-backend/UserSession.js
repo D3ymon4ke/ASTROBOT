@@ -25,62 +25,93 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+const DEFAULT_SETTINGS = {
+  token: '',
+  appId: '33KjYszMx4FNIHT6qAJ7V',
+  isDemo: true,
+  selectedStrategy: 'ma_crossover',
+  stakeValue: '1.00',
+  stakeType: 'fixed',
+  stopLoss: '50.00',
+  takeProfit: '20.00',
+  granularity: '60',
+  symbol: 'R_100',
+  moneyManagement: 'fixed',
+  martingaleMultiplier: '2.0',
+  martingaleMaxLevels: '2',
+  martingaleMode: 'next_candle',
+  autoPilot: false,
+  autoPilotInterval: '5',
+  disableSlowStrategies: false,
+  disableMaCrossover: false,
+  enableMasterCandleSecondary: false,
+  soundEnabled: true,
+  telegramToken: '',
+  telegramChatId: '',
+  telegramEnabled: false,
+  telegramNotifWin: true,
+  telegramNotifLoss: true,
+  telegramNotifDailySummary: true
+};
+
 export class UserSession {
   constructor(email) {
     this.email = email.trim().toLowerCase();
     this.filePath = path.join(DATA_DIR, `session_${this.email.replace(/[^a-z0-9]/g, '_')}.json`);
     
-    // Core states
-    this.isRunning = false;
-    this.initialBalance = 0;
-    this.balance = 0;
-    this.sessionStartTime = null;
-    this.galeLevel = 0;
-    this.currentSorosStake = 0;
-    this.waitingForGaleNextCandle = false;
-    this.lastGaleDirection = null;
-    this.activeContractId = null;
-    this.lastContractDetails = null;
-    this.candles = [];
-    this.trades = [];
-    this.logs = [];
-    this.liveSignals = {};
-    this.strategiesStats = [];
-    this.sessionAssetStats = {};
-    this.activeCycleId = null;
-    this.cycles = [];
-    this.schedulerState = true; // default enabled
-    this.activeTradeCountdown = null;
-    this.lastResetDay = null;
-
-    // Default configuration settings
-    this.settings = {
-      token: '',
-      appId: '33KjYszMx4FNIHT6qAJ7V',
-      isDemo: true,
-      selectedStrategy: 'ma_crossover',
-      stakeValue: '1.00',
-      stakeType: 'fixed',
-      stopLoss: '50.00',
-      takeProfit: '20.00',
-      granularity: '60',
-      symbol: 'R_100',
-      moneyManagement: 'fixed',
-      martingaleMultiplier: '2.0',
-      martingaleMaxLevels: '2',
-      martingaleMode: 'next_candle',
-      autoPilot: false,
-      autoPilotInterval: '5',
-      disableSlowStrategies: false,
-      disableMaCrossover: false,
-      enableMasterCandleSecondary: false,
-      soundEnabled: true,
-      telegramToken: '',
-      telegramChatId: '',
-      telegramEnabled: false,
-      telegramNotifWin: true,
-      telegramNotifLoss: true,
-      telegramNotifDailySummary: true
+    // Mode states container
+    this._activeMode = 'demo';
+    this.modeStates = {
+      demo: {
+        isRunning: false,
+        initialBalance: 0,
+        balance: 0,
+        sessionStartTime: null,
+        galeLevel: 0,
+        currentSorosStake: 0,
+        waitingForGaleNextCandle: false,
+        lastGaleDirection: null,
+        activeContractId: null,
+        lastContractDetails: null,
+        candles: [],
+        trades: [],
+        logs: [],
+        liveSignals: {},
+        strategiesStats: [],
+        sessionAssetStats: {},
+        activeCycleId: null,
+        cycles: [],
+        schedulerState: true,
+        activeTradeCountdown: null,
+        lastResetDay: null,
+        stuckContractStartTime: null,
+        settings: { ...DEFAULT_SETTINGS, isDemo: true }
+      },
+      real: {
+        isRunning: false,
+        initialBalance: 0,
+        balance: 0,
+        sessionStartTime: null,
+        galeLevel: 0,
+        currentSorosStake: 0,
+        waitingForGaleNextCandle: false,
+        lastGaleDirection: null,
+        activeContractId: null,
+        lastContractDetails: null,
+        candles: [],
+        trades: [],
+        logs: [],
+        liveSignals: {},
+        strategiesStats: [],
+        sessionAssetStats: {},
+        activeCycleId: null,
+        cycles: [],
+        schedulerState: true,
+        activeTradeCountdown: null,
+        lastResetDay: null,
+        stuckContractStartTime: null,
+        settings: { ...DEFAULT_SETTINGS, isDemo: false }
+      }
     };
 
     this.clients = new Set();
@@ -102,35 +133,139 @@ export class UserSession {
     this.startCountdownTimer();
   }
 
+  // Getters & Setters redirecting to current active mode
+  get activeMode() { return this._activeMode || 'demo'; }
+
+  get isRunning() { return this.modeStates[this.activeMode].isRunning; }
+  set isRunning(val) { this.modeStates[this.activeMode].isRunning = val; }
+
+  get initialBalance() { return this.modeStates[this.activeMode].initialBalance; }
+  set initialBalance(val) { this.modeStates[this.activeMode].initialBalance = val; }
+
+  get balance() { return this.modeStates[this.activeMode].balance; }
+  set balance(val) { this.modeStates[this.activeMode].balance = val; }
+
+  get sessionStartTime() { return this.modeStates[this.activeMode].sessionStartTime; }
+  set sessionStartTime(val) { this.modeStates[this.activeMode].sessionStartTime = val; }
+
+  get galeLevel() { return this.modeStates[this.activeMode].galeLevel; }
+  set galeLevel(val) { this.modeStates[this.activeMode].galeLevel = val; }
+
+  get currentSorosStake() { return this.modeStates[this.activeMode].currentSorosStake; }
+  set currentSorosStake(val) { this.modeStates[this.activeMode].currentSorosStake = val; }
+
+  get waitingForGaleNextCandle() { return this.modeStates[this.activeMode].waitingForGaleNextCandle; }
+  set waitingForGaleNextCandle(val) { this.modeStates[this.activeMode].waitingForGaleNextCandle = val; }
+
+  get lastGaleDirection() { return this.modeStates[this.activeMode].lastGaleDirection; }
+  set lastGaleDirection(val) { this.modeStates[this.activeMode].lastGaleDirection = val; }
+
+  get activeContractId() { return this.modeStates[this.activeMode].activeContractId; }
+  set activeContractId(val) { this.modeStates[this.activeMode].activeContractId = val; }
+
+  get lastContractDetails() { return this.modeStates[this.activeMode].lastContractDetails; }
+  set lastContractDetails(val) { this.modeStates[this.activeMode].lastContractDetails = val; }
+
+  get candles() { return this.modeStates[this.activeMode].candles; }
+  set candles(val) { this.modeStates[this.activeMode].candles = val; }
+
+  get trades() { return this.modeStates[this.activeMode].trades; }
+  set trades(val) { this.modeStates[this.activeMode].trades = val; }
+
+  get logs() { return this.modeStates[this.activeMode].logs; }
+  set logs(val) { this.modeStates[this.activeMode].logs = val; }
+
+  get liveSignals() { return this.modeStates[this.activeMode].liveSignals; }
+  set liveSignals(val) { this.modeStates[this.activeMode].liveSignals = val; }
+
+  get strategiesStats() { return this.modeStates[this.activeMode].strategiesStats; }
+  set strategiesStats(val) { this.modeStates[this.activeMode].strategiesStats = val; }
+
+  get sessionAssetStats() { return this.modeStates[this.activeMode].sessionAssetStats; }
+  set sessionAssetStats(val) { this.modeStates[this.activeMode].sessionAssetStats = val; }
+
+  get activeCycleId() { return this.modeStates[this.activeMode].activeCycleId; }
+  set activeCycleId(val) { this.modeStates[this.activeMode].activeCycleId = val; }
+
+  get cycles() { return this.modeStates[this.activeMode].cycles; }
+  set cycles(val) { this.modeStates[this.activeMode].cycles = val; }
+
+  get schedulerState() { return this.modeStates[this.activeMode].schedulerState; }
+  set schedulerState(val) { this.modeStates[this.activeMode].schedulerState = val; }
+
+  get activeTradeCountdown() { return this.modeStates[this.activeMode].activeTradeCountdown; }
+  set activeTradeCountdown(val) { this.modeStates[this.activeMode].activeTradeCountdown = val; }
+
+  get lastResetDay() { return this.modeStates[this.activeMode].lastResetDay; }
+  set lastResetDay(val) { this.modeStates[this.activeMode].lastResetDay = val; }
+
+  get stuckContractStartTime() { return this.modeStates[this.activeMode].stuckContractStartTime; }
+  set stuckContractStartTime(val) { this.modeStates[this.activeMode].stuckContractStartTime = val; }
+
+  get settings() { return this.modeStates[this.activeMode].settings; }
+  set settings(val) { this.modeStates[this.activeMode].settings = val; }
+  }
+
   loadFromFile() {
     try {
       if (fs.existsSync(this.filePath)) {
         const raw = fs.readFileSync(this.filePath, 'utf8');
         const data = JSON.parse(raw);
         
-        this.isRunning = data.isRunning ?? false;
-        this.initialBalance = data.initialBalance ?? 0;
-        this.balance = data.balance ?? 0;
-        this.galeLevel = data.galeLevel ?? 0;
-        this.currentSorosStake = data.currentSorosStake ?? 0;
-        this.waitingForGaleNextCandle = data.waitingForGaleNextCandle ?? false;
-        this.lastGaleDirection = data.lastGaleDirection ?? null;
-        this.activeContractId = data.activeContractId ?? null;
-        this.lastContractDetails = data.lastContractDetails ?? null;
-        this.trades = data.trades ?? [];
-        this.logs = data.logs ?? [];
-        this.activeCycleId = data.activeCycleId ?? null;
-        this.cycles = data.cycles ?? [];
-        this.schedulerState = data.schedulerState ?? true;
-        this.sessionAssetStats = data.sessionAssetStats ?? {};
-        this.lastResetDay = data.lastResetDay ?? null;
-        
-        if (data.settings) {
-          this.settings = { ...this.settings, ...data.settings };
+        if (data.modeStates) {
+          this._activeMode = data.activeMode ?? 'demo';
+          this.modeStates = data.modeStates;
+        } else {
+          // Migrate old flat structure to new split structure
+          const isDemo = data.settings?.isDemo ?? true;
+          this._activeMode = isDemo ? 'demo' : 'real';
+          
+          const migratedState = {
+            isRunning: data.isRunning ?? false,
+            initialBalance: data.initialBalance ?? 0,
+            balance: data.balance ?? 0,
+            sessionStartTime: data.sessionStartTime ?? null,
+            galeLevel: data.galeLevel ?? 0,
+            currentSorosStake: data.currentSorosStake ?? 0,
+            waitingForGaleNextCandle: data.waitingForGaleNextCandle ?? false,
+            lastGaleDirection: data.lastGaleDirection ?? null,
+            activeContractId: data.activeContractId ?? null,
+            lastContractDetails: data.lastContractDetails ?? null,
+            candles: [],
+            trades: data.trades ?? [],
+            logs: data.logs ?? [],
+            liveSignals: {},
+            strategiesStats: [],
+            sessionAssetStats: data.sessionAssetStats ?? {},
+            activeCycleId: data.activeCycleId ?? null,
+            cycles: data.cycles ?? [],
+            schedulerState: data.schedulerState ?? true,
+            activeTradeCountdown: data.activeTradeCountdown ?? null,
+            lastResetDay: data.lastResetDay ?? null,
+            stuckContractStartTime: null,
+            settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) }
+          };
+
+          this.modeStates = {
+            demo: isDemo ? migratedState : {
+              isRunning: false, initialBalance: 0, balance: 0, sessionStartTime: null, galeLevel: 0, currentSorosStake: 0,
+              waitingForGaleNextCandle: false, lastGaleDirection: null, activeContractId: null, lastContractDetails: null,
+              candles: [], trades: [], logs: [], liveSignals: {}, strategiesStats: [], sessionAssetStats: {},
+              activeCycleId: null, cycles: [], schedulerState: true, activeTradeCountdown: null, lastResetDay: null,
+              stuckContractStartTime: null, settings: { ...DEFAULT_SETTINGS, isDemo: true }
+            },
+            real: !isDemo ? migratedState : {
+              isRunning: false, initialBalance: 0, balance: 0, sessionStartTime: null, galeLevel: 0, currentSorosStake: 0,
+              waitingForGaleNextCandle: false, lastGaleDirection: null, activeContractId: null, lastContractDetails: null,
+              candles: [], trades: [], logs: [], liveSignals: {}, strategiesStats: [], sessionAssetStats: {},
+              activeCycleId: null, cycles: [], schedulerState: true, activeTradeCountdown: null, lastResetDay: null,
+              stuckContractStartTime: null, settings: { ...DEFAULT_SETTINGS, isDemo: false }
+            }
+          };
         }
         
         this.loadedFromFile = true;
-        console.log(`Loaded persisted session for ${this.email}`);
+        console.log(`Loaded persisted session for ${this.email} (Active mode: ${this._activeMode})`);
       }
     } catch (e) {
       console.error(`Error loading session file for ${this.email}:`, e);
@@ -139,25 +274,14 @@ export class UserSession {
 
   saveToFile() {
     try {
+      // Ensure logs slice is only updated for saving to keep file sizes small
+      this.modeStates.demo.logs = this.modeStates.demo.logs.slice(-200);
+      this.modeStates.real.logs = this.modeStates.real.logs.slice(-200);
+      
       const data = {
         email: this.email,
-        isRunning: this.isRunning,
-        initialBalance: this.initialBalance,
-        balance: this.balance,
-        galeLevel: this.galeLevel,
-        currentSorosStake: this.currentSorosStake,
-        waitingForGaleNextCandle: this.waitingForGaleNextCandle,
-        lastGaleDirection: this.lastGaleDirection,
-        activeContractId: this.activeContractId,
-        lastContractDetails: this.lastContractDetails,
-        trades: this.trades,
-        logs: this.logs.slice(-200), // Keep last 200 logs
-        activeCycleId: this.activeCycleId,
-        cycles: this.cycles,
-        schedulerState: this.schedulerState,
-        sessionAssetStats: this.sessionAssetStats,
-        lastResetDay: this.lastResetDay,
-        settings: this.settings
+        activeMode: this._activeMode,
+        modeStates: this.modeStates
       };
       fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2), 'utf8');
     } catch (e) {
@@ -481,10 +605,22 @@ export class UserSession {
     this.galeLevel = 0;
     this.currentSorosStake = 0;
     this.waitingForGaleNextCandle = false;
+    this.candles = []; // Clear candles for a fresh analysis start
     this.addLog({ message: 'INICIANDO OPERAÇÕES AUTOMÁTICAS', type: 'success' });
     
     this.sendTelegramNotif('bot_started', `🤖 <b>ASTROBOT OPERANDO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ativo:</b> <code>${this.settings.symbol}</code>\n<b>Estratégia:</b> <code>${this.settings.selectedStrategy}</code>\n<b>Stake Inicial:</b> <code>$${this.settings.stakeValue}</code>\n<b>Saldo Inicial:</b> <code>$${this.balance}</code>`);
     
+    // Ensure we are connected and authorized, or force resubscribe if already connected
+    if (this.settings.token) {
+      if (!this.derivAPI.connected || !this.derivAPI.authorized) {
+        console.log(`[Manual Start] Deriv not connected or not authorized for ${this.email}. Reconnecting...`);
+        this.derivAPI.connect(this.settings.token, this.settings.appId, this.settings.isDemo);
+      } else {
+        console.log(`[Manual Start] Force renewing Deriv subscription to ${this.settings.symbol} (${this.settings.granularity}s).`);
+        this.derivAPI.changeSymbol(this.settings.symbol, parseInt(this.settings.granularity));
+      }
+    }
+
     this.saveToFile();
     this.syncToClients();
     this.syncStatusToFirestore();
@@ -549,17 +685,34 @@ export class UserSession {
   }
 
   updateSettings(newSettings) {
+    const prevMode = this._activeMode;
+    const prevSymbol = this.settings.symbol;
+    const prevGranularity = this.settings.granularity;
+
+    if (newSettings.isDemo !== undefined) {
+      this._activeMode = newSettings.isDemo ? 'demo' : 'real';
+    }
+
     const symbolChanged = newSettings.symbol !== this.settings.symbol;
     const granularityChanged = parseInt(newSettings.granularity) !== parseInt(this.settings.granularity);
     const tokenChanged = newSettings.token !== this.settings.token || newSettings.appId !== this.settings.appId || newSettings.isDemo !== this.settings.isDemo;
 
+    // Merge settings into active mode's settings
     this.settings = { ...this.settings, ...newSettings };
+    
+    // Save, sync and update Supabase fields for current active state
     this.saveToFile();
     this.syncToClients();
     this.syncSettingsToFirestore();
+    this.syncCyclesToFirestore();
+    this.syncStatusToFirestore();
 
-    if (tokenChanged && this.settings.token) {
-      this.derivAPI.connect(this.settings.token, this.settings.appId, this.settings.isDemo);
+    if (tokenChanged || prevMode !== this._activeMode) {
+      if (this.settings.token) {
+        this.derivAPI.connect(this.settings.token, this.settings.appId, this.settings.isDemo);
+      } else {
+        this.derivAPI.disconnect();
+      }
     } else if (symbolChanged || granularityChanged) {
       this.derivAPI.changeSymbol(this.settings.symbol, parseInt(this.settings.granularity));
     }
@@ -676,20 +829,13 @@ export class UserSession {
     if (cycle.enableMasterCandleSecondary !== undefined) this.settings.enableMasterCandleSecondary = cycle.enableMasterCandleSecondary;
     if (cycle.martingaleMultiplier !== undefined) this.settings.martingaleMultiplier = cycle.martingaleMultiplier.toString();
 
-    // Check if symbol or granularity changed and update subscription
-    if (this.settings.token) {
-      const symbolChanged = this.settings.symbol !== prevSymbol;
-      const granularityChanged = this.settings.granularity !== prevGranularity;
-      if (symbolChanged || granularityChanged) {
-        console.log(`[Scheduler] Cycle changed symbol/granularity from ${prevSymbol} (${prevGranularity}s) to ${this.settings.symbol} (${this.settings.granularity}s). Updating Deriv subscription.`);
-        this.derivAPI.changeSymbol(this.settings.symbol, parseInt(this.settings.granularity));
-      }
-    }
 
-    // Reset gale levels
+
+    // Reset gale levels and clear candles for fresh analysis
     this.galeLevel = 0;
     this.currentSorosStake = 0;
     this.waitingForGaleNextCandle = false;
+    this.candles = [];
     this.initialBalance = this.balance;
     this.sessionStartTime = Date.now();
     this.isRunning = true;
@@ -701,6 +847,16 @@ export class UserSession {
 
     this.sendTelegramNotif('cycle_started', `📅 <b>CICLO AGENDADO INICIADO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ciclo:</b> <code>${cycle.name}</code>\n<b>Estratégia:</b> <code>${strategyId}</code>\n<b>Stake:</b> <code>$${parseFloat(stake).toFixed(2)}</code>\n<b>Stop Loss:</b> <code>$${parseFloat(stopLoss).toFixed(2)}</code>\n<b>Take Profit:</b> <code>$${parseFloat(takeProfit).toFixed(2)}</code>`);
 
+    // Ensure we are connected and authorized, or force resubscribe if already connected
+    if (this.settings.token) {
+      if (!this.derivAPI.connected || !this.derivAPI.authorized) {
+        console.log(`[Scheduler] Deriv not connected or not authorized for ${this.email} on cycle start. Reconnecting...`);
+        this.derivAPI.connect(this.settings.token, this.settings.appId, this.settings.isDemo);
+      } else {
+        console.log(`[Scheduler] Cycle starting for ${this.email}. Renewing Deriv subscription to ${this.settings.symbol} (${this.settings.granularity}s).`);
+        this.derivAPI.changeSymbol(this.settings.symbol, parseInt(this.settings.granularity));
+      }
+    }
 
     // Update cycle status
     this.cycles = this.cycles.map(c => c.id === cycle.id ? { ...c, status: 'Ativo' } : c);
@@ -727,12 +883,14 @@ export class UserSession {
           this.activeContractId = null;
           this.pendingRegistrationStartTime = null;
           this.activeTradeCountdown = null;
+          this.stuckContractStartTime = null;
           this.saveToFile();
           this.syncToClients();
         }
       } else {
         this.pendingRegistrationStartTime = null;
         if (this.activeTradeCountdown && this.activeTradeCountdown.dateExpiry) {
+          this.stuckContractStartTime = null;
           const nowEpoch = Math.floor(now.getTime() / 1000);
           if (nowEpoch > this.activeTradeCountdown.dateExpiry + 20) { // 20s grace period past expiry
             console.log(`[Watchdog] Ordem ${this.activeContractId} expirada sem evento de fechamento para ${this.email}. Liberando trava.`);
@@ -742,10 +900,24 @@ export class UserSession {
             this.saveToFile();
             this.syncToClients();
           }
+        } else {
+          // If activeContractId is set but activeTradeCountdown is missing/null, prevent permanent lock
+          if (!this.stuckContractStartTime) {
+            this.stuckContractStartTime = now.getTime();
+          } else if (now.getTime() - this.stuckContractStartTime > 30000) { // 30s threshold
+            console.log(`[Watchdog] Ordem ${this.activeContractId} sem contagem regressiva identificada para ${this.email}. Liberando trava.`);
+            this.addLog({ message: `[Watchdog] Trava de ordem #${this.activeContractId} liberada por falta de rastreamento de tempo.`, type: 'warning' });
+            this.activeContractId = null;
+            this.activeTradeCountdown = null;
+            this.stuckContractStartTime = null;
+            this.saveToFile();
+            this.syncToClients();
+          }
         }
       }
     } else {
       this.pendingRegistrationStartTime = null;
+      this.stuckContractStartTime = null;
     }
 
     // 1. Daily Reset of cycle status to "Aguardando"

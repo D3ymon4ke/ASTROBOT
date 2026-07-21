@@ -16,6 +16,7 @@ export class DerivAPI {
     this.reconnectTimeoutId = null;
     this.reconnectAttempts = 0;
     this.pendingRequests = new Map();
+    this.lastReceivedTime = Date.now();
     
     // Callbacks
     this.onConnectionChange = () => {};
@@ -37,6 +38,7 @@ export class DerivAPI {
     this.appId = appId ? appId.trim() : '33KjYszMx4FNIHT6qAJ7V';
     this.isDemo = isDemo;
     this.shouldReconnect = true;
+    this.lastReceivedTime = Date.now();
 
     if (this.reconnectTimeoutId) {
       clearTimeout(this.reconnectTimeoutId);
@@ -243,8 +245,17 @@ export class DerivAPI {
 
   startPingLoop() {
     this.stopPingLoop();
+    this.lastReceivedTime = Date.now();
     this.pingIntervalId = setInterval(() => {
       if (this.ws && this.connected) {
+        // If we haven't received any messages (including ping responses) for 20 seconds, assume connection is dead
+        if (Date.now() - this.lastReceivedTime > 20000) {
+          this.log('Nenhuma resposta ou mensagem recebida da Deriv em 20s. Conexão inativa, forçando reconexão...', 'warning');
+          if (this.ws) {
+            this.ws.close();
+          }
+          return;
+        }
         this.pingSentTime = Date.now();
         this.ws.send(JSON.stringify({ ping: 1 }));
       }
@@ -360,6 +371,7 @@ export class DerivAPI {
   }
 
   handleMessage(data) {
+    this.lastReceivedTime = Date.now();
     const reqId = data.req_id || (data.echo_req && data.echo_req.req_id);
     if (reqId && this.pendingRequests.has(reqId.toString())) {
       const { resolve, reject } = this.pendingRequests.get(reqId.toString());

@@ -1,29 +1,83 @@
 // Database utility using Electron fs (fallback to localStorage)
+import { fileURLToPath } from 'url';
+
 let fs = null;
 let path = null;
-let dbPath = '';
 
 try {
   if (typeof window !== 'undefined' && typeof window.require === 'function') {
     fs = window.require('fs');
     path = window.require('path');
-    // Save to local directory
-    const cwd = typeof process !== 'undefined' && process.cwd ? process.cwd() : '';
-    dbPath = path && cwd ? path.join(cwd, 'trades_db.json') : '';
   }
 } catch (e) {
   console.warn("Node/Electron fs modules not available. Using localStorage fallback.");
 }
 
-export const loadDbTrades = () => {
+const getDbPaths = (isDemo) => {
+  const suffix = isDemo ? '_demo' : '_real';
+  const cwd = typeof process !== 'undefined' && process.cwd ? process.cwd() : '';
+  if (path && cwd) {
+    return {
+      trades: path.join(cwd, `trades_db${suffix}.json`),
+      monthly: path.join(cwd, `monthly_reports_db${suffix}.json`)
+    };
+  }
+  return { trades: '', monthly: '' };
+};
+
+const getLocalStorageKeys = (isDemo) => {
+  const suffix = isDemo ? '_demo' : '_real';
+  return {
+    trades: `astrobot_trades_db${suffix}`,
+    monthly: `astrobot_monthly_reports_db${suffix}`
+  };
+};
+
+// Auto-migration for old files/keys to demo
+try {
+  const cwd = typeof process !== 'undefined' && process.cwd ? process.cwd() : '';
+  if (fs && cwd && path) {
+    const oldTrades = path.join(cwd, 'trades_db.json');
+    const newDemoTrades = path.join(cwd, 'trades_db_demo.json');
+    if (fs.existsSync(oldTrades) && !fs.existsSync(newDemoTrades)) {
+      fs.copyFileSync(oldTrades, newDemoTrades);
+      console.log("[Migration] Copied old trades_db.json to trades_db_demo.json");
+    }
+    const oldMonthly = path.join(cwd, 'monthly_reports_db.json');
+    const newDemoMonthly = path.join(cwd, 'monthly_reports_db_demo.json');
+    if (fs.existsSync(oldMonthly) && !fs.existsSync(newDemoMonthly)) {
+      fs.copyFileSync(oldMonthly, newDemoMonthly);
+      console.log("[Migration] Copied old monthly_reports_db.json to monthly_reports_db_demo.json");
+    }
+  } else if (typeof localStorage !== 'undefined') {
+    const oldTradesData = localStorage.getItem('astrobot_trades_db');
+    const newDemoTradesKey = 'astrobot_trades_db_demo';
+    if (oldTradesData && !localStorage.getItem(newDemoTradesKey)) {
+      localStorage.setItem(newDemoTradesKey, oldTradesData);
+      console.log("[Migration] Copied old astrobot_trades_db in localStorage to astrobot_trades_db_demo");
+    }
+    const oldMonthlyData = localStorage.getItem('astrobot_monthly_reports_db');
+    const newDemoMonthlyKey = 'astrobot_monthly_reports_db_demo';
+    if (oldMonthlyData && !localStorage.getItem(newDemoMonthlyKey)) {
+      localStorage.setItem(newDemoMonthlyKey, oldMonthlyData);
+      console.log("[Migration] Copied old astrobot_monthly_reports_db in localStorage to astrobot_monthly_reports_db_demo");
+    }
+  }
+} catch (e) {
+  console.warn("Migration failed or not applicable:", e);
+}
+
+export const loadDbTrades = (isDemo = true) => {
   try {
-    if (fs && dbPath) {
-      if (fs.existsSync(dbPath)) {
-        const data = fs.readFileSync(dbPath, 'utf-8');
+    const paths = getDbPaths(isDemo);
+    if (fs && paths.trades) {
+      if (fs.existsSync(paths.trades)) {
+        const data = fs.readFileSync(paths.trades, 'utf-8');
         return JSON.parse(data);
       }
     } else {
-      const data = localStorage.getItem('astrobot_trades_db');
+      const keys = getLocalStorageKeys(isDemo);
+      const data = localStorage.getItem(keys.trades);
       if (data) {
         return JSON.parse(data);
       }
@@ -34,10 +88,9 @@ export const loadDbTrades = () => {
   return [];
 };
 
-export const saveDbTrade = (trade) => {
+export const saveDbTrade = (trade, isDemo = true) => {
   try {
-    const trades = loadDbTrades();
-    // Add unique timestamp if not present
+    const trades = loadDbTrades(isDemo);
     const newTrade = {
       id: trade.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       timestamp: trade.timestamp || Date.now(),
@@ -45,10 +98,12 @@ export const saveDbTrade = (trade) => {
     };
     trades.push(newTrade);
     
-    if (fs && dbPath) {
-      fs.writeFileSync(dbPath, JSON.stringify(trades, null, 2), 'utf-8');
+    const paths = getDbPaths(isDemo);
+    if (fs && paths.trades) {
+      fs.writeFileSync(paths.trades, JSON.stringify(trades, null, 2), 'utf-8');
     } else {
-      localStorage.setItem('astrobot_trades_db', JSON.stringify(trades));
+      const keys = getLocalStorageKeys(isDemo);
+      localStorage.setItem(keys.trades, JSON.stringify(trades));
     }
     return trades;
   } catch (err) {
@@ -57,9 +112,9 @@ export const saveDbTrade = (trade) => {
   return [];
 };
 
-export const saveDbTrades = (newTradesList) => {
+export const saveDbTrades = (newTradesList, isDemo = true) => {
   try {
-    const trades = loadDbTrades();
+    const trades = loadDbTrades(isDemo);
     let updated = false;
     newTradesList.forEach(trade => {
       const exists = trades.some(t => 
@@ -79,10 +134,12 @@ export const saveDbTrades = (newTradesList) => {
     });
     
     if (updated) {
-      if (fs && dbPath) {
-        fs.writeFileSync(dbPath, JSON.stringify(trades, null, 2), 'utf-8');
+      const paths = getDbPaths(isDemo);
+      if (fs && paths.trades) {
+        fs.writeFileSync(paths.trades, JSON.stringify(trades, null, 2), 'utf-8');
       } else {
-        localStorage.setItem('astrobot_trades_db', JSON.stringify(trades));
+        const keys = getLocalStorageKeys(isDemo);
+        localStorage.setItem(keys.trades, JSON.stringify(trades));
       }
       return trades;
     }
@@ -93,12 +150,14 @@ export const saveDbTrades = (newTradesList) => {
   return [];
 };
 
-export const clearDbTrades = () => {
+export const clearDbTrades = (isDemo = true) => {
   try {
-    if (fs && dbPath) {
-      fs.writeFileSync(dbPath, JSON.stringify([], null, 2), 'utf-8');
+    const paths = getDbPaths(isDemo);
+    if (fs && paths.trades) {
+      fs.writeFileSync(paths.trades, JSON.stringify([], null, 2), 'utf-8');
     } else {
-      localStorage.setItem('astrobot_trades_db', JSON.stringify([]));
+      const keys = getLocalStorageKeys(isDemo);
+      localStorage.setItem(keys.trades, JSON.stringify([]));
     }
   } catch (err) {
     console.error("Error clearing database:", err);
@@ -106,16 +165,17 @@ export const clearDbTrades = () => {
 };
 
 // Monthly Reports Database Operations
-export const loadMonthlyReports = () => {
+export const loadMonthlyReports = (isDemo = true) => {
   try {
-    if (fs && dbPath) {
-      const monthlyPath = path.join(path.dirname(dbPath), 'monthly_reports_db.json');
-      if (fs.existsSync(monthlyPath)) {
-        const data = fs.readFileSync(monthlyPath, 'utf-8');
+    const paths = getDbPaths(isDemo);
+    if (fs && paths.monthly) {
+      if (fs.existsSync(paths.monthly)) {
+        const data = fs.readFileSync(paths.monthly, 'utf-8');
         return JSON.parse(data);
       }
     } else {
-      const data = localStorage.getItem('astrobot_monthly_reports_db');
+      const keys = getLocalStorageKeys(isDemo);
+      const data = localStorage.getItem(keys.monthly);
       if (data) {
         return JSON.parse(data);
       }
@@ -126,9 +186,9 @@ export const loadMonthlyReports = () => {
   return [];
 };
 
-export const saveMonthlyReport = (report) => {
+export const saveMonthlyReport = (report, isDemo = true) => {
   try {
-    const reports = loadMonthlyReports();
+    const reports = loadMonthlyReports(isDemo);
     const existingIndex = reports.findIndex(r => r.id === report.id);
     const newReport = {
       ...report,
@@ -140,11 +200,12 @@ export const saveMonthlyReport = (report) => {
       reports.push(newReport);
     }
 
-    if (fs && dbPath) {
-      const monthlyPath = path.join(path.dirname(dbPath), 'monthly_reports_db.json');
-      fs.writeFileSync(monthlyPath, JSON.stringify(reports, null, 2), 'utf-8');
+    const paths = getDbPaths(isDemo);
+    if (fs && paths.monthly) {
+      fs.writeFileSync(paths.monthly, JSON.stringify(reports, null, 2), 'utf-8');
     } else {
-      localStorage.setItem('astrobot_monthly_reports_db', JSON.stringify(reports));
+      const keys = getLocalStorageKeys(isDemo);
+      localStorage.setItem(keys.monthly, JSON.stringify(reports));
     }
     return reports;
   } catch (err) {
@@ -153,15 +214,16 @@ export const saveMonthlyReport = (report) => {
   return [];
 };
 
-export const deleteMonthlyReport = (id) => {
+export const deleteMonthlyReport = (id, isDemo = true) => {
   try {
-    const reports = loadMonthlyReports();
+    const reports = loadMonthlyReports(isDemo);
     const updated = reports.filter(r => r.id !== id);
-    if (fs && dbPath) {
-      const monthlyPath = path.join(path.dirname(dbPath), 'monthly_reports_db.json');
-      fs.writeFileSync(monthlyPath, JSON.stringify(updated, null, 2), 'utf-8');
+    const paths = getDbPaths(isDemo);
+    if (fs && paths.monthly) {
+      fs.writeFileSync(paths.monthly, JSON.stringify(updated, null, 2), 'utf-8');
     } else {
-      localStorage.setItem('astrobot_monthly_reports_db', JSON.stringify(updated));
+      const keys = getLocalStorageKeys(isDemo);
+      localStorage.setItem(keys.monthly, JSON.stringify(updated));
     }
     return updated;
   } catch (err) {
