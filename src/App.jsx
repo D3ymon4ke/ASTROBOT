@@ -878,6 +878,63 @@ export default function App() {
     }
   }, [userEmail]);
 
+  // Restore user session profile and check license on startup if email is saved
+  useEffect(() => {
+    const email = localStorage.getItem('astrobot_user_email');
+    if (email) {
+      const restoreSession = async () => {
+        try {
+          const isLocalOrElectron = window.location.hostname === 'localhost' || 
+                                    window.location.hostname === '127.0.0.1' || 
+                                    window.location.protocol === 'file:' ||
+                                    (window.process && window.process.type === 'renderer');
+
+          const apiUrl = isLocalOrElectron 
+            ? 'https://astrobot-seven.vercel.app/api/get-profile'
+            : '/api/get-profile';
+
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+          });
+
+          const result = await response.json();
+          if (response.ok && result.success && result.user) {
+            const user = result.user;
+            setUserEmail(user.email);
+            setCdKey(user.cdkey);
+            setKeyExpiresAt(user.expiresAt);
+            setIsKeyValid(user.licenseStatus === 'active');
+
+            // Cache details
+            localStorage.setItem('astrobot_user_email', user.email);
+            if (user.cdkey) localStorage.setItem('astrobot_cdkey', user.cdkey);
+            if (user.expiresAt) localStorage.setItem('astrobot_expires_at', user.expiresAt.toString());
+
+            if (user.settings) {
+              setSettings(prev => ({ ...prev, ...user.settings }));
+              localStorage.setItem('astrobot_settings', JSON.stringify(user.settings));
+            }
+            if (user.profile) {
+              if (user.profile.fullname) {
+                setWelcomeName(user.profile.fullname);
+                localStorage.setItem('astrobot_custom_name', user.profile.fullname);
+              }
+              if (user.profile.profileImage) {
+                setProfileImage(user.profile.profileImage);
+                localStorage.setItem('astrobot_profile_image', user.profile.profileImage);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Failed to restore user session:', err);
+        }
+      };
+      restoreSession();
+    }
+  }, []);
+
   // Validate license periodically based on keyExpiresAt state
   useEffect(() => {
     const checkLicense = () => {
