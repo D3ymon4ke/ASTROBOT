@@ -204,7 +204,6 @@ export class UserSession {
 
   get settings() { return this.modeStates[this.activeMode].settings; }
   set settings(val) { this.modeStates[this.activeMode].settings = val; }
-  }
 
   loadFromFile() {
     try {
