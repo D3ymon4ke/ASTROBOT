@@ -515,6 +515,8 @@ wss.on('connection', (ws) => {
         session.stopBot();
       } else if (type === 'update_settings') {
         session.updateSettings(payload.settings);
+      } else if (type === 'update_planning') {
+        session.updatePlanning(payload.planning);
       } else if (type === 'update_cycles') {
         session.updateCycles(payload.cycles);
       } else if (type === 'trigger_cycle') {

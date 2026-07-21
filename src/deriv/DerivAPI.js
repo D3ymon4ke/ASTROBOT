@@ -150,6 +150,13 @@ export class DerivAPI {
     });
   }
 
+  updatePlanning(planning) {
+    this.send({
+      type: 'update_planning',
+      planning
+    });
+  }
+
   updateCycles(cycles) {
     this.send({
       type: 'update_cycles',

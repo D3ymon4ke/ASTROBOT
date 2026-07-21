@@ -5,11 +5,10 @@ import {
   Sparkles, Layers, Sliders, Info, CheckCircle, Clock, BarChart2, BookOpen
 } from 'lucide-react';
 
-export default function Planning({ dbTrades, onClearDb }) {
-  // Goal Settings State (Persisted in localStorage)
+export default function Planning({ dbTrades, onClearDb, planningState, onUpdatePlanning }) {
+  // Goal Settings State (Persisted in localStorage as fallback cache)
   const [goals, setGoals] = useState(() => {
-    const saved = localStorage.getItem('astrobot_planning_goals');
-    return saved ? JSON.parse(saved) : {
+    return planningState?.goals || {
       monthly: 500,
       quarterly: 1500,
       annual: 5000,
@@ -29,16 +28,36 @@ export default function Planning({ dbTrades, onClearDb }) {
   const [tempCustomName, setTempCustomName] = useState(goals.customName || '');
 
   // Simulator States
-  const [simStake, setSimStake] = useState(1.0);
-  const [simSessions, setSimSessions] = useState(2);
-  const [simTarget, setSimTarget] = useState(3.0);
-  const [simWinrate, setSimWinrate] = useState(91);
+  const [simStake, setSimStake] = useState(() => planningState?.simulator?.simStake ?? 1.0);
+  const [simSessions, setSimSessions] = useState(() => planningState?.simulator?.simSessions ?? 2);
+  const [simTarget, setSimTarget] = useState(() => planningState?.simulator?.simTarget ?? 3.0);
+  const [simWinrate, setSimWinrate] = useState(() => planningState?.simulator?.simWinrate ?? 91);
 
   // Calendar click state
   const [selectedDayTrades, setSelectedDayTrades] = useState(null);
   const [selectedDayNum, setSelectedDayNum] = useState(null);
 
-  // Persist goals changes
+  // Sync state with incoming props
+  useEffect(() => {
+    if (planningState) {
+      if (planningState.goals) {
+        setGoals(planningState.goals);
+        setTempMonthly(planningState.goals.monthly || '');
+        setTempQuarterly(planningState.goals.quarterly || '');
+        setTempAnnual(planningState.goals.annual || '');
+        setTempCustom(planningState.goals.custom || '');
+        setTempCustomName(planningState.goals.customName || '');
+      }
+      if (planningState.simulator) {
+        setSimStake(planningState.simulator.simStake ?? 1.0);
+        setSimSessions(planningState.simulator.simSessions ?? 2);
+        setSimTarget(planningState.simulator.simTarget ?? 3.0);
+        setSimWinrate(planningState.simulator.simWinrate ?? 91);
+      }
+    }
+  }, [planningState]);
+
+  // Persist goals changes to localStorage as fallback
   useEffect(() => {
     localStorage.setItem('astrobot_planning_goals', JSON.stringify(goals));
   }, [goals]);
@@ -74,20 +93,34 @@ export default function Planning({ dbTrades, onClearDb }) {
       return;
     }
 
-    setGoals({
+    const newGoals = {
       monthly: mVal,
       quarterly: qVal,
       annual: aVal,
       custom: cVal,
       customName: tempCustomName || 'Objetivo Customizado',
       configured: true
-    });
+    };
+    setGoals(newGoals);
+    if (onUpdatePlanning) {
+      onUpdatePlanning({
+        goals: newGoals,
+        simulator: { simStake, simSessions, simTarget, simWinrate }
+      });
+    }
   };
 
   // Reset Configuration
   const handleResetPlanning = () => {
     if (window.confirm('Tem certeza de que deseja reconfigurar suas metas financeiras?')) {
-      setGoals(prev => ({ ...prev, configured: false }));
+      const newGoals = { ...goals, configured: false };
+      setGoals(newGoals);
+      if (onUpdatePlanning) {
+        onUpdatePlanning({
+          goals: newGoals,
+          simulator: { simStake, simSessions, simTarget, simWinrate }
+        });
+      }
     }
   };
 
@@ -1013,7 +1046,16 @@ export default function Planning({ dbTrades, onClearDb }) {
                     max="10.0"
                     step="0.05"
                     value={simStake}
-                    onChange={(e) => setSimStake(parseFloat(e.target.value))}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setSimStake(val);
+                      if (onUpdatePlanning) {
+                        onUpdatePlanning({
+                          goals,
+                          simulator: { simStake: val, simSessions, simTarget, simWinrate }
+                        });
+                      }
+                    }}
                     style={{ flex: 1, accentColor: 'var(--primary)' }}
                   />
                   <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', minWidth: '40px' }}>${simStake.toFixed(2)}</span>
@@ -1029,7 +1071,16 @@ export default function Planning({ dbTrades, onClearDb }) {
                     max="20.0"
                     step="0.5"
                     value={simTarget}
-                    onChange={(e) => setSimTarget(parseFloat(e.target.value))}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setSimTarget(val);
+                      if (onUpdatePlanning) {
+                        onUpdatePlanning({
+                          goals,
+                          simulator: { simStake, simSessions, simTarget: val, simWinrate }
+                        });
+                      }
+                    }}
                     style={{ flex: 1, accentColor: 'var(--primary)' }}
                   />
                   <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', minWidth: '40px' }}>${simTarget.toFixed(1)}</span>
@@ -1045,7 +1096,15 @@ export default function Planning({ dbTrades, onClearDb }) {
                     <button
                       key={s}
                       type="button"
-                      onClick={() => setSimSessions(s)}
+                      onClick={() => {
+                        setSimSessions(s);
+                        if (onUpdatePlanning) {
+                          onUpdatePlanning({
+                            goals,
+                            simulator: { simStake, simSessions: s, simTarget, simWinrate }
+                          });
+                        }
+                      }}
                       style={{
                         flex: 1,
                         padding: '4px',
@@ -1073,7 +1132,16 @@ export default function Planning({ dbTrades, onClearDb }) {
                     max="99"
                     step="1"
                     value={simWinrate}
-                    onChange={(e) => setSimWinrate(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setSimWinrate(val);
+                      if (onUpdatePlanning) {
+                        onUpdatePlanning({
+                          goals,
+                          simulator: { simStake, simSessions, simTarget, simWinrate: val }
+                        });
+                      }
+                    }}
                     style={{ flex: 1, accentColor: 'var(--primary)' }}
                   />
                   <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', minWidth: '40px' }}>{simWinrate}%</span>

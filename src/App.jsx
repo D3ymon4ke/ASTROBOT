@@ -1188,6 +1188,24 @@ export default function App() {
     fetchDownloads();
   }, []);
 
+  // Planning / Goals States
+  const [planning, setPlanning] = useState({
+    goals: {
+      monthly: 500,
+      quarterly: 1500,
+      annual: 5000,
+      custom: 2000,
+      customName: 'Notebook Novo',
+      configured: false
+    },
+    simulator: {
+      simStake: 1.0,
+      simSessions: 2,
+      simTarget: 3.0,
+      simWinrate: 91
+    }
+  });
+
   // Scheduler / Automation States
   const [schedulerState, setSchedulerState] = useState(() => {
     return localStorage.getItem('astrobot_scheduler_active') === 'true';
@@ -1667,6 +1685,21 @@ export default function App() {
         const isDemoMode = sync.settings?.isDemo !== undefined ? sync.settings.isDemo : (localStorage.getItem('deriv_is_demo') !== 'false');
         const updatedDb = saveDbTrades(sync.trades, isDemoMode);
         setDbTrades(updatedDb);
+      }
+      if (sync.planning) {
+        setPlanning(sync.planning);
+        // Fallback catch-up migration
+        const localSavedGoals = localStorage.getItem('astrobot_planning_goals');
+        if (!sync.planning.goals?.configured && localSavedGoals) {
+          try {
+            const parsed = JSON.parse(localSavedGoals);
+            if (parsed.configured) {
+              const merged = { goals: parsed, simulator: sync.planning.simulator };
+              setPlanning(merged);
+              derivAPI.updatePlanning(merged);
+            }
+          } catch (e) {}
+        }
       }
       if (sync.logs) setLogs(sync.logs);
       if (sync.liveSignals) setLiveSignals(sync.liveSignals);
@@ -5814,8 +5847,13 @@ export default function App() {
             <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
               <Planning
                 dbTrades={dbTrades}
+                planningState={planning}
+                onUpdatePlanning={(newPlanning) => {
+                  setPlanning(newPlanning);
+                  derivAPI.updatePlanning(newPlanning);
+                }}
                 onClearDb={() => {
-                  clearDbTrades();
+                  clearDbTrades(isDemo);
                   setDbTrades([]);
                 }}
               />

@@ -54,6 +54,23 @@ const DEFAULT_SETTINGS = {
   telegramNotifDailySummary: true
 };
 
+const DEFAULT_PLANNING = {
+  goals: {
+    monthly: 500,
+    quarterly: 1500,
+    annual: 5000,
+    custom: 2000,
+    customName: 'Notebook Novo',
+    configured: false
+  },
+  simulator: {
+    simStake: 1.0,
+    simSessions: 2,
+    simTarget: 3.0,
+    simWinrate: 91
+  }
+};
+
 export class UserSession {
   constructor(email) {
     this.email = email.trim().toLowerCase();
@@ -85,7 +102,8 @@ export class UserSession {
         activeTradeCountdown: null,
         lastResetDay: null,
         stuckContractStartTime: null,
-        settings: { ...DEFAULT_SETTINGS, isDemo: true }
+        settings: { ...DEFAULT_SETTINGS, isDemo: true },
+        planning: { ...DEFAULT_PLANNING }
       },
       real: {
         isRunning: false,
@@ -110,7 +128,8 @@ export class UserSession {
         activeTradeCountdown: null,
         lastResetDay: null,
         stuckContractStartTime: null,
-        settings: { ...DEFAULT_SETTINGS, isDemo: false }
+        settings: { ...DEFAULT_SETTINGS, isDemo: false },
+        planning: { ...DEFAULT_PLANNING }
       }
     };
 
@@ -205,6 +224,9 @@ export class UserSession {
   get settings() { return this.modeStates[this.activeMode].settings; }
   set settings(val) { this.modeStates[this.activeMode].settings = val; }
 
+  get planning() { return this.modeStates[this.activeMode].planning; }
+  set planning(val) { this.modeStates[this.activeMode].planning = val; }
+
   loadFromFile() {
     try {
       if (fs.existsSync(this.filePath)) {
@@ -214,6 +236,10 @@ export class UserSession {
         if (data.modeStates) {
           this._activeMode = data.activeMode ?? 'demo';
           this.modeStates = data.modeStates;
+          
+          // Ensure planning is initialized
+          if (!this.modeStates.demo.planning) this.modeStates.demo.planning = { ...DEFAULT_PLANNING };
+          if (!this.modeStates.real.planning) this.modeStates.real.planning = { ...DEFAULT_PLANNING };
         } else {
           // Migrate old flat structure to new split structure
           const isDemo = data.settings?.isDemo ?? true;
@@ -242,7 +268,8 @@ export class UserSession {
             activeTradeCountdown: data.activeTradeCountdown ?? null,
             lastResetDay: data.lastResetDay ?? null,
             stuckContractStartTime: null,
-            settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) }
+            settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
+            planning: { ...DEFAULT_PLANNING }
           };
 
           this.modeStates = {
@@ -251,14 +278,16 @@ export class UserSession {
               waitingForGaleNextCandle: false, lastGaleDirection: null, activeContractId: null, lastContractDetails: null,
               candles: [], trades: [], logs: [], liveSignals: {}, strategiesStats: [], sessionAssetStats: {},
               activeCycleId: null, cycles: [], schedulerState: true, activeTradeCountdown: null, lastResetDay: null,
-              stuckContractStartTime: null, settings: { ...DEFAULT_SETTINGS, isDemo: true }
+              stuckContractStartTime: null, settings: { ...DEFAULT_SETTINGS, isDemo: true },
+              planning: { ...DEFAULT_PLANNING }
             },
             real: !isDemo ? migratedState : {
               isRunning: false, initialBalance: 0, balance: 0, sessionStartTime: null, galeLevel: 0, currentSorosStake: 0,
               waitingForGaleNextCandle: false, lastGaleDirection: null, activeContractId: null, lastContractDetails: null,
               candles: [], trades: [], logs: [], liveSignals: {}, strategiesStats: [], sessionAssetStats: {},
               activeCycleId: null, cycles: [], schedulerState: true, activeTradeCountdown: null, lastResetDay: null,
-              stuckContractStartTime: null, settings: { ...DEFAULT_SETTINGS, isDemo: false }
+              stuckContractStartTime: null, settings: { ...DEFAULT_SETTINGS, isDemo: false },
+              planning: { ...DEFAULT_PLANNING }
             }
           };
         }
@@ -717,6 +746,17 @@ export class UserSession {
     }
   }
 
+  updatePlanning(newPlanning) {
+    // Deep merge planning fields
+    const currentPlanning = this.planning || { ...DEFAULT_PLANNING };
+    this.planning = {
+      goals: { ...currentPlanning.goals, ...(newPlanning.goals || {}) },
+      simulator: { ...currentPlanning.simulator, ...(newPlanning.simulator || {}) }
+    };
+    this.saveToFile();
+    this.syncToClients();
+  }
+
   updateCycles(newCycles) {
     this.cycles = newCycles;
     this.saveToFile();
@@ -1030,8 +1070,14 @@ export class UserSession {
         const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
         return {
           hhmm: `${hh}:${mm}`,
-          currentDayName: dayNames[dayIndex]
+          currentDayName: dayNames[dayIndex],
+          minutesSinceMidnight: targetDate.getUTCHours() * 60 + targetDate.getUTCMinutes()
         };
+      };
+
+      const timeToMinutes = (hhmm) => {
+        const [h, m] = hhmm.split(':').map(Number);
+        return h * 60 + m;
       };
 
       pendingCycle = this.cycles.find(cycle => {
@@ -1039,14 +1085,21 @@ export class UserSession {
         const parts = getCycleTimeParts(cycle.timezone || 'GMT-3', now);
         const days = cycle.days || ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
         const dayMatches = days.includes(parts.currentDayName);
-        const timeMatches = cycle.startTime === parts.hhmm;
+        if (!dayMatches) return false;
+
+        const cycleMinutes = timeToMinutes(cycle.startTime);
+        const currentMinutes = parts.minutesSinceMidnight;
+        // Check if start time has arrived and we are within the 15-minute grace/catch-up window
+        const minutesDiff = currentMinutes - cycleMinutes;
+        const timeMatches = minutesDiff >= 0 && minutesDiff <= 15;
+
         if (dayMatches && !timeMatches) {
           // Log near-miss for debugging (only log once per minute at second 0)
           if (now.getSeconds() <= 5) {
             console.log(`[Scheduler][${this.email}] Cycle "${cycle.name}" waiting. Expected: ${cycle.startTime}, Current: ${parts.hhmm} (tz: ${cycle.timezone || 'GMT-3'})`);
           }
         }
-        return dayMatches && timeMatches;
+        return timeMatches;
       });
     }
 
