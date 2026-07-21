@@ -21,8 +21,9 @@ import Planning from './components/Planning';
 import Strands from './components/Strands';
 import LightPillar from './components/LightPillar';
 import TelegramConfig from './components/TelegramConfig';
-import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, TrendingUp, Zap, CheckCircle, Menu, X, Percent, TrendingDown, Target, Newspaper, Bell, User, Camera, Upload, Send, Download } from 'lucide-react';
-import { loadDbTrades, saveDbTrade, clearDbTrades } from './utils/db';
+import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, TrendingUp, Zap, CheckCircle, Menu, X, Percent, TrendingDown, Target, Newspaper, Bell, User, Camera, Upload, Send, Download, Users } from 'lucide-react';
+import CommunityFeed from './components/CommunityFeed';
+import { loadDbTrades, saveDbTrade, clearDbTrades, saveDbTrades } from './utils/db';
 import { playWinSound, playLossSound } from './utils/sound';
 import {
   sendTelegramMessage,
@@ -241,7 +242,7 @@ export default function App() {
   });
   const [appId, setAppId] = useState(() => {
     const savedRemember = localStorage.getItem('astrobot_remember_me') !== 'false';
-    return savedRemember ? (localStorage.getItem('deriv_app_id') || '1098') : '1098';
+    return savedRemember ? (localStorage.getItem('deriv_app_id') || '33KjYszMx4FNIHT6qAJ7V') : '33KjYszMx4FNIHT6qAJ7V';
   });
   const [isDemo, setIsDemo] = useState(() => {
     const savedRemember = localStorage.getItem('astrobot_remember_me') !== 'false';
@@ -258,6 +259,48 @@ export default function App() {
   const [initialBalance, setInitialBalance] = useState(0);
   const [accountInfo, setAccountInfo] = useState(null);
   const [latency, setLatency] = useState(0);
+
+  // Auto-Update states
+  const [updateStatus, setUpdateStatus] = useState(null); // 'available' | 'downloading' | 'downloaded' | 'error' | null
+  const [updateVersion, setUpdateVersion] = useState('');
+  const [updateProgress, setUpdateProgress] = useState(0);
+
+  useEffect(() => {
+    const isElectron = window && window.process && window.process.type === 'renderer';
+    if (isElectron) {
+      try {
+        const { ipcRenderer } = window.require('electron');
+
+        ipcRenderer.on('update-available', (event, version) => {
+          setUpdateStatus('available');
+          setUpdateVersion(version);
+        });
+
+        ipcRenderer.on('update-download-progress', (event, percent) => {
+          setUpdateStatus('downloading');
+          setUpdateProgress(percent);
+        });
+
+        ipcRenderer.on('update-downloaded', () => {
+          setUpdateStatus('downloaded');
+        });
+
+        ipcRenderer.on('update-error', (event, errorMsg) => {
+          setUpdateStatus('error');
+          console.error('[Update Error]', errorMsg);
+        });
+
+        return () => {
+          ipcRenderer.removeAllListeners('update-available');
+          ipcRenderer.removeAllListeners('update-download-progress');
+          ipcRenderer.removeAllListeners('update-downloaded');
+          ipcRenderer.removeAllListeners('update-error');
+        };
+      } catch (e) {
+        console.error('Failed to register Electron auto-update listeners:', e);
+      }
+    }
+  }, []);
   
   // Market data states
   const [candles, setCandles] = useState([]);
@@ -397,6 +440,20 @@ export default function App() {
   const [overlayActive, setOverlayActive] = useState(false);
   const [bottomTab, setBottomTab] = useState('logs');
   const [activePage, setActivePage] = useState('dashboard');
+  const [showBetaFeatures, setShowBetaFeatures] = useState(
+    localStorage.getItem('astrobot_beta_features') === 'true'
+  );
+
+  useEffect(() => {
+    const handleBetaChanged = () => {
+      setShowBetaFeatures(localStorage.getItem('astrobot_beta_features') === 'true');
+    };
+    window.addEventListener('astrobot_beta_features_changed', handleBetaChanged);
+    return () => {
+      window.removeEventListener('astrobot_beta_features_changed', handleBetaChanged);
+    };
+  }, []);
+
   const [isInitializing, setIsInitializing] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -569,7 +626,7 @@ export default function App() {
     
     // Clear token inputs in state
     setToken('');
-    setAppId('1098');
+    setAppId('33KjYszMx4FNIHT6qAJ7V');
     setIsDemo(true);
   };
 
@@ -689,7 +746,7 @@ export default function App() {
 
             // Trigger automatic connection to Deriv if token is present
             const savedToken = user.settings?.token || localStorage.getItem('deriv_token');
-            const savedAppId = user.settings?.appId || localStorage.getItem('deriv_app_id') || '1098';
+            const savedAppId = user.settings?.appId || localStorage.getItem('deriv_app_id') || '33KjYszMx4FNIHT6qAJ7V';
             const savedIsDemo = user.settings?.isDemo !== undefined ? user.settings.isDemo : (localStorage.getItem('deriv_is_demo') !== 'false');
 
             if (savedToken && user.licenseStatus === 'active') {
@@ -1249,7 +1306,8 @@ export default function App() {
     liveSignals: {},
     strategiesStats: [],
     cycles: [],
-    trades: []
+    trades: [],
+    hasReceivedSync: false
   });
 
   // Sync ref values
@@ -1546,24 +1604,89 @@ export default function App() {
     setLogs(prev => [...prev.slice(-99), logObj]);
   };
 
+  // Connect and sync with the VPS backend when userEmail changes
+  useEffect(() => {
+    if (userEmail) {
+      derivAPI.authenticateUser(userEmail);
+    }
+  }, [userEmail]);
+
   // Add system logs callback to DerivAPI
   useEffect(() => {
     derivAPI.onLogMessage = (log) => addLog(log);
     derivAPI.onConnectionChange = (status) => setConnected(status);
     derivAPI.onErrorReceived = (err) => {
-      addLog({ message: `Erro Deriv: ${err}`, type: 'error', time: new Date().toLocaleTimeString() });
+      addLog({ message: `Erro VPS: ${err}`, type: 'error', time: new Date().toLocaleTimeString() });
       setAuthError(err);
-      // Release trade block if a request fails at registration stage
       if (stateRef.current.activeContractId === 'PENDING_REGISTRATION') {
         stateRef.current.activeContractId = null;
       }
     };
 
+    derivAPI.onSyncReceived = (sync) => {
+      // Play win/loss sound if trades list grew, but only if we already had a first sync payload loaded
+      const isFirstSync = !stateRef.current.hasReceivedSync;
+      stateRef.current.hasReceivedSync = true;
+
+      if (isFirstSync && sync.trades) {
+        stateRef.current.trades = sync.trades;
+      }
+
+      if (!isFirstSync && sync.trades && sync.trades.length > stateRef.current.trades.length) {
+        const lastTrade = sync.trades[sync.trades.length - 1];
+        if (stateRef.current.settings.soundEnabled !== false) {
+          if (lastTrade.result === 'WIN') {
+            playWinSound();
+          } else {
+            playLossSound();
+          }
+        }
+      }
+
+      setIsRunning(sync.isRunning);
+      stateRef.current.isRunning = sync.isRunning;
+
+      setInitialBalance(sync.initialBalance);
+      stateRef.current.initialBalance = sync.initialBalance;
+
+      setBalance(sync.balance);
+      stateRef.current.balance = sync.balance;
+
+      stateRef.current.galeLevel = sync.galeLevel;
+      stateRef.current.currentSorosStake = sync.currentSorosStake;
+      stateRef.current.waitingForGaleNextCandle = sync.waitingForGaleNextCandle;
+      stateRef.current.lastGaleDirection = sync.lastGaleDirection;
+
+      stateRef.current.activeContractId = sync.activeContractId;
+      stateRef.current.lastContractDetails = sync.lastContractDetails;
+
+      if (sync.candles) setCandles(sync.candles);
+      if (sync.trades) {
+        setTrades(sync.trades);
+        stateRef.current.trades = sync.trades;
+        const updatedDb = saveDbTrades(sync.trades);
+        setDbTrades(updatedDb);
+      }
+      if (sync.logs) setLogs(sync.logs);
+      if (sync.liveSignals) setLiveSignals(sync.liveSignals);
+      if (sync.strategiesStats) setStrategiesStats(sync.strategiesStats);
+      if (sync.sessionAssetStats) setSessionAssetStats(sync.sessionAssetStats);
+      
+      setActiveCycleId(sync.activeCycleId);
+      stateRef.current.activeCycleId = sync.activeCycleId;
+
+      if (sync.cycles) setCycles(sync.cycles);
+      setSchedulerState(sync.schedulerState ?? true);
+      setActiveTradeCountdown(sync.activeTradeCountdown);
+
+      if (sync.settings) {
+        setSettings(prev => ({ ...prev, ...sync.settings }));
+        stateRef.current.settings = { ...stateRef.current.settings, ...sync.settings };
+      }
+    };
+
     derivAPI.onAuthSuccess = (info) => {
       setAuthError('');
-      setBalance(info.balance);
-      setInitialBalance(info.balance);
-      setAccountInfo(info);
       
       const customName = localStorage.getItem('astrobot_custom_name') || welcomeName;
       const customImage = localStorage.getItem('astrobot_profile_image') || profileImage;
@@ -1584,7 +1707,7 @@ export default function App() {
         }, 2200);
       }
 
-      addLog({ message: `Conta Autorizada: ${info.fullname} | Saldo Inicial: $${info.balance}`, type: 'success', time: new Date().toLocaleTimeString() });
+      addLog({ message: `Sincronizado com o Servidor VPS. Usuário: ${info.email}`, type: 'success', time: new Date().toLocaleTimeString() });
     };
 
     // Keep pinging for latency display
@@ -1599,48 +1722,6 @@ export default function App() {
       derivAPI.disconnect();
     };
   }, []);
-
-  // Auto Reconnection Logic when Deriv disconnects unexpectedly
-  useEffect(() => {
-    if (!authorized || connected) return;
-
-    const savedToken = token || localStorage.getItem('deriv_token');
-    const savedAppId = appId || localStorage.getItem('deriv_app_id') || '1098';
-    const savedIsDemo = isDemo;
-    
-    if (!savedToken) return;
-
-    addLog({
-      message: `[Conexão] Conexão com a Deriv perdida ou erro detectado. Tentando reconectar automaticamente...`,
-      type: 'warning',
-      time: new Date().toLocaleTimeString()
-    });
-
-    const attemptReconnect = async () => {
-      try {
-        addLog({
-          message: `[Conexão] Tentando reconectar à Deriv...`,
-          type: 'info',
-          time: new Date().toLocaleTimeString()
-        });
-        await derivAPI.connect(savedToken, savedAppId, savedIsDemo);
-      } catch (err) {
-        addLog({
-          message: `[Conexão] Falha na reconexão automática: ${err.message || String(err)}. Nova tentativa em 10 segundos...`,
-          type: 'error',
-          time: new Date().toLocaleTimeString()
-        });
-      }
-    };
-
-    // Try immediately
-    attemptReconnect();
-
-    // Repeat check every 10 seconds until connected
-    const reconnectInterval = setInterval(attemptReconnect, 10000);
-
-    return () => clearInterval(reconnectInterval);
-  }, [authorized, connected, token, appId, isDemo]);
 
   // Handle active trade countdown tick
   useEffect(() => {
@@ -1714,11 +1795,7 @@ export default function App() {
           list.push(newCandle);
           if (list.length > 200) list.shift();
 
-          // We trigger calculations on this closed candle transition
-          setTimeout(() => {
-            handleCandleClosed(list);
-          }, 100);
-
+          // We trigger calculations on this closed candle transition (handled on VPS)
           return list;
         }
         return prev;
@@ -1726,499 +1803,16 @@ export default function App() {
     };
   }, []);
 
-  // Run backtests and check for live signals when a candle closes
+  // Run backtests and check for live signals when a candle closes (handled on VPS backend)
   const handleCandleClosed = (activeCandles) => {
-    const currentSettings = stateRef.current.settings;
-    
-    // The last candle in activeCandles is the newly opened one.
-    // The closed candles are everything up to the second-to-last.
-    const closedCandles = activeCandles.slice(0, -1);
-    if (closedCandles.length < 5) return;
-
-    // 1. Run Strategy backtests on closed candles
-    const maxGale = currentSettings.martingaleEnabled ? currentSettings.martingaleMaxLevels : 0;
-    const stats = analyzeStrategies(closedCandles, maxGale);
-    setStrategiesStats(stats);
-
-    // Find the best strategy (excluding master_candle which is only secondary)
-    const baseFiltered = stats.filter(s => s.id !== 'master_candle');
-    let filteredStats = baseFiltered;
-    if (currentSettings.autoPilot) {
-      if (currentSettings.disableSlowStrategies) {
-        filteredStats = filteredStats.filter(s => s.id !== 'pullback' && s.id !== 'reversal');
-      }
-      if (currentSettings.disableMaCrossover) {
-        filteredStats = filteredStats.filter(s => s.id !== 'ma_crossover');
-      }
-    }
-    const sorted = [...filteredStats].sort((a, b) => b.winRate - a.winRate);
-    const bestStrategy = sorted.length > 0 && sorted[0].winRate > 0 ? sorted[0] : null;
-
-    // Save statistics of the current asset for cross-asset recommendations
-    if (bestStrategy) {
-      setSessionAssetStats(prev => ({
-        ...prev,
-        [currentSettings.symbol]: {
-          assetName: currentSettings.symbol,
-          bestStrategyName: bestStrategy.name,
-          bestWinRate: bestStrategy.winRate
-        }
-      }));
-
-      // Check if it's time to run autopilot/suggestion revaluation (on the newly opened candle)
-      const lastOpenedCandle = activeCandles[activeCandles.length - 1];
-      const epochMinutes = Math.floor(lastOpenedCandle.epoch / 60);
-      const evalInterval = Math.max(
-        parseInt(currentSettings.autoPilotInterval || '5'),
-        Math.round(parseInt(currentSettings.granularity) / 60)
-      );
-
-      if (epochMinutes % evalInterval === 0) {
-        if (currentSettings.autoPilot) {
-          // If autopilot is enabled, change automatically!
-          if (bestStrategy.id !== currentSettings.selectedStrategy) {
-            addLog({
-              message: `[Piloto Automático] Nova estratégia dominante identificada: ${bestStrategy.name} (${bestStrategy.winRate.toFixed(1)}% Assertividade). Alterando automaticamente.`,
-              type: 'success',
-              time: new Date().toLocaleTimeString()
-            });
-            setSettings(prev => ({ ...prev, selectedStrategy: bestStrategy.id }));
-          }
-        } else {
-          // If autopilot is disabled, suggest the user to switch!
-          const currentStratStats = stats.find(s => s.id === currentSettings.selectedStrategy);
-          const currentWinRate = currentStratStats ? currentStratStats.winRate : 0;
-          
-          if (bestStrategy.id !== currentSettings.selectedStrategy && bestStrategy.winRate > currentWinRate + 2) {
-            setAiSuggestion({
-              strategyId: bestStrategy.id,
-              strategyName: bestStrategy.name,
-              winRate: bestStrategy.winRate,
-              currentWinRate: currentWinRate,
-              active: true
-            });
-          }
-        }
-      }
-    }
-
-    // 2. Compute live signals for all strategies on closed candles
-    const signals = {};
-    stats.forEach(s => {
-      const sig = getLiveSignal(s.id, closedCandles, maxGale);
-      if (sig) {
-        signals[s.id] = sig;
-      }
-    });
-    setLiveSignals(signals);
-
-    // 3. If bot is NOT running, stop here
-    if (!stateRef.current.isRunning) return;
-
-    // 4. Check Stop Loss / Take Profit
-    const profit = stateRef.current.balance - stateRef.current.initialBalance;
-    if (profit >= parseFloat(currentSettings.takeProfit)) {
-      addLog({ message: `Meta de Lucro (Take Profit) atingida! Parando bot. Lucro: $${profit.toFixed(2)}`, type: 'success', time: new Date().toLocaleTimeString() });
-
-      // Telegram notification
-      sendTelegramNotif('take_profit', formatTakeProfitMessage(profit, trades.length, trades.length > 0 ? (trades.filter(t => t.profit > 0).length / trades.length) * 100 : 0));
-      
-      // Update Cycle if active
-      if (stateRef.current.activeCycleId) {
-        const cycleId = stateRef.current.activeCycleId;
-        setCycles(prev => {
-          const updated = prev.map(c => c.id === cycleId ? { ...c, status: 'Meta Batida' } : c);
-          const cycle = prev.find(c => c.id === cycleId);
-          if (cycle) {
-            addSchedulerLog(`Ciclo "${cycle.name}" finalizado: META BATIDA! Lucro: $${profit.toFixed(2)}`, 'success');
-          }
-          return updated;
-        });
-        setActiveCycleId(null);
-        stateRef.current.activeCycleId = null;
-      }
-
-      stopBot();
-      return;
-    }
-    if (profit <= -parseFloat(currentSettings.stopLoss)) {
-      addLog({ message: `Limite de Perda (Stop Loss) atingido! Parando bot. Prejuízo: $${profit.toFixed(2)}`, type: 'error', time: new Date().toLocaleTimeString() });
-
-      // Telegram notification
-      sendTelegramNotif('stop_loss', formatStopLossMessage(profit, trades.length, trades.length > 0 ? (trades.filter(t => t.profit > 0).length / trades.length) * 100 : 0));
-      
-      // Update Cycle if active
-      if (stateRef.current.activeCycleId) {
-        const cycleId = stateRef.current.activeCycleId;
-        setCycles(prev => {
-          const updated = prev.map(c => c.id === cycleId ? { ...c, status: 'Stop Atingido' } : c);
-          const cycle = prev.find(c => c.id === cycleId);
-          if (cycle) {
-            addSchedulerLog(`Ciclo "${cycle.name}" finalizado: STOP LOSS ATINGIDO! Prejuízo: $${profit.toFixed(2)}`, 'error');
-          }
-          return updated;
-        });
-        setActiveCycleId(null);
-        stateRef.current.activeCycleId = null;
-      }
-
-      stopBot();
-      return;
-    }
-
-    // 5. If we are currently in an active trade, wait for it to settle
-    if (stateRef.current.activeContractId) {
-      addLog({ message: `Aguardando fechamento da ordem em andamento...`, type: 'info', time: new Date().toLocaleTimeString() });
-      return;
-    }
-
-    // 6. Check for Martingale next candle
-    if (stateRef.current.waitingForGaleNextCandle && stateRef.current.lastGaleDirection) {
-      // Place Martingale trade IMMEDIATELY on the next candle in the same direction!
-      const nextStake = calculateCurrentStake(true);
-      executeTrade(nextStake, stateRef.current.lastGaleDirection);
-      stateRef.current.waitingForGaleNextCandle = false;
-      return;
-    }
-
-    // 7. Check for normal Strategy Entry signal
-    let targetStrategyId = currentSettings.selectedStrategy;
-    if (currentSettings.autoPilot && bestStrategy) {
-      targetStrategyId = bestStrategy.id;
-    }
-
-    // Secondary strategy: check Master Candle first if enabled
-    let signal = null;
-    let strategyUsed = targetStrategyId;
-
-    if (currentSettings.enableMasterCandleSecondary && signals['master_candle']) {
-      signal = signals['master_candle'];
-      strategyUsed = 'master_candle';
-    } else {
-      signal = signals[targetStrategyId];
-    }
-
-    if (signal) {
-      const stake = calculateCurrentStake(false);
-      addLog({ message: `Sinal identificado na estratégia [${strategyUsed}] para operar ${signal.direction}.`, type: 'info', time: new Date().toLocaleTimeString() });
-      executeTrade(stake, signal.direction);
-    }
+    return;
   };
 
-  // Calculate current stake depending on settings & gale level
-  const calculateCurrentStake = (isMartingaleUpdate) => {
-    const currentSettings = stateRef.current.settings;
-    const mode = currentSettings.moneyManagement || (currentSettings.martingaleEnabled ? 'martingale' : 'fixed');
-    let baseStake = parseFloat(currentSettings.stakeValue);
+  // All trading logic (strategy analysis, stake calculation, order execution, contract updates)
+  // is now handled exclusively by the VPS backend (UserSession.js).
+  // The frontend only receives real-time state via the 'sync' WebSocket event.
 
-    if (currentSettings.stakeType === 'percentage') {
-      baseStake = (stateRef.current.balance * (baseStake / 100));
-      if (baseStake < 0.35) baseStake = 0.35;
-    }
 
-    if (mode === 'fixed' || mode === 'iron_hands') {
-      return baseStake;
-    }
-
-    const level = stateRef.current.galeLevel;
-    const multiplier = parseFloat(currentSettings.martingaleMultiplier);
-
-    if (mode === 'soros') {
-      if (stateRef.current.currentSorosStake && stateRef.current.currentSorosStake > 0) {
-        return stateRef.current.currentSorosStake;
-      }
-      return baseStake;
-    }
-
-    if (mode === 'reverse_gale') {
-      if (level > 0) {
-        return baseStake * Math.pow(multiplier, level);
-      }
-      return baseStake;
-    }
-
-    if (mode === 'progressive_gale') {
-      if (isMartingaleUpdate && level > 0) {
-        return baseStake * Math.pow(multiplier + level * 0.25, level);
-      }
-      return baseStake;
-    }
-
-    if (mode === 'martingale') {
-      if (isMartingaleUpdate && level > 0) {
-        return baseStake * Math.pow(multiplier, level);
-      }
-    }
-
-    return baseStake;
-  };
-
-  // Execute Trade on Deriv
-  const executeTrade = (stake, direction) => {
-    const currentSettings = stateRef.current.settings;
-    const contractType = direction === 'CALL' ? 'CALL' : 'PUT';
-    
-    // We enter a trade matching the candle timeframe (e.g. 1m for M1, 5m for M5)
-    let durationMin = Math.max(1, Math.round(parseInt(currentSettings.granularity) / 60));
-    let durationUnit = 'm';
-
-    // Forex options on Deriv require a minimum duration of 15 minutes for time-based trades in this jurisdiction
-    if (currentSettings.symbol.startsWith('frx') && durationUnit === 'm') {
-      if (durationMin < 15) {
-        addLog({ 
-          message: `[Ajuste Forex] Alterando duração de ${durationMin}m para 15m (mínimo obrigatório da Deriv para Forex nesta conta).`, 
-          type: 'warning', 
-          time: new Date().toLocaleTimeString() 
-        });
-        durationMin = 15;
-      }
-    }
-
-    derivAPI.buyContract(currentSettings.symbol, stake, contractType, durationMin, durationUnit);
-    
-    stateRef.current.lastGaleDirection = direction;
-    // Set a temporary block until we get confirmation from Deriv buy request
-    stateRef.current.activeContractId = 'PENDING_REGISTRATION';
-  };
-
-  // Handle open contract updates (Proposal Open Contract)
-  useEffect(() => {
-    derivAPI.onContractUpdate = (poc) => {
-      // Check if we are waiting for a trade result
-      if (!stateRef.current.isRunning) return;
-
-      const currentSettings = stateRef.current.settings;
-
-      // If we just got the contract ID from subscription
-      if (stateRef.current.activeContractId === 'PENDING_REGISTRATION') {
-        stateRef.current.activeContractId = poc.contract_id;
-        stateRef.current.lastContractDetails = {
-          epoch: poc.date_start,
-          symbol: poc.underlying_symbol,
-          contractType: poc.contract_type,
-          stake: parseFloat(poc.buy_price),
-          galeLevel: stateRef.current.galeLevel,
-          entryPrice: parseFloat(poc.entry_tick)
-        };
-        addLog({ message: `Ordem confirmada no servidor. ID: ${poc.contract_id}. Aguardando resultado...`, type: 'info', time: new Date().toLocaleTimeString() });
-
-        // Initialize countdown
-        const fallbackDuration = parseInt(currentSettings.granularity);
-        const total = (poc.date_expiry && poc.date_start) ? (poc.date_expiry - poc.date_start) : fallbackDuration;
-        setActiveTradeCountdown({
-          contractId: poc.contract_id,
-          symbol: poc.underlying_symbol,
-          contractType: poc.contract_type,
-          stake: parseFloat(poc.buy_price),
-          dateStart: poc.date_start || Math.floor(Date.now() / 1000),
-          dateExpiry: poc.date_expiry || (Math.floor(Date.now() / 1000) + fallbackDuration),
-          totalDuration: total,
-          remaining: total
-        });
-
-        return;
-      }
-
-      // Ensure this update belongs to our active contract
-      if (poc.contract_id !== stateRef.current.activeContractId) return;
-
-      const status = poc.status;
-      const isSold = poc.is_sold;
-      const profit = parseFloat(poc.profit || 0);
-
-      // Contract resolved
-      if (isSold === 1 || status === 'won' || status === 'lost') {
-        const details = stateRef.current.lastContractDetails;
-        if (!details) return;
-
-        // Clear countdown banner
-        setActiveTradeCountdown(null);
-
-        const isWin = profit > 0;
-        const resultLabel = isWin ? 'WIN' : 'LOSS';
-
-        if (stateRef.current.settings.soundEnabled !== false) {
-          if (isWin) {
-            playWinSound();
-          } else {
-            playLossSound();
-          }
-        }
-
-        // Telegram WIN/LOSS notification
-        const newBal = stateRef.current.balance + profit;
-        if (isWin) {
-          const sessionProfit = newBal - stateRef.current.initialBalance;
-          const goalPct = currentSettings.takeProfit > 0 ? (sessionProfit / currentSettings.takeProfit) * 100 : 0;
-          sendTelegramNotif('win', formatWinMessage(profit, newBal, goalPct));
-        } else {
-          const nextGale = stateRef.current.galeLevel + 1;
-          const maxGale = parseInt(currentSettings.martingaleMaxLevels || '2');
-          const hasGale = nextGale <= maxGale && (currentSettings.moneyManagement === 'martingale' || currentSettings.moneyManagement === 'progressive_gale');
-          const nextStakeEst = hasGale ? parseFloat(currentSettings.stakeValue) * Math.pow(parseFloat(currentSettings.martingaleMultiplier || '2.2'), nextGale) : 0;
-          sendTelegramNotif('loss', formatLossMessage(profit, newBal, hasGale ? nextGale : 0, nextStakeEst));
-        }
-        
-        // Update states
-        const newBalance = stateRef.current.balance + profit;
-        setBalance(newBalance);
-        stateRef.current.balance = newBalance;
-
-        const tradeObj = {
-          time: new Date(details.epoch * 1000).toLocaleTimeString(),
-          epoch: details.epoch,
-          symbol: details.symbol,
-          contractType: details.contractType,
-          stake: details.stake,
-          galeLevel: details.galeLevel,
-          profit: profit,
-          result: resultLabel,
-          strategyName: currentSettings.autoPilot ? 'Piloto Automático' : currentSettings.selectedStrategy
-        };
-
-        setTrades(prev => [...prev, tradeObj]);
-
-        // Save to persistent database
-        const updatedDb = saveDbTrade({
-          ...tradeObj,
-          timestamp: details.epoch ? details.epoch * 1000 : Date.now()
-        });
-        setDbTrades(updatedDb);
-        addLog({
-          message: `[${resultLabel}] Operação concluída. Lucro/Retorno: $${profit.toFixed(2)} | Novo Saldo: $${newBalance.toFixed(2)}`,
-          type: isWin ? 'success' : 'error',
-          time: new Date().toLocaleTimeString()
-        });
-
-        // Reset active contract blockers
-        stateRef.current.activeContractId = null;
-        stateRef.current.lastContractDetails = null;
-
-        const mode = currentSettings.moneyManagement || (currentSettings.martingaleEnabled ? 'martingale' : 'fixed');
-
-        // Reset/Update for all Money Management modes
-        if (mode === 'fixed' || mode === 'iron_hands') {
-          stateRef.current.galeLevel = 0;
-          stateRef.current.waitingForGaleNextCandle = false;
-        } 
-        else if (mode === 'soros') {
-          if (isWin) {
-            const nextLevel = stateRef.current.galeLevel + 1;
-            const maxLevels = parseInt(currentSettings.martingaleMaxLevels || '2');
-            
-            if (nextLevel < maxLevels) {
-              stateRef.current.galeLevel = nextLevel;
-              const compoundingRatio = Math.min(1.0, parseFloat(currentSettings.martingaleMultiplier || '1.0') >= 10 ? parseFloat(currentSettings.martingaleMultiplier) / 100 : parseFloat(currentSettings.martingaleMultiplier));
-              const prevSorosStake = stateRef.current.currentSorosStake || details.stake;
-              const nextSorosStake = prevSorosStake + (profit * compoundingRatio);
-              
-              stateRef.current.currentSorosStake = parseFloat(nextSorosStake.toFixed(2));
-              addLog({ 
-                message: `[Soros] Vitória! Avançando para Estágio ${nextLevel + 1}/${maxLevels}. Próxima entrada: $${stateRef.current.currentSorosStake}`, 
-                type: 'success', 
-                time: new Date().toLocaleTimeString() 
-              });
-            } else {
-              stateRef.current.galeLevel = 0;
-              stateRef.current.currentSorosStake = 0;
-              addLog({ 
-                message: `[Soros] Ciclo de Soros Concluído com Sucesso! Resetando para a entrada inicial.`, 
-                type: 'success', 
-                time: new Date().toLocaleTimeString() 
-              });
-            }
-          } else {
-            stateRef.current.galeLevel = 0;
-            stateRef.current.currentSorosStake = 0;
-            stateRef.current.waitingForGaleNextCandle = false;
-            addLog({ 
-              message: `[Soros] Loss detectado. Ciclo interrompido. Resetando para a entrada inicial.`, 
-              type: 'error', 
-              time: new Date().toLocaleTimeString() 
-            });
-          }
-        } 
-        else if (mode === 'reverse_gale') {
-          if (isWin) {
-            const nextLevel = stateRef.current.galeLevel + 1;
-            if (nextLevel <= parseInt(currentSettings.martingaleMaxLevels)) {
-              stateRef.current.galeLevel = nextLevel;
-              addLog({ 
-                message: `[Gale Invertido] Vitória! Subindo nível de compounding para ${nextLevel}.`, 
-                type: 'success', 
-                time: new Date().toLocaleTimeString() 
-              });
-            } else {
-              stateRef.current.galeLevel = 0;
-              addLog({ 
-                message: `[Gale Invertido] Limite de compounding atingido. Resetando para a entrada inicial.`, 
-                type: 'success', 
-                time: new Date().toLocaleTimeString() 
-              });
-            }
-          } else {
-            stateRef.current.galeLevel = 0;
-            stateRef.current.waitingForGaleNextCandle = false;
-            addLog({ 
-              message: `[Gale Invertido] Loss detectado. Resetando para a entrada inicial.`, 
-              type: 'error', 
-              time: new Date().toLocaleTimeString() 
-            });
-          }
-        } 
-        else {
-          if (isWin) {
-            stateRef.current.galeLevel = 0;
-            stateRef.current.waitingForGaleNextCandle = false;
-          } else {
-            const nextLevel = stateRef.current.galeLevel + 1;
-            if (nextLevel <= parseInt(currentSettings.martingaleMaxLevels)) {
-              stateRef.current.galeLevel = nextLevel;
-              addLog({ 
-                message: `Loss detectado. Preparando ${mode === 'progressive_gale' ? 'Gale Progressivo' : 'Martingale'} Nível ${nextLevel}...`, 
-                type: 'warning', 
-                time: new Date().toLocaleTimeString() 
-              });
-
-              if (currentSettings.martingaleMode === 'next_candle') {
-                const granularity = parseInt(currentSettings.granularity || '60');
-                const secondsElapsed = Math.floor(Date.now() / 1000) % granularity;
-                const threshold = Math.max(15, Math.floor(granularity * 0.25));
-
-                if (secondsElapsed <= threshold) {
-                  const nextStake = calculateCurrentStake(true);
-                  addLog({
-                    message: `Executando Nível ${nextLevel} imediatamente na nova vela aberta (${secondsElapsed}s decorridos).`,
-                    type: 'warning',
-                    time: new Date().toLocaleTimeString()
-                  });
-                  executeTrade(nextStake, stateRef.current.lastGaleDirection);
-                  stateRef.current.waitingForGaleNextCandle = false;
-                } else {
-                  stateRef.current.waitingForGaleNextCandle = true;
-                  addLog({
-                    message: `Próxima vela já avançada (${secondsElapsed}s decorridos). Agendado para o início do próximo ciclo.`,
-                    type: 'info',
-                    time: new Date().toLocaleTimeString()
-                  });
-                }
-              } else {
-                stateRef.current.waitingForGaleNextCandle = false;
-              }
-            } else {
-              stateRef.current.galeLevel = 0;
-              stateRef.current.waitingForGaleNextCandle = false;
-              addLog({ 
-                message: `Limite máximo de recuperação atingido. Resetando ciclo de banca.`, 
-                type: 'error', 
-                time: new Date().toLocaleTimeString() 
-              });
-            }
-          }
-        }
-      }
-    };
-  }, []);
 
   // Connect / Disconnect handlers
   const handleConnect = async () => {
@@ -2259,6 +1853,7 @@ export default function App() {
     setAccountInfo(null);
     setIsRunning(false);
     stateRef.current.isRunning = false;
+    stateRef.current.hasReceivedSync = false;
     setCandles([]);
     setShowLanding(true);
   };
@@ -2286,13 +1881,12 @@ export default function App() {
     });
 
     try {
-      derivAPI.disconnect();
-      setAuthorized(false);
       setAccountInfo(null);
       setCandles([]);
+      stateRef.current.hasReceivedSync = false;
 
       const savedToken = localStorage.getItem('deriv_token') || '';
-      const savedAppId = localStorage.getItem('deriv_app_id') || '1098';
+      const savedAppId = localStorage.getItem('deriv_app_id') || '33KjYszMx4FNIHT6qAJ7V';
 
       setIsDemo(newIsDemo);
       localStorage.setItem('deriv_is_demo', newIsDemo ? 'true' : 'false');
@@ -2326,98 +1920,54 @@ export default function App() {
     }
   };
 
-  // Start / Stop Bot handlers
+  // Start / Stop Bot handlers — delegate entirely to VPS
   const startBot = (force = false) => {
     if (force !== true && !isRunning && !isInitializing) {
       setIsInitializing(true);
       return;
     }
-
-    setIsRunning(true);
-    stateRef.current.isRunning = true;
-    stateRef.current.galeLevel = 0;
-    stateRef.current.waitingForGaleNextCandle = false;
-    
-    // Set initial balance snapshot for stop loss / take profit calculations
-    setInitialBalance(balance);
-    stateRef.current.initialBalance = balance;
-
-    addLog({ message: 'Motor Neural Ativado. Monitorando mercado para triggers...', type: 'success', time: new Date().toLocaleTimeString() });
-
-    // Telegram notification
-    sendTelegramNotif('bot_started',
-      `🚀 <b>ASTROBOT INICIADO</b>\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `<b>Ativo:</b> <code>${stateRef.current.settings.symbol}</code>\n` +
-      `<b>Estratégia:</b> <code>${stateRef.current.settings.autoPilot ? 'Piloto Automático' : stateRef.current.settings.selectedStrategy.replace('_',' ').toUpperCase()}</code>\n` +
-      `<b>Horário:</b> <code>${new Date().toLocaleTimeString('pt-BR')}</code>\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `🤖 <i>Motor Neural ativado. Monitorando mercado...</i>`
-    );
+    addLog({ message: 'Enviando comando de início ao servidor VPS...', type: 'info', time: new Date().toLocaleTimeString() });
+    derivAPI.startBot();
   };
 
   const stopBot = () => {
-    setIsRunning(false);
-    stateRef.current.isRunning = false;
-    stateRef.current.galeLevel = 0;
-    stateRef.current.waitingForGaleNextCandle = false;
-
-    // Check if there was an active cycle running
-    if (stateRef.current.activeCycleId) {
-      const cycleId = stateRef.current.activeCycleId;
-      setCycles(prev => {
-        const updated = prev.map(c => c.id === cycleId ? { ...c, status: 'Interrompido' } : c);
-        const cycle = prev.find(c => c.id === cycleId);
-        if (cycle) {
-          addSchedulerLog(`Ciclo "${cycle.name}" interrompido pelo usuário.`, 'warning');
-        }
-        return updated;
-      });
-      setActiveCycleId(null);
-      stateRef.current.activeCycleId = null;
-    }
-
-    addLog({ message: 'Bot PARADO pelo usuário.', type: 'warning', time: new Date().toLocaleTimeString() });
-
-    // Telegram notification
-    sendTelegramNotif('bot_stopped',
-      `🛑 <b>ASTROBOT DESLIGADO</b>\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `<b>Saldo Final:</b> <code>$${stateRef.current.balance?.toFixed(2) || '0.00'}</code>\n` +
-      `<b>Horário:</b> <code>${new Date().toLocaleTimeString('pt-BR')}</code>\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `💤 <i>Bot encerrado. Use /startbot para retomar.</i>`
-    );
+    addLog({ message: 'Enviando comando de parada ao servidor VPS...', type: 'warning', time: new Date().toLocaleTimeString() });
+    derivAPI.stopBot();
   };
 
-  // Change symbol or granularity
+  // Change symbol or granularity — push to VPS
   const handleSettingsChange = (newSettings) => {
     const symbolChanged = newSettings.symbol !== settings.symbol;
     const granChanged = newSettings.granularity !== settings.granularity;
 
     setSettings(newSettings);
 
-    if (connected && (symbolChanged || granChanged)) {
+    if (symbolChanged || granChanged) {
       setCandles([]);
-      derivAPI.changeSymbol(newSettings.symbol, parseInt(newSettings.granularity));
     }
+
+    // Push all setting changes to VPS
+    derivAPI.updateSettings(newSettings);
   };
 
   const handleSaveSettings = () => {
     localStorage.setItem('astrobot_settings', JSON.stringify(settings));
     
     const savedToken = localStorage.getItem('deriv_token') || '';
-    const savedAppId = localStorage.getItem('deriv_app_id') || '1098';
+    const savedAppId = localStorage.getItem('deriv_app_id') || '33KjYszMx4FNIHT6qAJ7V';
     const savedIsDemo = localStorage.getItem('deriv_is_demo') !== 'false';
 
-    syncSettingsToDb({
-      settings: {
-        ...settings,
-        token: savedToken,
-        appId: savedAppId,
-        isDemo: savedIsDemo
-      }
-    });
+    const fullSettings = {
+      ...settings,
+      token: savedToken,
+      appId: savedAppId,
+      isDemo: savedIsDemo
+    };
+
+    syncSettingsToDb({ settings: fullSettings });
+
+    // Push full settings package to VPS backend
+    derivAPI.updateSettings(fullSettings);
 
     addLog({
       message: '[Configurações] Painel de Módulos Salvo com Sucesso e Sincronizado na Nuvem!',
@@ -2426,57 +1976,17 @@ export default function App() {
     });
   };
 
-  // Scheduler Automation helper functions
+  // Scheduler Automation helper — delegate to VPS
   const triggerCycle = (cycle) => {
-    addSchedulerLog(`Iniciando Ciclo Automático: "${cycle.name}"`, 'success');
+    addSchedulerLog(`Solicitando Ciclo Automático ao VPS: "${cycle.name}"`, 'success');
     addLog({
-      message: `[Agendador] Iniciando Ciclo "${cycle.name}" (Entrada: $${cycle.stakeValue} | Meta: $${cycle.takeProfit} | Stop: $${cycle.stopLoss})`,
-      type: 'success',
+      message: `[Agendador] Solicitando ciclo "${cycle.name}" ao servidor VPS...`,
+      type: 'info',
       time: new Date().toLocaleTimeString()
     });
-
-    // 1. Update settings
-    const isAutopilot = cycle.selectedStrategy === 'autopilot';
-    const cycleSettings = {
-      ...stateRef.current.settings,
-      symbol: cycle.symbol,
-      takeProfit: cycle.takeProfit,
-      stopLoss: cycle.stopLoss,
-      stakeValue: cycle.stakeValue,
-      selectedStrategy: isAutopilot ? stateRef.current.settings.selectedStrategy : cycle.selectedStrategy,
-      autoPilot: isAutopilot,
-      enableMasterCandleSecondary: cycle.enableMasterCandleSecondary !== undefined ? cycle.enableMasterCandleSecondary : false,
-      disableSlowStrategies: cycle.disableSlowStrategies !== undefined ? cycle.disableSlowStrategies : false
-    };
-
-    setSettings(cycleSettings);
-    stateRef.current.settings = cycleSettings;
-
-    // 2. Change symbol in API if connected and different
-    if (connected && cycle.symbol !== stateRef.current.settings.symbol) {
-      setCandles([]);
-      derivAPI.changeSymbol(cycle.symbol, parseInt(stateRef.current.settings.granularity || '60'));
-    }
-
-    // 3. Mark cycle as running
-    setCycles(prev => prev.map(c => c.id === cycle.id ? { ...c, status: 'Executando', lastRun: new Date().toLocaleDateString() } : c));
-    setActiveCycleId(cycle.id);
-    stateRef.current.activeCycleId = cycle.id;
-
-    // 4. Start the bot
-    setTimeout(() => {
-      setIsRunning(true);
-      stateRef.current.isRunning = true;
-      stateRef.current.galeLevel = 0;
-      stateRef.current.waitingForGaleNextCandle = false;
-      
-      // Set initial balance snapshot for stop loss / take profit calculations
-      setInitialBalance(stateRef.current.balance);
-      stateRef.current.initialBalance = stateRef.current.balance;
-
-      addLog({ message: `Ciclo ${cycle.name} ativo. Configurações de risco carregadas.`, type: 'success', time: new Date().toLocaleTimeString() });
-    }, 100);
+    derivAPI.triggerCycle(cycle.id);
   };
+
 
   const handleTriggerCycleManually = (cycleId) => {
     const cycle = cycles.find(c => c.id === cycleId);
@@ -2486,67 +1996,8 @@ export default function App() {
     }
   };
 
-  // Scheduler Tick Effect
-  useEffect(() => {
-    if (!schedulerState) return;
-
-    const parseTimezoneOffset = (tzString) => {
-      if (!tzString || tzString === 'UTC') return 0;
-      const match = tzString.match(/GMT([+-])(\d+)/);
-      if (match) {
-        const sign = match[1] === '+' ? 1 : -1;
-        const hours = parseInt(match[2]);
-        return sign * hours;
-      }
-      return 0;
-    };
-
-    const getCycleTimeParts = (timezone, dateObj = new Date()) => {
-      const offsetHours = parseTimezoneOffset(timezone);
-      const targetDate = new Date(dateObj.getTime() + (offsetHours * 3600000));
-      const hh = targetDate.getUTCHours().toString().padStart(2, '0');
-      const mm = targetDate.getUTCMinutes().toString().padStart(2, '0');
-      const dayIndex = targetDate.getUTCDay();
-      const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-      return {
-        hhmm: `${hh}:${mm}`,
-        currentDayName: dayNames[dayIndex]
-      };
-    };
-
-    const interval = setInterval(() => {
-      // Don't start any cycle if one is already running
-      if (stateRef.current.activeCycleId) return;
-
-      const now = new Date();
-      const currentSeconds = now.getSeconds();
-
-      // Only evaluate in the first 10 seconds of a minute to avoid duplicate triggers
-      if (currentSeconds > 10) return;
-
-      // Find if any cycle is scheduled for this minute
-      const pendingCycle = cycles.find(cycle => {
-        if (!cycle.active || cycle.status !== 'Aguardando') return false;
-
-        const parts = getCycleTimeParts(cycle.timezone || 'GMT-3', now);
-        
-        // Match day
-        const days = cycle.days || ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-        const dayMatches = days.includes(parts.currentDayName);
-        
-        // Match hour/minute
-        const timeMatches = cycle.startTime === parts.hhmm;
-
-        return dayMatches && timeMatches;
-      });
-
-      if (pendingCycle) {
-        triggerCycle(pendingCycle);
-      }
-    }, 5000); // Check every 5 seconds
-
-    return () => clearInterval(interval);
-  }, [schedulerState, cycles, connected]);
+  // Scheduler Tick — handled by VPS server.js global interval
+  // (removed local setInterval — server already runs this for all sessions)
 
   // Clear log helper
   const handleClearLogs = () => {
@@ -4615,7 +4066,17 @@ export default function App() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             <div>
-              <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.5px' }}>TOKEN DE ACESSO (API TOKEN / PAT)</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', letterSpacing: '0.5px', margin: 0 }}>TOKEN DE ACESSO (API TOKEN / PAT)</label>
+                <a
+                  href="https://deriv.com/pt/partners-help-center-questions/how-do-i-create-a-deriv-api-token"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: '0.7rem', color: 'var(--primary-light)', textDecoration: 'none', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                >
+                  📖 Como obter o token?
+                </a>
+              </div>
               <input
                 type="password"
                 placeholder="Ex: a1B2c3D4... ou pat_..."
@@ -4630,7 +4091,7 @@ export default function App() {
                 <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.5px' }}>APP ID</label>
                 <input
                   type="text"
-                  placeholder="1098"
+                  placeholder="33KjYszMx4FNIHT6qAJ7V"
                   value={appId}
                   onChange={(e) => setAppId(e.target.value)}
                   style={{ padding: '0.8rem', fontSize: '1rem' }}
@@ -5270,6 +4731,7 @@ export default function App() {
               { id: 'telegram', label: 'Telegram', icon: Send },
               { id: 'news', label: 'Atualizações', icon: Newspaper },
               { id: 'downloads', label: 'Downloads', icon: Download },
+              ...(showBetaFeatures ? [{ id: 'community', label: 'Comunidade', icon: Users, badge: 'Beta' }] : []),
               ...(isAdminLoggedIn ? [{ id: 'admin', label: 'Admin', icon: ShieldCheck }] : [])
             ].map((tab) => {
               const IconComp = tab.icon;
@@ -5301,6 +4763,22 @@ export default function App() {
                 >
                   <IconComp size={13} />
                   <span>{tab.label}</span>
+                  {tab.badge && (
+                    <span style={{
+                      background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)',
+                      color: 'white',
+                      fontSize: '0.55rem',
+                      fontWeight: '800',
+                      borderRadius: '10px',
+                      padding: '1px 5px',
+                      marginLeft: '3px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.3px',
+                      display: 'inline-block'
+                    }}>
+                      {tab.badge}
+                    </span>
+                  )}
                   {tab.id === 'news' && (() => {
                     const unread = getUnreadCount(posts);
                     return unread > 0 ? (
@@ -6346,9 +5824,15 @@ export default function App() {
             <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
               <Scheduler
                 schedulerState={schedulerState}
-                onToggleScheduler={setSchedulerState}
+                onToggleScheduler={(newState) => {
+                  setSchedulerState(newState);
+                  derivAPI.updateSettings({ schedulerState: newState });
+                }}
                 cycles={cycles}
-                onSaveCycles={setCycles}
+                onSaveCycles={(newCycles) => {
+                  setCycles(newCycles);
+                  derivAPI.updateCycles(newCycles);
+                }}
                 activeCycleId={activeCycleId}
                 onTriggerCycleManually={handleTriggerCycleManually}
                 schedulerLogs={schedulerLogs}
@@ -6450,6 +5934,18 @@ export default function App() {
               <DownloadsFeed
                 downloads={downloads}
                 loading={downloadsLoading}
+              />
+            </main>
+          );
+        }
+
+        if (activePage === 'community' && showBetaFeatures) {
+          return (
+            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
+              <CommunityFeed
+                userEmail={userEmail}
+                userName={localStorage.getItem('astrobot_custom_name') || ''}
+                profileImage={profileImage}
               />
             </main>
           );
@@ -6732,6 +6228,95 @@ export default function App() {
             startBot(true);
           }}
         />
+      )}
+
+      {/* Auto-Update Modal Overlay */}
+      {updateStatus && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(5, 3, 10, 0.95)',
+          backdropFilter: 'blur(15px)',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontFamily: 'sans-serif'
+        }}>
+          <div className="glass-panel" style={{
+            padding: '2.5rem',
+            maxWidth: '480px',
+            width: '90%',
+            textAlign: 'center',
+            background: 'rgba(14, 11, 24, 0.75)',
+            border: '1px solid rgba(139, 92, 246, 0.25)',
+            borderRadius: '24px',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.6), 0 0 40px rgba(139, 92, 246, 0.15)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.5rem'
+          }}>
+            <div style={{ fontSize: '3rem' }}>🚀</div>
+            <div>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '0.5rem', background: 'linear-gradient(135deg, #a78bfa 0%, #06b6d4 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                ATUALIZAÇÃO DETECTADA
+              </h2>
+              <span style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: 'bold', background: 'rgba(255,255,255,0.05)', padding: '4px 12px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                Nova versão: v{updateVersion}
+              </span>
+            </div>
+
+            {updateStatus === 'available' && (
+              <p style={{ fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.6' }}>
+                Uma nova versão do ASTROBOT foi detectada. Iniciando o download automático do instalador...
+              </p>
+            )}
+
+            {updateStatus === 'downloading' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#cbd5e1', fontWeight: 'bold' }}>
+                  <span>Baixando atualizações...</span>
+                  <span style={{ fontFamily: 'monospace', color: '#a78bfa' }}>{updateProgress}%</span>
+                </div>
+                <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.03)' }}>
+                  <div style={{ width: `${updateProgress}%`, height: '100%', background: 'linear-gradient(90deg, #8b5cf6, #06b6d4)', borderRadius: '4px', transition: 'width 0.1s ease', boxShadow: '0 0 10px rgba(139, 92, 246, 0.5)' }}></div>
+                </div>
+              </div>
+            )}
+
+            {updateStatus === 'downloaded' && (
+              <p style={{ fontSize: '0.82rem', color: '#10b981', fontWeight: 'bold' }}>
+                ✓ Download concluído! Reiniciando o aplicativo para instalar a nova versão...
+              </p>
+            )}
+
+            {updateStatus === 'error' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <p style={{ fontSize: '0.82rem', color: '#ef4444', lineHeight: '1.6' }}>
+                  Ocorreu um erro ao baixar a nova versão. O ASTROBOT continuará operando normalmente.
+                </p>
+                <button
+                  onClick={() => setUpdateStatus(null)}
+                  style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

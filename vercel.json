@@ -3,6 +3,9 @@
   "rewrites": [
     { "source": "/api/login", "destination": "/api/auth" },
     { "source": "/api/register", "destination": "/api/auth" },
+    { "source": "/api/generate-key", "destination": "/api/admin-keys?action=generate" },
+    { "source": "/api/list-keys", "destination": "/api/admin-keys?action=list" },
+    { "source": "/api/delete-key", "destination": "/api/admin-keys?action=delete" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

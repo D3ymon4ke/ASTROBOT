@@ -1,38 +1,4 @@
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-
-// Initialize Firebase Admin SDK safely
-let db;
-let initError = null;
-try {
-  if (getApps().length === 0) {
-    let serviceAccount;
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      try {
-        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      } catch (parseErr) {
-        throw new Error("Falha ao analisar o JSON de FIREBASE_SERVICE_ACCOUNT: " + parseErr.message);
-      }
-    } else {
-      const serviceAccountPath = join(process.cwd(), 'astrobot-d9382-firebase-adminsdk-fbsvc-cbe709be1b.json');
-      try {
-        serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
-      } catch (readErr) {
-        throw new Error("Arquivo JSON local ausente ou inválido: " + readErr.message);
-      }
-    }
-
-    initializeApp({
-      credential: cert(serviceAccount)
-    });
-  }
-  db = getFirestore();
-} catch (err) {
-  console.error("Firebase admin init error:", err);
-  initError = err.message || String(err);
-}
+import { supabase } from './utils/supabase.js';
 
 export default async function handler(req, res) {
   // Support CORS
@@ -53,11 +19,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
-  if (!db) {
+  if (!supabase) {
     return res.status(500).json({ 
       success: false, 
-      message: 'Configuração do Firebase ausente.', 
-      details: initError 
+      message: 'Configuração do Supabase ausente.' 
     });
   }
 
@@ -78,44 +43,53 @@ export default async function handler(req, res) {
     const chatId = String(message.chat.id);
 
     const emailQuery = req.query.email;
-    let userDocFound = null;
+    let matchedEmail = null;
 
     if (emailQuery) {
       const cleanEmail = emailQuery.trim().toLowerCase();
-      const userDoc = await db.collection('users').doc(cleanEmail).get();
-      if (userDoc.exists) {
-        userDocFound = userDoc;
+      const { data: userDoc } = await supabase
+        .from('users')
+        .select('email')
+        .eq('email', cleanEmail)
+        .maybeSingle();
+      if (userDoc) {
+        matchedEmail = userDoc.email;
       }
     }
 
-    if (!userDocFound) {
-      // Fallback: Find user in Firestore that has telegramConfig.chatId === chatId
-      const usersRef = db.collection('users');
-      let snapshot = await usersRef.where('telegramConfig.chatId', '==', chatId).get();
+    if (!matchedEmail) {
+      // Fallback: Find user in Supabase that has telegram_config->>chatId === chatId
+      const { data: userDoc } = await supabase
+        .from('users')
+        .select('email')
+        .eq('telegram_config->>chatId', chatId)
+        .limit(1)
+        .maybeSingle();
 
-      // Fallback: search by numeric chatId if the first query returned empty
-      if (snapshot.empty && !isNaN(Number(chatId))) {
-        snapshot = await usersRef.where('telegramConfig.chatId', '==', Number(chatId)).get();
-      }
-
-      if (!snapshot.empty) {
-        userDocFound = snapshot.docs[0];
+      if (userDoc) {
+        matchedEmail = userDoc.email;
       }
     }
 
-    if (!userDocFound) {
+    if (!matchedEmail) {
       console.log(`Mensagem de chat ID desconhecido: ${chatId}`);
       return res.status(200).json({ success: true, message: 'Chat ID não vinculado a nenhum usuário.' });
     }
 
-    // Write command to the user's queue
-    await userDocFound.ref.update({
-      pendingCommand: {
-        text: text,
-        timestamp: Date.now(),
-        processed: false
-      }
-    });
+    // Write command to the user's queue (pending_command)
+    const { error: updateErr } = await supabase
+      .from('users')
+      .update({
+        pending_command: {
+          text: text,
+          timestamp: Date.now(),
+          processed: false,
+          message_id: message.message_id
+        }
+      })
+      .eq('email', matchedEmail);
+
+    if (updateErr) throw updateErr;
 
     return res.status(200).json({
       success: true,

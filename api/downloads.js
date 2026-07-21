@@ -1,26 +1,4 @@
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-
-let db;
-let initError = null;
-try {
-  if (getApps().length === 0) {
-    let serviceAccount;
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    } else {
-      const serviceAccountPath = join(process.cwd(), 'astrobot-d9382-firebase-adminsdk-fbsvc-cbe709be1b.json');
-      serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
-    }
-    initializeApp({ credential: cert(serviceAccount) });
-  }
-  db = getFirestore();
-} catch (err) {
-  console.error('Firebase init error:', err);
-  initError = err.message || String(err);
-}
+import { supabase } from './utils/supabase.js';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Credentials': true,
@@ -33,14 +11,28 @@ export default async function handler(req, res) {
   Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (!db) return res.status(500).json({ error: 'Firebase não inicializado.', details: initError });
+  if (!supabase) return res.status(500).json({ error: 'Supabase não inicializado.' });
 
   // ---- GET: list downloads (public) ----
   if (req.method === 'GET') {
     try {
-      const snap = await db.collection('downloads').orderBy('createdAt', 'desc').get();
-      const downloads = [];
-      snap.forEach(doc => downloads.push({ id: doc.id, ...doc.data() }));
+      const { data: downloadsData, error } = await supabase
+        .from('downloads')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const downloads = downloadsData.map(row => ({
+        id: row.id,
+        version: row.version,
+        downloadUrl: row.download_url,
+        changelog: row.changelog,
+        os: row.os,
+        active: row.active,
+        createdAt: row.created_at ? Number(row.created_at) : null
+      }));
+
       return res.status(200).json({ success: true, downloads });
     } catch (err) {
       return res.status(500).json({ error: err.message });
@@ -59,15 +51,24 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Versão e Link de download são obrigatórios.' });
       }
 
-      const docRef = await db.collection('downloads').add({
+      const newDownload = {
         version: version.trim(),
-        downloadUrl: downloadUrl.trim(),
+        download_url: downloadUrl.trim(),
         changelog: changelog || '',
         os: os || 'Windows',
         active: active !== undefined ? active : true,
-        createdAt: Date.now()
-      });
-      return res.status(200).json({ success: true, id: docRef.id });
+        created_at: Date.now()
+      };
+
+      const { data, error } = await supabase
+        .from('downloads')
+        .insert(newDownload)
+        .select('id')
+        .single();
+
+      if (error) throw error;
+
+      return res.status(200).json({ success: true, id: data.id });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -81,7 +82,13 @@ export default async function handler(req, res) {
     }
     if (!download_id) return res.status(400).json({ error: 'download_id é obrigatório.' });
     try {
-      await db.collection('downloads').doc(download_id).delete();
+      const { error } = await supabase
+        .from('downloads')
+        .delete()
+        .eq('id', download_id);
+
+      if (error) throw error;
+
       return res.status(200).json({ success: true });
     } catch (err) {
       return res.status(500).json({ error: err.message });

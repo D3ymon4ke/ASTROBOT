@@ -24,6 +24,7 @@ export default function Scheduler({
     symbol: 'R_100',
     granularity: '60', // 1m
     selectedStrategy: 'autopilot',
+    moneyManagement: 'martingale',
     stakeValue: 1.0,
     takeProfit: 10.0,
     stopLoss: 20.0,
@@ -41,11 +42,12 @@ export default function Scheduler({
   const sanitizedCycles = (cycles || []).map(c => ({
     ...defaultCycle,
     ...c,
-    selectedStrategy: 'autopilot',
+    selectedStrategy: c.selectedStrategy || c.strategy || defaultCycle.selectedStrategy,
     days: c.days || defaultCycle.days,
     icon: c.icon || defaultCycle.icon,
     color: c.color || defaultCycle.color,
     minProbability: c.minProbability || defaultCycle.minProbability,
+    moneyManagement: c.moneyManagement || (parseInt(c.martingaleLevels) > 0 ? 'martingale' : 'fixed'),
     martingaleLevels: c.martingaleLevels ?? defaultCycle.martingaleLevels,
     martingaleMultiplier: c.martingaleMultiplier ?? defaultCycle.martingaleMultiplier,
     timezone: c.timezone || defaultCycle.timezone
@@ -65,6 +67,9 @@ export default function Scheduler({
     stakeValue: 1.0,
     takeProfit: 10.0,
     stopLoss: 20.0,
+    moneyManagement: 'martingale',
+    martingaleLevels: 2,
+    martingaleMultiplier: 2.0,
     periods: {
       dawn: true,
       morning: true,
@@ -83,6 +88,9 @@ export default function Scheduler({
     const stake = parseFloat(generatorData.stakeValue) || 1.0;
     const tp = parseFloat(generatorData.takeProfit) || 10.0;
     const sl = parseFloat(generatorData.stopLoss) || 20.0;
+    const moneyMgmt = generatorData.moneyManagement || 'martingale';
+    const galeLevels = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' ? 0 : (parseInt(generatorData.martingaleLevels) ?? 2);
+    const galeMult = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' || galeLevels === 0 ? 1.0 : (parseFloat(generatorData.martingaleMultiplier) || 2.0);
     
     const periodConfigs = {
       dawn: [
@@ -116,7 +124,7 @@ export default function Scheduler({
           const assetIndex = generatedCount % targetAssets.length;
           const symbol = targetAssets[assetIndex];
           
-          const strategy = 'autopilot';
+          const strategy = cfg.strategy || 'autopilot';
           const name = `${cfg.name} (Auto)`;
           
           newCycles.push({
@@ -131,8 +139,9 @@ export default function Scheduler({
             stakeValue: stake,
             takeProfit: tp,
             stopLoss: sl,
-            martingaleLevels: 2,
-            martingaleMultiplier: 2.0,
+            moneyManagement: moneyMgmt,
+            martingaleLevels: galeLevels,
+            martingaleMultiplier: galeMult,
             enableMasterCandleSecondary: !!generatorData.enableMasterCandleSecondary,
             disableSlowStrategies: !!generatorData.disableSlowStrategies,
             disableMaCrossover: !!generatorData.disableMaCrossover,
@@ -697,21 +706,43 @@ export default function Scheduler({
             )}
           </div>
 
-          <button
-            onClick={handleResetAllCycles}
-            style={{
-              padding: '0.45rem',
-              fontSize: '0.68rem',
-              borderRadius: '6px',
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(255,255,255,0.05)',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            Resetar Status dos Ciclos
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            <button
+              onClick={handleResetAllCycles}
+              style={{
+                padding: '0.45rem',
+                fontSize: '0.68rem',
+                borderRadius: '6px',
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              🔄 Resetar Status dos Ciclos
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm(`Apagar todos os ${cycles.length} ciclos? Esta ação não pode ser desfeita.`)) {
+                  onSaveCycles([]);
+                  setSelectedCycleId(null);
+                }
+              }}
+              style={{
+                padding: '0.45rem',
+                fontSize: '0.68rem',
+                borderRadius: '6px',
+                background: 'rgba(239,68,68,0.06)',
+                border: '1px solid rgba(239,68,68,0.2)',
+                color: '#ef4444',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              🗑️ Limpar Todos os Ciclos
+            </button>
+          </div>
         </div>
 
         {/* ÁREA CENTRAL: DETALHES COMPLETOS DO CICLO */}
@@ -1436,6 +1467,80 @@ export default function Scheduler({
                 </div>
               </div>
 
+              {/* Gerenciamento e Martingale */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>GERENCIAMENTO</label>
+                  <select
+                    value={generatorData.moneyManagement || 'martingale'}
+                    onChange={(e) => setGeneratorData(prev => ({ ...prev, moneyManagement: e.target.value }))}
+                    style={{
+                      fontSize: '0.78rem',
+                      padding: '0.55rem',
+                      background: '#09090f',
+                      color: 'white',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      width: '100%',
+                      height: '38px',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value="fixed">Mão Fixa (Fixed)</option>
+                    <option value="martingale">Martingale</option>
+                    <option value="progressive_gale">Gale Progressivo</option>
+                    <option value="soros">Soros</option>
+                    <option value="iron_hands">Iron Hands</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>NÍVEIS GALE</label>
+                  <select
+                    value={generatorData.martingaleLevels ?? 2}
+                    onChange={(e) => setGeneratorData(prev => ({ ...prev, martingaleLevels: parseInt(e.target.value) }))}
+                    disabled={generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands'}
+                    style={{
+                      fontSize: '0.78rem',
+                      padding: '0.55rem',
+                      background: '#09090f',
+                      color: 'white',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      width: '100%',
+                      height: '38px',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value="0">Sem Gale</option>
+                    <option value="1">1 Gale</option>
+                    <option value="2">2 Gales</option>
+                    <option value="3">3 Gales</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>MULTIPLICADOR</label>
+                  <input
+                    type="number"
+                    value={generatorData.martingaleMultiplier ?? 2.0}
+                    onChange={(e) => setGeneratorData(prev => ({ ...prev, martingaleMultiplier: parseFloat(e.target.value) }))}
+                    min="1.0"
+                    max="3.0"
+                    step="0.1"
+                    disabled={generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' || generatorData.martingaleLevels === 0}
+                    style={{
+                      fontSize: '0.78rem',
+                      padding: '0.55rem',
+                      background: '#09090f',
+                      color: 'white',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      width: '100%',
+                      height: '38px'
+                    }}
+                  />
+                </div>
+              </div>
+
               {/* Period Selectors */}
               <div>
                 <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', letterSpacing: '0.5px' }}>PERÍODOS DE OPERAÇÃO</label>
@@ -1850,21 +1955,15 @@ export default function Scheduler({
                         <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                           Estratégia Principal
                         </label>
-                        <div style={{
-                          padding: '0.6rem 0.8rem',
-                          fontSize: '0.85rem',
-                          background: 'rgba(139, 92, 246, 0.1)',
-                          border: '1px solid rgba(139, 92, 246, 0.3)',
-                          borderRadius: '8px',
-                          color: 'var(--primary-light)',
-                          fontWeight: 'bold',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          height: '38px'
-                        }}>
-                          🤖 Piloto Automático
-                        </div>
+                        <select
+                          value={wizardData.selectedStrategy || 'autopilot'}
+                          onChange={(e) => setWizardData({ ...wizardData, selectedStrategy: e.target.value })}
+                          style={{ height: '38px', fontSize: '0.85rem' }}
+                        >
+                          {strategies.map(strat => (
+                            <option key={strat.id} value={strat.id}>{strat.name}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 
@@ -1938,6 +2037,23 @@ export default function Scheduler({
                       </div>
                     </div>
 
+                    <div>
+                      <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                        Gerenciamento de Banca
+                      </label>
+                      <select
+                        value={wizardData.moneyManagement || 'martingale'}
+                        onChange={(e) => setWizardData({ ...wizardData, moneyManagement: e.target.value })}
+                        style={{ height: '38px', fontSize: '0.85rem' }}
+                      >
+                        <option value="fixed">Mão Fixa (Fixed)</option>
+                        <option value="martingale">Martingale</option>
+                        <option value="progressive_gale">Gale Progressivo</option>
+                        <option value="soros">Soros (Compounding)</option>
+                        <option value="iron_hands">Iron Hands</option>
+                      </select>
+                    </div>
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                       <div>
                         <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
@@ -1946,9 +2062,10 @@ export default function Scheduler({
                         <select
                           value={wizardData.martingaleLevels}
                           onChange={(e) => setWizardData({ ...wizardData, martingaleLevels: parseInt(e.target.value) })}
+                          disabled={wizardData.moneyManagement === 'fixed' || wizardData.moneyManagement === 'iron_hands'}
                           style={{ height: '38px', fontSize: '0.85rem' }}
                         >
-                          <option value="0">Sem Martingale (Mão Fixa)</option>
+                          <option value="0">Sem Gale</option>
                           <option value="1">Gale Nível 1</option>
                           <option value="2">Gale Nível 2</option>
                           <option value="3">Gale Nível 3</option>
@@ -1965,7 +2082,7 @@ export default function Scheduler({
                           min="1.0"
                           max="3.0"
                           step="0.1"
-                          disabled={wizardData.martingaleLevels === 0}
+                          disabled={wizardData.moneyManagement === 'fixed' || wizardData.moneyManagement === 'iron_hands' || wizardData.martingaleLevels === 0}
                           style={{ padding: '0.6rem 0.8rem', fontSize: '0.85rem' }}
                         />
                       </div>

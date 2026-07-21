@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Send, CheckCircle, AlertCircle, HelpCircle, Save, Bell, Shield, TrendingUp, Info } from 'lucide-react';
 import { sendTelegramMessage } from '../utils/telegram';
+import { derivAPI } from '../deriv/DerivAPI';
 
 export default function TelegramConfig({
   settings,
@@ -53,6 +54,62 @@ export default function TelegramConfig({
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null); // { success: boolean, message: string }
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [useOfficial, setUseOfficial] = useState(!config.token);
+
+  useEffect(() => {
+    if (settings) {
+      setConfig(prev => {
+        const updated = { ...prev };
+        let changed = false;
+        
+        if (settings.telegramEnabled !== undefined && settings.telegramEnabled !== prev.enabled) {
+          updated.enabled = settings.telegramEnabled;
+          changed = true;
+        }
+        if (settings.telegramToken !== undefined && settings.telegramToken !== prev.token) {
+          updated.token = settings.telegramToken;
+          changed = true;
+        }
+        if (settings.telegramChatId !== undefined && String(settings.telegramChatId) !== String(prev.chatId)) {
+          updated.chatId = String(settings.telegramChatId);
+          changed = true;
+        }
+        
+        if (changed) {
+          localStorage.setItem('astrobot_telegram_config', JSON.stringify(updated));
+          return updated;
+        }
+        return prev;
+      });
+    }
+  }, [settings]);
+
+  useEffect(() => {
+    // If the token changes or is updated, adjust the tab selection automatically
+    setUseOfficial(!config.token);
+  }, [config.token]);
+
+  const getTelegramLink = () => {
+    if (!userEmail) return '#';
+    try {
+      const base64 = btoa(userEmail.toLowerCase().trim())
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, ''); // Base64url safe
+      return `https://t.me/ASTROOFICIAL_BOT?start=${base64}`;
+    } catch (e) {
+      return '#';
+    }
+  };
+
+  const handleDisconnectOfficial = () => {
+    const updated = { ...config, chatId: '', token: '' };
+    setConfig(updated);
+    localStorage.setItem('astrobot_telegram_config', JSON.stringify(updated));
+    if (onSaveTelegramSettings) {
+      onSaveTelegramSettings(updated);
+    }
+  };
 
   const handleToggleActive = () => {
     setConfig(prev => ({ ...prev, enabled: !prev.enabled }));
@@ -76,35 +133,41 @@ export default function TelegramConfig({
   const handleSave = () => {
     localStorage.setItem('astrobot_telegram_config', JSON.stringify(config));
     
-    // Register the Vercel webhook automatically on Telegram if config is enabled
-    if (config.enabled && config.token) {
-      const isLocalOrElectron = window.location.hostname === 'localhost' || 
-                                window.location.hostname === '127.0.0.1' || 
-                                window.location.protocol === 'file:' ||
-                                (window.process && window.process.type === 'renderer');
-      const baseDomain = isLocalOrElectron ? 'https://astrobot-seven.vercel.app' : window.location.origin;
-      const webhookUrl = `${baseDomain}/api/telegram-webhook?email=${encodeURIComponent(userEmail || '')}`;
-      fetch(`https://api.telegram.org/bot${config.token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`)
-        .then(res => res.json())
-        .then(resData => {
-          if (resData.ok) {
-            console.log("Telegram webhook registered successfully!");
+    // Push Telegram settings to VPS backend (mapped to the field names UserSession.js uses)
+    derivAPI.updateSettings({
+      telegramEnabled: config.enabled,
+      telegramToken: config.token,
+      telegramChatId: config.chatId,
+      telegramNotifWin: config.notifications?.win ?? true,
+      telegramNotifLoss: config.notifications?.loss ?? true,
+      telegramNotifDailySummary: config.notifications?.daily_summary ?? true,
+      telegramNotifBotStarted: config.notifications?.bot_started ?? true,
+      telegramNotifBotStopped: config.notifications?.bot_stopped ?? true,
+      telegramNotifTakeProfit: config.notifications?.take_profit ?? true,
+      telegramNotifStopLoss: config.notifications?.stop_loss ?? true,
+      telegramNotifOpportunity: config.notifications?.opportunity_found ?? true,
+      telegramNotifOrder: config.notifications?.order_executed ?? true,
+      telegramNotifCycle: config.notifications?.cycle_started ?? true,
+    });
+
+    // Register the VPS Telegram webhook so commands from Telegram go directly to the VPS
+    if (config.enabled && config.token && userEmail) {
+      const VPS_URL = 'https://187-127-40-228.sslip.io';
+      const webhookUrl = `${VPS_URL}/api/telegram-webhook?email=${encodeURIComponent(userEmail)}`;
+      fetch(`https://api.telegram.org/bot${config.token}/setWebhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: webhookUrl })
+      })
+        .then(r => r.json())
+        .then(d => {
+          if (d.ok) {
+            console.log('[Telegram] Webhook registrado no VPS:', webhookUrl);
           } else {
-            console.error("Failed to register Telegram webhook:", resData.description);
+            console.error('[Telegram] Falha ao registrar webhook:', d.description);
           }
         })
-        .catch(err => console.error("Error setting webhook:", err));
-    }
-    
-    // Send to Electron main process if available
-    const isElectron = window && window.process && window.process.type === 'renderer';
-    if (isElectron) {
-      try {
-        const { ipcRenderer } = window.require('electron');
-        ipcRenderer.send('update-telegram-config', config);
-      } catch (err) {
-        console.error('Failed to notify Electron main process:', err);
-      }
+        .catch(e => console.error('[Telegram] Erro ao registrar webhook:', e));
     }
 
     if (onSaveTelegramSettings) {
@@ -148,7 +211,8 @@ export default function TelegramConfig({
     if (!config.enabled) {
       return { label: 'DESATIVADO', color: '#64748b', bg: 'rgba(100, 116, 139, 0.1)', border: 'rgba(100, 116, 139, 0.3)' };
     }
-    if (!config.token || !config.chatId) {
+    const isConfigured = useOfficial ? !!config.chatId : (!!config.token && !!config.chatId);
+    if (!isConfigured) {
       return { label: 'AGUARDANDO CONFIGURAÇÃO', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', border: 'rgba(245, 158, 11, 0.3)' };
     }
     return { label: 'INTEGRAÇÃO ATIVA (24H)', color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)' };
@@ -215,113 +279,263 @@ export default function TelegramConfig({
         {/* Left Column: API Settings & Notification Toggles */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           
-          {/* Credentials Card */}
+           {/* Credentials Card */}
           <div className="glass-panel" style={{ padding: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
             <h3 style={{ fontSize: '0.8rem', fontWeight: '800', color: 'white', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Shield size={14} style={{ color: 'var(--primary-light)' }} /> DADOS DE CONEXÃO DO BOT
             </h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div>
-                <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>TELEGRAM BOT TOKEN</label>
-                <input
-                  type="password"
-                  name="token"
-                  value={config.token}
-                  onChange={handleInputChange}
-                  placeholder="Ex: 123456789:ABCdefGhIJKlmNoPQ..."
-                  style={{
-                    fontSize: '0.78rem',
-                    padding: '0.55rem',
-                    background: '#09090f',
-                    color: 'white',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    width: '100%'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>SEU TELEGRAM CHAT ID</label>
-                <input
-                  type="text"
-                  name="chatId"
-                  value={config.chatId}
-                  onChange={handleInputChange}
-                  placeholder="Ex: 987654321"
-                  style={{
-                    fontSize: '0.78rem',
-                    padding: '0.55rem',
-                    background: '#09090f',
-                    color: 'white',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    width: '100%'
-                  }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.25rem', gap: '10px' }}>
+            {/* Tabs for Bot Mode */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '1.25rem' }}>
               <button
-                onClick={handleTestConnection}
-                disabled={testing}
-                className="action-button-glow"
+                type="button"
+                onClick={() => setUseOfficial(true)}
                 style={{
-                  padding: '0.55rem 1rem',
-                  fontSize: '0.75rem',
+                  flex: 1,
+                  padding: '8px 12px',
+                  fontSize: '0.72rem',
                   fontWeight: '800',
-                  color: 'white',
-                  background: 'rgba(59, 130, 246, 0.12)',
-                  border: '1px solid rgba(59, 130, 246, 0.4)',
                   borderRadius: '8px',
                   cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
+                  border: useOfficial ? '1px solid var(--primary-light)' : '1px solid rgba(255, 255, 255, 0.08)',
+                  background: useOfficial ? 'rgba(139, 92, 246, 0.15)' : 'rgba(0, 0, 0, 0.2)',
+                  color: useOfficial ? 'white' : '#94A3B8',
+                  transition: 'all 0.2s ease'
                 }}
               >
-                {testing ? 'Testando...' : 'Testar Conexão'}
+                🤖 Bot Oficial ASTROBOT®
               </button>
-
               <button
-                onClick={handleSave}
+                type="button"
+                onClick={() => setUseOfficial(false)}
                 style={{
-                  padding: '0.55rem 1.25rem',
-                  fontSize: '0.75rem',
+                  flex: 1,
+                  padding: '8px 12px',
+                  fontSize: '0.72rem',
                   fontWeight: '800',
-                  color: 'white',
-                  background: saveSuccess ? 'rgba(16, 185, 129, 0.15)' : 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
-                  border: saveSuccess ? '1px solid var(--success)' : 'none',
                   borderRadius: '8px',
                   cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  boxShadow: saveSuccess ? 'none' : '0 0 12px rgba(139, 92, 246, 0.3)',
-                  transition: 'all 0.25s ease'
+                  border: !useOfficial ? '1px solid var(--primary-light)' : '1px solid rgba(255, 255, 255, 0.08)',
+                  background: !useOfficial ? 'rgba(139, 92, 246, 0.15)' : 'rgba(0, 0, 0, 0.2)',
+                  color: !useOfficial ? 'white' : '#94A3B8',
+                  transition: 'all 0.2s ease'
                 }}
               >
-                <Save size={13} /> {saveSuccess ? 'Salvo!' : 'Salvar Dados'}
+                ⚙️ Bot Personalizado
               </button>
             </div>
 
-            {testResult && (
-              <div style={{
-                marginTop: '1rem',
-                padding: '0.5rem 0.75rem',
-                borderRadius: '6px',
-                fontSize: '0.7rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: testResult.success ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                border: testResult.success ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)',
-                color: testResult.success ? '#10b981' : '#ef4444'
-              }}>
-                {testResult.success ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-                {testResult.message}
+            {useOfficial ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', textAlign: 'center', padding: '0.5rem 0' }}>
+                <div style={{
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '50%',
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#3b82f6',
+                  fontSize: '1.8rem'
+                }}>
+                  🤖
+                </div>
+                
+                <div>
+                  <h4 style={{ color: 'white', margin: '0 0 6px 0', fontSize: '0.85rem', fontWeight: '700' }}>Vincular Bot Oficial ASTROBOT®</h4>
+                  <p style={{ color: '#cbd5e1', fontSize: '0.72rem', margin: 0, lineHeight: '1.4' }}>
+                    Clique no botão abaixo para abrir o Telegram e iniciar a conversa com o nosso bot oficial. Ele vinculará sua conta instantaneamente.
+                  </p>
+                </div>
+
+                <a
+                  href={getTelegramLink()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="action-button-glow"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '0.65rem 1.5rem',
+                    fontSize: '0.78rem',
+                    fontWeight: '800',
+                    color: 'white',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                    borderRadius: '8px',
+                    textDecoration: 'none',
+                    boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
+                    cursor: 'pointer',
+                    marginTop: '0.5rem'
+                  }}
+                >
+                  <Send size={14} /> Começar no Telegram
+                </a>
+
+                {config.chatId ? (
+                  <div style={{
+                    marginTop: '0.5rem',
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}>
+                    <div style={{
+                      padding: '0.5rem 1rem',
+                      borderRadius: '8px',
+                      background: 'rgba(16, 185, 129, 0.08)',
+                      border: '1px solid rgba(16, 185, 129, 0.25)',
+                      color: '#10b981',
+                      fontSize: '0.72rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      <CheckCircle size={14} /> <b>Status:</b> Telegram Conectado (ID: {config.chatId})
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDisconnectOfficial}
+                      style={{
+                        padding: '4px 12px',
+                        fontSize: '0.65rem',
+                        fontWeight: '700',
+                        color: '#ef4444',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Desvincular Telegram
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{
+                    marginTop: '0.5rem',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '8px',
+                    background: 'rgba(245, 158, 11, 0.08)',
+                    border: '1px solid rgba(245, 158, 11, 0.25)',
+                    color: '#f59e0b',
+                    fontSize: '0.72rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <AlertCircle size={14} /> <b>Status:</b> Aguardando Clique/Início no Telegram
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>TELEGRAM BOT TOKEN</label>
+                    <input
+                      type="password"
+                      name="token"
+                      value={config.token}
+                      onChange={handleInputChange}
+                      placeholder="Ex: 123456789:ABCdefGhIJKlmNoPQ..."
+                      style={{
+                        fontSize: '0.78rem',
+                        padding: '0.55rem',
+                        background: '#09090f',
+                        color: 'white',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        width: '100%'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>SEU TELEGRAM CHAT ID</label>
+                    <input
+                      type="text"
+                      name="chatId"
+                      value={config.chatId}
+                      onChange={handleInputChange}
+                      placeholder="Ex: 987654321"
+                      style={{
+                        fontSize: '0.78rem',
+                        padding: '0.55rem',
+                        background: '#09090f',
+                        color: 'white',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        width: '100%'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={handleTestConnection}
+                    disabled={testing}
+                    className="action-button-glow"
+                    style={{
+                      padding: '0.55rem 1rem',
+                      fontSize: '0.75rem',
+                      fontWeight: '800',
+                      color: 'white',
+                      background: 'rgba(59, 130, 246, 0.12)',
+                      border: '1px solid rgba(59, 130, 246, 0.4)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    {testing ? 'Testando...' : 'Testar Conexão'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    style={{
+                      padding: '0.55rem 1.25rem',
+                      fontSize: '0.75rem',
+                      fontWeight: '800',
+                      color: 'white',
+                      background: saveSuccess ? 'rgba(16, 185, 129, 0.15)' : 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+                      border: saveSuccess ? '1px solid var(--success)' : 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: saveSuccess ? 'none' : '0 0 12px rgba(139, 92, 246, 0.3)',
+                      transition: 'all 0.25s ease'
+                    }}
+                  >
+                    <Save size={13} /> {saveSuccess ? 'Salvo!' : 'Salvar Dados'}
+                  </button>
+                </div>
+
+                {testResult && (
+                  <div style={{
+                    marginTop: '0.5rem',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '6px',
+                    fontSize: '0.7rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: testResult.success ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                    border: testResult.success ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)',
+                    color: testResult.success ? '#10b981' : '#ef4444'
+                  }}>
+                    {testResult.success ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                    {testResult.message}
+                  </div>
+                )}
               </div>
             )}
           </div>

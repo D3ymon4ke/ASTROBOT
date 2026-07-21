@@ -36,3 +36,10 @@ astrobot-d9382-firebase-adminsdk-fbsvc-cbe709be1b.json
 .vercel
 anotações
 anota*
+.vercel
+.env*
+scratch/
+*.json
+!package.json
+!package-lock.json
+!.oxlintrc.json

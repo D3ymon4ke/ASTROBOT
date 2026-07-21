@@ -57,6 +57,42 @@ export const saveDbTrade = (trade) => {
   return [];
 };
 
+export const saveDbTrades = (newTradesList) => {
+  try {
+    const trades = loadDbTrades();
+    let updated = false;
+    newTradesList.forEach(trade => {
+      const exists = trades.some(t => 
+        t.id === trade.id || 
+        (t.epoch && trade.epoch && t.epoch === trade.epoch) ||
+        (t.timestamp && trade.timestamp && t.timestamp === trade.timestamp)
+      );
+      if (!exists) {
+        const newTrade = {
+          id: trade.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: trade.timestamp || Date.now(),
+          ...trade
+        };
+        trades.push(newTrade);
+        updated = true;
+      }
+    });
+    
+    if (updated) {
+      if (fs && dbPath) {
+        fs.writeFileSync(dbPath, JSON.stringify(trades, null, 2), 'utf-8');
+      } else {
+        localStorage.setItem('astrobot_trades_db', JSON.stringify(trades));
+      }
+      return trades;
+    }
+    return trades;
+  } catch (err) {
+    console.error("Error saving trades list to database:", err);
+  }
+  return [];
+};
+
 export const clearDbTrades = () => {
   try {
     if (fs && dbPath) {

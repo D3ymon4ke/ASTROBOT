@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, Play, Square, AlertCircle, ChevronLeft, ChevronRight, HelpCircle, Globe, Cpu, Coins, ShieldCheck, Zap, Activity, Save, Volume2 } from 'lucide-react';
+import { Settings as SettingsIcon, Play, Square, AlertCircle, ChevronLeft, ChevronRight, HelpCircle, Globe, Cpu, Coins, ShieldCheck, Zap, Activity, Save, Volume2, ShieldAlert, Users } from 'lucide-react';
 import { playWinSound, playLossSound, playClickSound } from '../utils/sound';
 
 export default function Settings({
@@ -19,6 +19,16 @@ export default function Settings({
 }) {
   const [activeModule, setActiveModule] = useState('mercado');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showBetaFeatures, setShowBetaFeatures] = useState(
+    localStorage.getItem('astrobot_beta_features') === 'true'
+  );
+
+  const handleToggleBeta = (e) => {
+    const val = e.target.checked;
+    setShowBetaFeatures(val);
+    localStorage.setItem('astrobot_beta_features', val ? 'true' : 'false');
+    window.dispatchEvent(new Event('astrobot_beta_features_changed'));
+  };
 
   const handleSave = () => {
     onSaveSettings();
@@ -750,6 +760,51 @@ export default function Settings({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* MODULE 8: BETA EXPERIMENTAL */}
+        <div style={{
+          background: activeModule === 'beta' ? 'rgba(168, 85, 247, 0.06)' : 'rgba(255, 255, 255, 0.01)',
+          border: activeModule === 'beta' ? '1px solid rgba(168, 85, 247, 0.35)' : '1px solid rgba(255, 255, 255, 0.03)',
+          borderRadius: '12px',
+          padding: '0.75rem',
+          transition: 'all 0.25s ease',
+          boxShadow: activeModule === 'beta' ? '0 4px 15px rgba(168, 85, 247, 0.1)' : 'none'
+        }}>
+          <div onClick={() => toggleModule('beta')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShieldAlert size={15} style={{ color: activeModule === 'beta' ? '#a855f7' : '#94A3B8' }} />
+              <strong style={{ fontSize: '0.78rem', color: activeModule === 'beta' ? 'white' : '#94A3B8', fontWeight: 'bold' }}>🧪 EXPERIMENTAL (BETA)</strong>
+            </div>
+            {activeModule !== 'beta' && (
+              <span style={{ fontSize: '0.7rem', color: '#a855f7', fontWeight: 'bold', background: 'rgba(168, 85, 247, 0.1)', padding: '2px 8px', borderRadius: '12px' }}>
+                {showBetaFeatures ? 'Ativo' : 'Inativo'}
+              </span>
+            )}
+          </div>
+          
+          {activeModule === 'beta' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>MÓDULOS BETA</label>
+                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Habilitar Feed da Comunidade e Rankings Sociais</span>
+                </div>
+                <label className="switch" style={{ flexShrink: 0 }}>
+                  <input 
+                    type="checkbox" 
+                    checked={showBetaFeatures} 
+                    onChange={handleToggleBeta} 
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.4rem 0.6rem', background: 'rgba(168, 85, 247, 0.06)', border: '1px solid rgba(168, 85, 247, 0.2)', borderRadius: '6px', fontSize: '0.68rem', color: '#c084fc' }}>
+                <Users size={14} /> Ativar novos recursos experimentais de interação social do ASTROBOT.
+              </div>
             </div>
           )}
         </div>

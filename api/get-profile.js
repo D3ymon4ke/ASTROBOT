@@ -1,38 +1,4 @@
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-
-// Initialize Firebase Admin SDK safely
-let db;
-let initError = null;
-try {
-  if (getApps().length === 0) {
-    let serviceAccount;
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      try {
-        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      } catch (parseErr) {
-        throw new Error("Falha ao analisar o JSON de FIREBASE_SERVICE_ACCOUNT: " + parseErr.message);
-      }
-    } else {
-      const serviceAccountPath = join(process.cwd(), 'astrobot-d9382-firebase-adminsdk-fbsvc-cbe709be1b.json');
-      try {
-        serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
-      } catch (readErr) {
-        throw new Error("Arquivo JSON local ausente ou inválido: " + readErr.message);
-      }
-    }
-
-    initializeApp({
-      credential: cert(serviceAccount)
-    });
-  }
-  db = getFirestore();
-} catch (err) {
-  console.error("Firebase admin init error:", err);
-  initError = err.message || String(err);
-}
+import { supabase } from './utils/supabase.js';
 
 export default async function handler(req, res) {
   // Support CORS
@@ -49,11 +15,10 @@ export default async function handler(req, res) {
     return;
   }
 
-  if (!db) {
+  if (!supabase) {
     return res.status(500).json({ 
       success: false,
-      message: 'Configuração do Firebase ausente ou incorreta.',
-      details: initError
+      message: 'Configuração do Supabase ausente ou incorreta.'
     });
   }
 
@@ -70,28 +35,35 @@ export default async function handler(req, res) {
   const cleanEmail = email.trim().toLowerCase();
 
   try {
-    const userRef = db.collection('users').doc(cleanEmail);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists) {
+    const { data: userData, error: userErr } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', cleanEmail)
+      .maybeSingle();
+
+    if (userErr || !userData) {
       return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
     }
 
-    const userData = userDoc.data();
-
     // Verify key status
-    const keyRef = db.collection('keys').doc(userData.cdkey);
-    const keyDoc = await keyRef.get();
-    let expiresAt = userData.expiresAt;
+    let expiresAt = userData.expires_at ? Number(userData.expires_at) : null;
     let licenseStatus = 'active';
 
-    if (keyDoc.exists) {
-      const keyData = keyDoc.data();
-      expiresAt = keyData.expiresAt || expiresAt;
-      const now = Date.now();
-      if (keyData.status === 'expired' || (expiresAt && now > expiresAt)) {
-        licenseStatus = 'expired';
-        if (keyData.status !== 'expired') {
-          await keyRef.update({ status: 'expired' });
+    if (userData.cdkey) {
+      const { data: keyDoc } = await supabase
+        .from('keys')
+        .select('*')
+        .eq('cdkey', userData.cdkey)
+        .maybeSingle();
+
+      if (keyDoc) {
+        expiresAt = keyDoc.expires_at ? Number(keyDoc.expires_at) : expiresAt;
+        const now = Date.now();
+        if (keyDoc.status === 'expired' || (expiresAt && now > expiresAt)) {
+          licenseStatus = 'expired';
+          if (keyDoc.status !== 'expired') {
+            await supabase.from('keys').update({ status: 'expired' }).eq('cdkey', userData.cdkey);
+          }
         }
       }
     }
@@ -104,7 +76,7 @@ export default async function handler(req, res) {
         expiresAt: expiresAt,
         licenseStatus: licenseStatus,
         settings: userData.settings || {},
-        telegramConfig: userData.telegramConfig || {},
+        telegramConfig: userData.telegram_config || {},
         cycles: userData.cycles || [],
         profile: userData.profile || {}
       }

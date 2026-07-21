@@ -14,6 +14,7 @@
     "electron:build": "vite build && electron-builder"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.7",
     "firebase-admin": "^14.1.0",
     "lucide-react": "^1.24.0",
     "ogl": "^1.0.11",
@@ -29,6 +30,7 @@
     "electron": "^43.1.0",
     "electron-builder": "^26.15.3",
     "oxlint": "^1.71.0",
+    "ssh2": "^1.17.0",
     "vite": "^8.1.1",
     "wait-on": "^9.0.10"
   },

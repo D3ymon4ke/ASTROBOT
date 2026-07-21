@@ -263,10 +263,86 @@ ipcMain.on('update-telegram-config', (event, config) => {
   pollTelegram();
 });
 
+// Auto-Update Checker and Downloader
+async function checkForUpdates() {
+  const pjson = require('../package.json');
+  const currentVersion = pjson.version || '2.5.0';
+  const checkUrl = `https://187-127-40-228.sslip.io/api/check-update?version=${encodeURIComponent(currentVersion)}`;
+
+  console.log(`[Update] Checking version. Current: ${currentVersion}`);
+
+  try {
+    const response = await fetch(checkUrl);
+    const data = await response.json();
+
+    if (data.updateAvailable && data.url) {
+      console.log(`[Update] Update available: ${data.version}`);
+
+      // Notify renderer that update exists
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-available', data.version);
+      }
+
+      // Start downloading
+      const tempPath = app.getPath('temp');
+      const installerPath = path.join(tempPath, 'ASTROBOT_Setup.exe');
+      const fileStream = fs.createWriteStream(installerPath);
+
+      const https = require('https');
+      https.get(data.url, (res) => {
+        const totalSize = parseInt(res.headers['content-length'], 10) || 0;
+        let downloadedSize = 0;
+
+        res.on('data', (chunk) => {
+          downloadedSize += chunk.length;
+          fileStream.write(chunk);
+
+          if (totalSize > 0) {
+            const percent = Math.round((downloadedSize / totalSize) * 100);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('update-download-progress', percent);
+            }
+          }
+        });
+
+        res.on('end', () => {
+          fileStream.end();
+          console.log('[Update] Download complete.');
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('update-downloaded');
+          }
+
+          // Wait 2 seconds, then execute and exit
+          setTimeout(() => {
+            const { exec } = require('child_process');
+            exec(`"${installerPath}"`, (err) => {
+              if (err) console.error('Error running installer:', err);
+            });
+            isQuitting = true;
+            app.quit();
+          }, 2000);
+        });
+      }).on('error', (err) => {
+        console.error('[Update] Download error:', err);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('update-error', err.message);
+        }
+      });
+    } else {
+      console.log('[Update] App is up to date.');
+    }
+  } catch (err) {
+    console.error('[Update] Check failed:', err);
+  }
+}
+
 app.whenReady().then(() => {
   createWindow();
   createTray();
   pollTelegram(); // Start polling immediately
+
+  // Run update check 5 seconds after window ready
+  setTimeout(checkForUpdates, 5000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

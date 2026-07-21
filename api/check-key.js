@@ -1,38 +1,4 @@
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-
-// Initialize Firebase Admin SDK safely
-let db;
-let initError = null;
-try {
-  if (getApps().length === 0) {
-    let serviceAccount;
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      try {
-        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      } catch (parseErr) {
-        throw new Error("Falha ao analisar o JSON de FIREBASE_SERVICE_ACCOUNT: " + parseErr.message);
-      }
-    } else {
-      const serviceAccountPath = join(process.cwd(), 'astrobot-d9382-firebase-adminsdk-fbsvc-cbe709be1b.json');
-      try {
-        serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
-      } catch (readErr) {
-        throw new Error("Arquivo JSON local ausente ou inválido: " + readErr.message);
-      }
-    }
-
-    initializeApp({
-      credential: cert(serviceAccount)
-    });
-  }
-  db = getFirestore();
-} catch (err) {
-  console.error("Firebase admin init error:", err);
-  initError = err.message || String(err);
-}
+import { supabase } from './utils/supabase.js';
 
 export default async function handler(req, res) {
   // Support CORS
@@ -49,11 +15,10 @@ export default async function handler(req, res) {
     return;
   }
 
-  if (!db) {
+  if (!supabase) {
     return res.status(500).json({ 
       valid: false,
-      message: 'Configuração do Firebase ausente ou incorreta.',
-      details: initError
+      message: 'Configuração do Supabase ausente ou incorreta.'
     });
   }
 
@@ -70,20 +35,24 @@ export default async function handler(req, res) {
   const cleanKey = cdkey.trim().toUpperCase();
 
   try {
-    const keyRef = db.collection('keys').doc(cleanKey);
-    const doc = await keyRef.get();
+    const { data: keyDoc, error: keyErr } = await supabase
+      .from('keys')
+      .select('*')
+      .eq('cdkey', cleanKey)
+      .maybeSingle();
 
-    if (!doc.exists) {
+    if (keyErr || !keyDoc) {
       return res.status(404).json({ valid: false, message: 'Chave de ativação (CDKEY) não encontrada.' });
     }
 
-    const data = doc.data();
     const now = Date.now();
+    const expiresAt = keyDoc.expires_at ? Number(keyDoc.expires_at) : null;
+    const activatedAt = keyDoc.activated_at ? Number(keyDoc.activated_at) : null;
 
     // 1. If key is already expired
-    if (data.status === 'expired' || (data.expiresAt && now > data.expiresAt)) {
-      if (data.status !== 'expired') {
-        await keyRef.update({ status: 'expired' });
+    if (keyDoc.status === 'expired' || (expiresAt && now > expiresAt)) {
+      if (keyDoc.status !== 'expired') {
+        await supabase.from('keys').update({ status: 'expired' }).eq('cdkey', cleanKey);
       }
       return res.status(200).json({ 
         valid: false, 
@@ -93,40 +62,43 @@ export default async function handler(req, res) {
     }
 
     // 2. If key is pending activation
-    if (data.status === 'pending' || !data.activatedAt) {
-      const durationDays = data.durationDays || 30;
-      const expiresAt = now + durationDays * 24 * 60 * 60 * 1000;
+    if (keyDoc.status === 'pending' || !activatedAt) {
+      const durationDays = keyDoc.duration_days || 30;
+      const newExpiresAt = now + durationDays * 24 * 60 * 60 * 1000;
       
-      await keyRef.update({
-        status: 'active',
-        activatedAt: now,
-        expiresAt: expiresAt
-      });
+      await supabase
+        .from('keys')
+        .update({
+          status: 'active',
+          activated_at: now,
+          expires_at: newExpiresAt
+        })
+        .eq('cdkey', cleanKey);
 
       return res.status(200).json({
         valid: true,
         status: 'active',
         activatedAt: now,
-        expiresAt: expiresAt,
+        expiresAt: newExpiresAt,
         message: `Licença ativada com sucesso! Válida por ${durationDays} dias.`
       });
     }
 
     // 3. If key is active
-    if (data.status === 'active') {
+    if (keyDoc.status === 'active') {
       return res.status(200).json({
         valid: true,
         status: 'active',
-        activatedAt: data.activatedAt,
-        expiresAt: data.expiresAt,
-        message: `Licença ativa. Expira em: ${new Date(data.expiresAt).toLocaleDateString()}`
+        activatedAt: activatedAt,
+        expiresAt: expiresAt,
+        message: `Licença ativa. Expira em: ${new Date(expiresAt).toLocaleDateString()}`
       });
     }
 
     return res.status(400).json({ valid: false, message: 'Estado de chave desconhecido.' });
 
   } catch (error) {
-    console.error("Firestore error:", error);
+    console.error("Supabase check key error:", error);
     return res.status(500).json({ message: 'Erro interno ao validar a CDKEY.', error: error.message });
   }
 }
