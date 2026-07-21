@@ -532,7 +532,9 @@ export default function App() {
   const [showPricingModal, setShowPricingModal] = useState(false);
 
   // User Authentication States
-  const [userEmail, setUserEmail] = useState('');
+  const [userEmail, setUserEmail] = useState(() => {
+    return localStorage.getItem('astrobot_user_email') || '';
+  });
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
   const [userEmailInput, setUserEmailInput] = useState(() => localStorage.getItem('astrobot_saved_email') || '');
   const [userPasswordInput, setUserPasswordInput] = useState(() => localStorage.getItem('astrobot_saved_password') || '');
@@ -685,6 +687,7 @@ export default function App() {
 
             // Commit final authenticated state
             setUserEmail(user.email);
+            localStorage.setItem('astrobot_user_email', user.email);
             setCdKey(user.cdkey);
             setKeyExpiresAt(user.expiresAt);
             setIsKeyValid(user.licenseStatus === 'active');

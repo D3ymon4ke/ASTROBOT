@@ -162,6 +162,10 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
   };
 
   const handleCreatePost = async () => {
+    if (!userEmail) {
+      alert('Erro: Usuário não autenticado no feed. Por favor, saia e entre novamente em sua conta.');
+      return;
+    }
     try {
       const res = await fetch(`${REST_URL}/api/community/posts`, {
         method: 'POST',
@@ -177,9 +181,14 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
         setShowShareModal(false);
         setShareComment('');
         fetchPosts();
+        alert('Publicação compartilhada com sucesso!');
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(`Erro ao publicar: ${errData.error || 'Erro interno do servidor'}`);
       }
     } catch (err) {
       console.error('Error sharing session result:', err);
+      alert('Erro de conexão ao publicar resultado.');
     }
   };
 
