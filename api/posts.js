@@ -31,8 +31,8 @@ export default async function handler(req, res) {
         coverImage: row.cover_image,
         tag: row.tag,
         pinned: row.pinned,
-        createdAt: row.created_at ? Number(row.created_at) : null,
-        updatedAt: row.updated_at ? Number(row.updated_at) : null,
+        createdAt: row.created_at ? (isNaN(Number(row.created_at)) ? new Date(row.created_at).getTime() : Number(row.created_at)) : null,
+        updatedAt: row.updated_at ? (isNaN(Number(row.updated_at)) ? new Date(row.updated_at).getTime() : Number(row.updated_at)) : null,
         // Also support other community properties if they exist
         email: row.email,
         userName: row.user_name,

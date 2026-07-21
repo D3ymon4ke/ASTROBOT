@@ -4972,7 +4972,12 @@ export default function App() {
                     <div key={idx} style={{ padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', borderLeft: '2px solid var(--primary-light)' }}>
                       <strong style={{ fontSize: '0.7rem', color: 'white', display: 'block' }}>{post.title}</strong>
                       <p style={{ fontSize: '0.62rem', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: '1.3' }}>{post.content}</p>
-                      <span style={{ fontSize: '0.5rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>{new Date(post.timestamp).toLocaleDateString()}</span>
+                      <span style={{ fontSize: '0.5rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
+                        {(() => {
+                          const d = new Date(post.createdAt || post.timestamp);
+                          return isNaN(d.getTime()) ? 'Recente' : d.toLocaleDateString('pt-BR');
+                        })()}
+                      </span>
                     </div>
                   ))
                 ) : (

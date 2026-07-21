@@ -31,7 +31,12 @@ function renderContent(text) {
 function PostCard({ post, isRead, onMarkRead }) {
   const [expanded, setExpanded] = useState(false);
   const tagInfo = TAG_INFO[post.tag] || TAG_INFO.novidade;
-  const date = new Date(post.createdAt).toLocaleDateString('pt-BR', {
+  const getSafeDate = (timeVal) => {
+    if (!timeVal) return new Date();
+    const d = new Date(timeVal);
+    return isNaN(d.getTime()) ? new Date() : d;
+  };
+  const date = getSafeDate(post.createdAt || post.timestamp).toLocaleDateString('pt-BR', {
     day: '2-digit', month: 'long', year: 'numeric'
   });
   
