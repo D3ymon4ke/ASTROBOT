@@ -565,6 +565,7 @@ app.post('/api/community/posts', async (req, res) => {
       return res.status(400).json({ error: 'O email é obrigatório.' });
     }
 
+    const sData = sessionData || {};
     const profile = await getUserProfile(email);
     const postObj = {
       email,
@@ -573,13 +574,13 @@ app.post('/api/community/posts', async (req, res) => {
       timestamp: Date.now(),
       comment: comment || '',
       isPublic: isPublic !== false,
-      profit: parseFloat(sessionData.profit || 0),
-      tradesTotal: parseInt(sessionData.tradesTotal || 0),
-      winRate: parseFloat(sessionData.winRate || 0),
-      strategy: sessionData.strategy || 'N/A',
-      symbol: sessionData.symbol || 'N/A',
-      sessionTime: parseInt(sessionData.sessionTime || 0),
-      metaHit: !!sessionData.metaHit,
+      profit: parseFloat(sData.profit || 0),
+      tradesTotal: parseInt(sData.tradesTotal || 0),
+      winRate: parseFloat(sData.winRate || 0),
+      strategy: sData.strategy || 'AI Autopilot PRO',
+      symbol: sData.symbol || 'Volatility 100 Index',
+      sessionTime: parseInt(sData.sessionTime || 0),
+      metaHit: !!sData.metaHit,
       likes: [],
       reactions: { '🔥': [], '🚀': [], '👏': [], '💎': [] },
       comments: [],
