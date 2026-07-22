@@ -171,6 +171,12 @@ export class DerivAPI {
     });
   }
 
+  triggerAutoReset() {
+    this.send({
+      type: 'trigger_auto_reset'
+    });
+  }
+
   send(data) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));

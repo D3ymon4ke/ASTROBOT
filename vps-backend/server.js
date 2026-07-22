@@ -524,6 +524,8 @@ wss.on('connection', (ws) => {
         if (cycle) {
           session.triggerCycle(cycle);
         }
+      } else if (type === 'trigger_auto_reset') {
+        session.triggerAutoReset(true);
       }
       
     } catch (err) {

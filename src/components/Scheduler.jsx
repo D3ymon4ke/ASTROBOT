@@ -14,8 +14,28 @@ export default function Scheduler({
   onTriggerCycleManually,
   schedulerLogs,
   onClearSchedulerLogs,
-  onStopBot
+  onStopBot,
+  autoResetConfig,
+  onSaveAutoResetConfig,
+  onTriggerAutoResetManual
 }) {
+  const defaultAutoReset = {
+    enabled: true,
+    time: '00:10',
+    resetOnAllFinished: true,
+    telegramNotify: true,
+    autoRenew: true
+  };
+
+  const autoReset = { ...defaultAutoReset, ...(autoResetConfig || {}) };
+
+  const handleUpdateAutoReset = (updates) => {
+    const newCfg = { ...autoReset, ...updates };
+    if (onSaveAutoResetConfig) {
+      onSaveAutoResetConfig(newCfg);
+    }
+  };
+
   const defaultCycle = {
     name: '',
     startTime: '09:00',
@@ -1303,6 +1323,121 @@ export default function Scheduler({
                 <strong style={{ color: '#10b981' }}>SYNCED</strong>
               </div>
             </div>
+          </div>
+
+          {/* PAINEL DE RESET AUTOMÁTICO E RENOVAÇÃO */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.65rem',
+            background: 'rgba(139, 92, 246, 0.05)',
+            border: '1px solid rgba(139, 92, 246, 0.25)',
+            borderRadius: '12px',
+            padding: '0.85rem'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--primary-light)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <RefreshCw size={14} className="pulse-primary" /> Reset & Renovação Diária
+              </span>
+              <span style={{
+                fontSize: '0.62rem',
+                fontWeight: '800',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                background: autoReset.autoRenew ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                color: autoReset.autoRenew ? '#10b981' : '#ef4444'
+              }}>
+                {autoReset.autoRenew ? 'RENOVAÇÃO ATIVA 🟢' : 'DESATIVADA 🔴'}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', fontSize: '0.72rem', marginTop: '0.2rem' }}>
+              {/* Reset Enabled Switch */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Reset Automático:</span>
+                <label className="switch" style={{ width: '34px', height: '18px' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!autoReset.enabled}
+                    onChange={(e) => handleUpdateAutoReset({ enabled: e.target.checked })}
+                  />
+                  <span className="slider" style={{ borderRadius: '18px' }}></span>
+                </label>
+              </div>
+
+              {/* Reset Time Input */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Horário do Reset:</span>
+                <input
+                  type="time"
+                  value={autoReset.time || '00:10'}
+                  onChange={(e) => handleUpdateAutoReset({ time: e.target.value })}
+                  style={{
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'white',
+                    borderRadius: '6px',
+                    padding: '2px 6px',
+                    fontSize: '0.72rem',
+                    fontFamily: 'var(--font-mono)'
+                  }}
+                />
+              </div>
+
+              {/* Auto Renew Switch */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Renovação Automática:</span>
+                <label className="switch" style={{ width: '34px', height: '18px' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!autoReset.autoRenew}
+                    onChange={(e) => handleUpdateAutoReset({ autoRenew: e.target.checked })}
+                  />
+                  <span className="slider" style={{ borderRadius: '18px' }}></span>
+                </label>
+              </div>
+
+              {/* Telegram Notify Switch */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Relatório no Telegram:</span>
+                <label className="switch" style={{ width: '34px', height: '18px' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!autoReset.telegramNotify}
+                    onChange={(e) => handleUpdateAutoReset({ telegramNotify: e.target.checked })}
+                  />
+                  <span className="slider" style={{ borderRadius: '18px' }}></span>
+                </label>
+              </div>
+            </div>
+
+            {/* Quick Manual Reset Button */}
+            <button
+              onClick={() => {
+                if (onTriggerAutoResetManual) {
+                  onTriggerAutoResetManual();
+                } else {
+                  handleResetAllCycles();
+                }
+              }}
+              style={{
+                marginTop: '0.35rem',
+                padding: '0.45rem',
+                fontSize: '0.68rem',
+                fontWeight: 'bold',
+                borderRadius: '8px',
+                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(59, 130, 246, 0.25) 100%)',
+                border: '1px solid rgba(139, 92, 246, 0.4)',
+                color: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}
+            >
+              <RefreshCw size={12} /> Resetar & Notificar Telegram Agora
+            </button>
           </div>
 
           {/* Logs Timeline Widget */}

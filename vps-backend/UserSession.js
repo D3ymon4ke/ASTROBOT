@@ -13,6 +13,7 @@ import {
   formatOrderExecuted,
   formatStatusReport,
   formatDailySummary,
+  formatAutoResetMessage,
   deleteTelegramMessages
 } from './utils/telegram.js';
 import { supabase, addCommunityPost, getUserProfile } from './supabase.js';
@@ -52,7 +53,14 @@ const DEFAULT_SETTINGS = {
   telegramNotifWin: true,
   telegramNotifLoss: true,
   telegramNotifDailySummary: true,
-  blacklistedAssets: []
+  blacklistedAssets: [],
+  autoReset: {
+    enabled: true,
+    time: '00:10',
+    resetOnAllFinished: true,
+    telegramNotify: true,
+    autoRenew: true
+  }
 };
 
 const DEFAULT_PLANNING = {
@@ -918,6 +926,91 @@ export class UserSession {
     this.syncSettingsToFirestore();
   }
 
+  triggerAutoReset(manual = false) {
+    const autoResetCfg = (this.settings && this.settings.autoReset) || {
+      enabled: true,
+      time: '00:10',
+      resetOnAllFinished: true,
+      telegramNotify: true,
+      autoRenew: true
+    };
+
+    const finishedCycles = this.cycles.filter(c => ['Meta Batida', 'Stop Atingido', 'Finalizado'].includes(c.status));
+
+    let totalProfit = 0;
+    let totalLoss = 0;
+    let wins = 0;
+    let losses = 0;
+
+    finishedCycles.forEach(c => {
+      if (c.finalProfit !== undefined) {
+        if (c.finalProfit >= 0) {
+          totalProfit += parseFloat(c.finalProfit);
+          wins++;
+        } else {
+          totalLoss += Math.abs(parseFloat(c.finalProfit));
+          losses++;
+        }
+      } else if (c.status === 'Meta Batida') {
+        const val = parseFloat(c.takeProfit || 0);
+        totalProfit += val;
+        wins++;
+      } else if (c.status === 'Stop Atingido') {
+        const val = parseFloat(c.stopLoss || 0);
+        totalLoss += val;
+        losses++;
+      }
+    });
+
+    const netProfit = totalProfit - totalLoss;
+    const summaryStats = {
+      resetTime: autoResetCfg.time || '00:10',
+      totalProfit,
+      totalLoss,
+      netProfit,
+      totalCycles: this.cycles.length,
+      finishedCyclesCount: finishedCycles.length,
+      wins,
+      losses,
+      winRate: (wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0
+    };
+
+    const isAutoRenew = autoResetCfg.autoRenew !== false;
+
+    // Send Telegram Notification if enabled
+    if (autoResetCfg.telegramNotify !== false) {
+      this.sendTelegramNotif('auto_reset', formatAutoResetMessage(summaryStats, isAutoRenew));
+    }
+
+    // Reset cycles status to "Aguardando"
+    this.cycles = this.cycles.map(c => ({
+      ...c,
+      status: 'Aguardando',
+      finalProfit: undefined
+    }));
+
+    if (this.isRunning && !manual) {
+      console.log(`[Scheduler] Pausing running bot on Auto Reset for ${this.email}.`);
+      this.isRunning = false;
+    }
+    this.activeCycleId = null;
+
+    const todayStr = new Date().toDateString();
+    this.lastResetDay = todayStr;
+
+    this.addLog({
+      message: `[Reset Automático] ${manual ? 'Reset manual executado.' : 'Reset diário das ' + summaryStats.resetTime + ' concluído!'} Status dos ciclos renovado para "Aguardando". ${isAutoRenew ? 'Renovação Ativada (ciclos serão executados novamente).' : 'Renovação Desativada.'}`,
+      type: 'success'
+    });
+
+    this.saveToFile();
+    this.syncCyclesToFirestore();
+    this.syncStatusToFirestore();
+    this.syncToClients();
+
+    return summaryStats;
+  }
+
   // This should be run on a 5-second tick from the global server loop
   schedulerTick(now = new Date()) {
     if (!this.schedulerState) return;
@@ -970,25 +1063,29 @@ export class UserSession {
       this.stuckContractStartTime = null;
     }
 
-    // 1. Daily Reset of cycle status to "Aguardando"
+    // 1. Daily Reset / Auto Reset of cycle status to "Aguardando"
     const todayStr = now.toDateString();
+    const autoResetCfg = (this.settings && this.settings.autoReset) || {
+      enabled: true,
+      time: '00:10',
+      resetOnAllFinished: true,
+      telegramNotify: true,
+      autoRenew: true
+    };
+
+    const resetTimeStr = autoResetCfg.time || '00:10';
+    const [targetH, targetM] = (resetTimeStr || '00:10').split(':').map(Number);
+    const currentH = now.getHours();
+    const currentM = now.getMinutes();
+
+    const isTimeReached = (currentH > targetH) || (currentH === targetH && currentM >= targetM);
+
     if (this.lastResetDay === null) {
       this.lastResetDay = todayStr;
       this.saveToFile();
-    } else if (this.lastResetDay !== todayStr) {
-      console.log(`[Scheduler] New day detected (${todayStr}) for ${this.email}. Resetting all cycle statuses to "Aguardando".`);
-      this.cycles = this.cycles.map(c => ({ ...c, status: 'Aguardando' }));
-      this.lastResetDay = todayStr;
-      
-      // Stop the running bot and clear the active cycle ID since it's a new day!
-      if (this.isRunning) {
-        console.log(`[Scheduler] Stopping running bot on new day reset for ${this.email}.`);
-        this.isRunning = false;
-      }
-      this.activeCycleId = null;
-      
-      this.saveToFile();
-      this.syncCyclesToFirestore();
+    } else if (this.lastResetDay !== todayStr && (autoResetCfg.enabled === false || isTimeReached)) {
+      console.log(`[Scheduler] Auto Reset triggered for ${this.email} (Target: ${resetTimeStr}, Current: ${currentH}:${currentM}).`);
+      this.triggerAutoReset(false);
     }
 
     // 1b. Inconsistency check (Active cycle pointing to "Aguardando" or missing)
@@ -1745,6 +1842,9 @@ export class UserSession {
         `${cycleListText || '<i>Nenhum ciclo cadastrado.</i>'}`;
 
       reply(message);
+    } else if (cmd === '/resetciclos' || cmd === '🔄 resetar ciclos' || cmd === 'resetar ciclos') {
+      this.triggerAutoReset(true);
+      reply('🔄 <b>Reset de Ciclos Executado!</b>\nStatus dos ciclos renovado para "Aguardando" e notificação de resumo enviada.');
     } else if (cmd === '/estrategias') {
       const sortedStrats = [...this.strategiesStats].sort((a, b) => b.winRate - a.winRate);
       const stratText = sortedStrats.slice(0, 8).map((st, idx) => {

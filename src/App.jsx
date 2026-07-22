@@ -6356,6 +6356,15 @@ export default function App() {
                 schedulerLogs={schedulerLogs}
                 onClearSchedulerLogs={handleClearSchedulerLogs}
                 onStopBot={stopBot}
+                autoResetConfig={settings.autoReset}
+                onSaveAutoResetConfig={(newAutoReset) => {
+                  handleSettingsChange({ ...settings, autoReset: newAutoReset });
+                  handleSaveSettings();
+                }}
+                onTriggerAutoResetManual={() => {
+                  derivAPI.triggerAutoReset();
+                  addSchedulerLog('Solicitando Reset Manual de Ciclos e Relatório Telegram...', 'warning');
+                }}
               />
             </main>
           );

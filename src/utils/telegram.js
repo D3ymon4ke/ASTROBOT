@@ -181,3 +181,31 @@ export const formatDailySummary = (stats) => {
          `━━━━━━━━━━━━━━━━━━━━━━\n` +
          `🏆 <i>A evolução rumo à liberdade financeira continua!</i>`;
 };
+
+// Format Auto Reset Message (Reset Automático & Renovação de Ciclos)
+export const formatAutoResetMessage = (stats, autoRenew = true) => {
+  const netProfit = stats.netProfit !== undefined ? stats.netProfit : ((stats.totalProfit || 0) - (stats.totalLoss || 0));
+  const profitSign = netProfit >= 0 ? '+' : '';
+  const winRate = stats.totalCycles > 0 && stats.wins !== undefined
+    ? ((stats.wins / Math.max(1, stats.wins + stats.losses)) * 100)
+    : (stats.winRate || 0);
+
+  const renewStatusText = autoRenew ? 'ATIVADA 🟢' : 'DESATIVADA 🔴';
+  const renewNotice = autoRenew
+    ? `🚀 <i>O botão de renovação automática está ATIVADO. O bot executará novamente todos os ciclos agendados no novo período!</i>`
+    : `⏸️ <i>Renovação automática desativada. Os ciclos foram resetados mas permanecerão pausados.</i>`;
+
+  return `🔄 <b>ASTROBOT • RESET AUTOMÁTICO DE CICLOS</b>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `⏰ <b>Horário do Reset:</b> <code>${stats.resetTime || '00:10'}</code>\n` +
+         `📅 <b>Período Concluído:</b> <code>Ciclo do Dia Anterior</code>\n\n` +
+         `📊 <b>RESUMO OPERACIONAL COMPLETO:</b>\n` +
+         `🟢 <b>Lucro Total:</b> <code>+$${parseFloat(stats.totalProfit || 0).toFixed(2)}</code>\n` +
+         `🔴 <b>Perda Total:</b> <code>-$${Math.abs(parseFloat(stats.totalLoss || 0)).toFixed(2)}</code>\n` +
+         `💵 <b>Resultado Líquido:</b> <code>${profitSign}$${parseFloat(netProfit).toFixed(2)}</code>\n` +
+         `🏆 <b>Missões Finalizadas:</b> <code>${stats.finishedCyclesCount || 0} de ${stats.totalCycles || 0}</code>\n` +
+         `🎯 <b>Assertividade Geral:</b> <code>${parseFloat(winRate).toFixed(1)}%</code>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `🔄 <b>Status de Renovação:</b> <code>${renewStatusText}</code>\n\n` +
+         renewNotice;
+};
