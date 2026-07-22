@@ -34,6 +34,9 @@ export default function Scheduler({
     disableSlowStrategies: false,
     disableMaCrossover: false,
     minProbability: 90,
+    minWinRate: 65,
+    backupSymbol: '1HZ100V',
+    lockProfitSecured: true,
     icon: '🤖',
     color: '#8b5cf6' // Purple
   };
@@ -47,6 +50,9 @@ export default function Scheduler({
     icon: c.icon || defaultCycle.icon,
     color: c.color || defaultCycle.color,
     minProbability: c.minProbability || defaultCycle.minProbability,
+    minWinRate: c.minWinRate || defaultCycle.minWinRate,
+    backupSymbol: c.backupSymbol || defaultCycle.backupSymbol,
+    lockProfitSecured: c.lockProfitSecured ?? defaultCycle.lockProfitSecured,
     moneyManagement: c.moneyManagement || (parseInt(c.martingaleLevels) > 0 ? 'martingale' : 'fixed'),
     martingaleLevels: c.martingaleLevels ?? defaultCycle.martingaleLevels,
     martingaleMultiplier: c.martingaleMultiplier ?? defaultCycle.martingaleMultiplier,
@@ -999,8 +1005,7 @@ export default function Scheduler({
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px',
-                    marginLeft: 'auto'
+                    gap: '4px'
                   }}
                 >
                   <Trash2 size={12} /> Excluir
@@ -2057,6 +2062,24 @@ export default function Scheduler({
                         </strong>
                       </div>
                     </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                        Ativo de Contingência / Backup (Failover)
+                      </label>
+                      <select
+                        value={wizardData.backupSymbol || '1HZ100V'}
+                        onChange={(e) => setWizardData({ ...wizardData, backupSymbol: e.target.value })}
+                        style={{ height: '38px', fontSize: '0.85rem' }}
+                      >
+                        {assets.map(a => (
+                          <option key={a.symbol} value={a.symbol}>{a.name} ({a.symbol})</option>
+                        ))}
+                      </select>
+                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
+                        Usado automaticamente se o ativo principal estiver em alta volatilidade ou na Blacklist.
+                      </span>
+                    </div>
                   </div>
                 )}
 
@@ -2204,6 +2227,21 @@ export default function Scheduler({
                             type="checkbox"
                             checked={wizardData.disableMaCrossover}
                             onChange={(e) => setWizardData({ ...wizardData, disableMaCrossover: e.target.checked })}
+                          />
+                          <span className="slider" style={{ borderRadius: '18px' }}></span>
+                        </label>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                        <div>
+                          <strong style={{ fontSize: '0.75rem', color: 'white', display: 'block' }}>Travar Lucros e Garantir Meta (`Lock Profit`)</strong>
+                          <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Encerra o ciclo imediatamente ao bater o Take Profit</span>
+                        </div>
+                        <label className="switch" style={{ width: '34px', height: '18px' }}>
+                          <input
+                            type="checkbox"
+                            checked={wizardData.lockProfitSecured ?? true}
+                            onChange={(e) => setWizardData({ ...wizardData, lockProfitSecured: e.target.checked })}
                           />
                           <span className="slider" style={{ borderRadius: '18px' }}></span>
                         </label>

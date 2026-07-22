@@ -503,6 +503,33 @@ export default function App() {
     };
   }, []);
 
+  // Keyboard Shortcuts (Alt + 1..9) for Fast Page Switching
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const pageShortcuts = {
+          '1': 'dashboard',
+          '2': 'automation',
+          '3': 'strategies',
+          '4': 'scanner',
+          '5': 'planning',
+          '6': 'reports',
+          '7': 'settings',
+          '8': 'telegram',
+          '9': 'news'
+        };
+        if (pageShortcuts[e.key]) {
+          e.preventDefault();
+          setActivePage(pageShortcuts[e.key]);
+          setIsProfileDropdownOpen(false);
+          setIsNotificationsOpen(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const [isInitializing, setIsInitializing] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -4937,22 +4964,22 @@ export default function App() {
           </div>
 
           {/* Nav links */}
-          <nav style={{ display: 'flex', gap: '1rem' }}>
+          <nav style={{ display: 'flex', gap: '0.75rem' }}>
             {[
-              { id: 'dashboard', label: 'Dashboard', icon: Layers },
-              { id: 'scanner', label: 'Scanner', icon: Cpu },
-              { id: 'strategies', label: 'Estratégias', icon: Sparkles },
-              { id: 'reports', label: 'Relatórios', icon: TrendingUp },
-              { id: 'planning', label: 'Planejamento', icon: Target },
-              { id: 'automation', label: 'Automação', icon: Calendar },
-              { id: 'telegram', label: 'Telegram', icon: Send },
-              { id: 'news', label: 'Atualizações', icon: Newspaper },
+              { id: 'dashboard', label: 'Dashboard', icon: Layers, shortcut: 'Alt+1' },
+              { id: 'automation', label: 'Automação', icon: Calendar, shortcut: 'Alt+2' },
+              { id: 'strategies', label: 'Estratégias', icon: Sparkles, shortcut: 'Alt+3' },
+              { id: 'scanner', label: 'Scanner', icon: Cpu, shortcut: 'Alt+4' },
+              { id: 'planning', label: 'Planejamento', icon: Target, shortcut: 'Alt+5' },
+              { id: 'reports', label: 'Relatórios', icon: TrendingUp, shortcut: 'Alt+6' },
+              { id: 'telegram', label: 'Telegram', icon: Send, shortcut: 'Alt+7' },
+              { id: 'news', label: 'Atualizações', icon: Newspaper, shortcut: 'Alt+8' },
               { id: 'downloads', label: 'Downloads', icon: Download },
               ...(showBetaFeatures ? [{ id: 'community', label: 'Comunidade', icon: Users, badge: 'Beta' }] : []),
               ...(isAdminLoggedIn ? [{ id: 'admin', label: 'Admin', icon: ShieldCheck }] : [])
             ].map((tab) => {
               const IconComp = tab.icon;
-              const isActive = activePage === tab.id;
+              const isActive = activePage === tab.id || (tab.id === 'automation' && activePage === 'scheduler');
               return (
                 <button
                   key={tab.id}
@@ -4961,25 +4988,29 @@ export default function App() {
                     setIsProfileDropdownOpen(false);
                     setIsNotificationsOpen(false);
                   }}
+                  title={tab.shortcut ? `Atalho: ${tab.shortcut}` : undefined}
                   style={{
-                    background: 'transparent',
+                    background: isActive ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
                     border: 'none',
                     color: isActive ? 'var(--primary-light)' : 'var(--text-secondary)',
                     borderBottom: isActive ? '2px solid var(--primary-light)' : '2px solid transparent',
-                    padding: '0.5rem 0.25rem',
+                    padding: '0.5rem 0.6rem',
                     fontSize: '0.8rem',
                     fontWeight: isActive ? '700' : '500',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    borderRadius: '0px',
-                    transition: 'all 0.2s ease',
+                    borderRadius: '6px 6px 0 0',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                     height: 'auto'
                   }}
                 >
                   <IconComp size={13} />
                   <span>{tab.label}</span>
+                  {tab.shortcut && (
+                    <span className="nav-shortcut-badge">{tab.shortcut}</span>
+                  )}
                   {tab.badge && (
                     <span style={{
                       background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)',
@@ -5443,7 +5474,7 @@ export default function App() {
       </header>
 
       {/* Main page router viewport */}
-      <div key={activePage} className="page-transition">
+      <div key={activePage} className="page-transition-container">
       {(() => {
         if (activePage === 'dashboard') {
           return (

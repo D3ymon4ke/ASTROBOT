@@ -843,7 +843,7 @@ export class UserSession {
     // > 0 means martingale should be active
     const management = cycle.management || cycle.moneyManagement ||
       (parseInt(maxGale) > 0 ? 'martingale' : 'fixed');
-    const autopilot = cycle.autopilot ?? (strategyId === 'autopilot') ?? false;
+    const autopilot = cycle.autopilot ?? (strategyId === 'autopilot');
     const stake = cycle.stake ?? cycle.stakeValue ?? parseFloat(this.settings.stakeValue);
     const stopLoss = cycle.stopLoss ?? parseFloat(this.settings.stopLoss);
     const takeProfit = cycle.takeProfit ?? parseFloat(this.settings.takeProfit);

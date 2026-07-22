@@ -1242,4 +1242,121 @@ input:checked + .slider:before {
   letter-spacing: 1px;
 }
 
+/* Page Transition & Fluid Navigation System */
+.page-transition-container {
+  width: 100%;
+  height: 100%;
+  animation: pageFadeSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes pageFadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.nav-item-glow {
+  position: relative;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-item-glow:hover {
+  background: rgba(139, 92, 246, 0.08) !important;
+  color: #ffffff !important;
+  transform: translateX(3px);
+}
+
+.nav-item-active-glow {
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.18) 0%, rgba(139, 92, 246, 0.04) 100%) !important;
+  border-left: 3px solid var(--primary-light) !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 0 15px rgba(139, 92, 246, 0.12), 0 2px 10px rgba(0, 0, 0, 0.2) !important;
+}
+
+.nav-item-active-glow::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary-light);
+  box-shadow: 0 0 8px var(--primary-light);
+  animation: pulse-green 1.5s infinite ease-in-out;
+}
+
+.nav-shortcut-badge {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  margin-left: auto;
+  transition: all 0.2s ease;
+}
+
+.nav-item-glow:hover .nav-shortcut-badge,
+.nav-item-active-glow .nav-shortcut-badge {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: var(--primary-light);
+}
+
+/* Mission Timeline & Progress Bar */
+.mission-progress-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.mission-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #8b5cf6 0%, #d946ef 50%, #10b981 100%);
+  background-size: 200% 100%;
+  border-radius: 10px;
+  transition: width 0.4s ease;
+  animation: progressStripes 2s linear infinite;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+}
+
+@keyframes progressStripes {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.gatekeeper-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.gatekeeper-badge.warning {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+
 
