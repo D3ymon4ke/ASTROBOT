@@ -2499,13 +2499,51 @@ export default function App() {
           </nav>
 
           {/* Call-to-Actions (Aligned right) */}
-          <div className="navbar-right-ctas" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, justifyContent: 'flex-end', minWidth: '240px' }}>
-            <button 
-              className="cta-connect"
-              onClick={() => setShowLanding(false)}
-            >
-              CONECTAR AO ROBÔ
-            </button>
+          <div className="navbar-right-ctas" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, justifyContent: 'flex-end', minWidth: '240px' }}>
+            {userEmail ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255, 255, 255, 0.05)', padding: '4px 10px', borderRadius: '20px', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+                  {profileImage ? (
+                    <img src={profileImage} alt="Profile" style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <User size={13} style={{ color: 'var(--primary-light)' }} />
+                  )}
+                  <span style={{ fontSize: '0.72rem', fontWeight: 'bold', color: 'white' }}>
+                    {welcomeName ? welcomeName.split(' ')[0] : 'Usuário'}
+                  </span>
+                </div>
+                <button 
+                  className="cta-connect"
+                  onClick={() => setShowLanding(false)}
+                  style={{ padding: '6px 14px', fontSize: '0.75rem' }}
+                >
+                  IR PARA O PAINEL
+                </button>
+                <button 
+                  onClick={handleLogout}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: 'var(--danger)',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.72rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  SAIR DA CONTA
+                </button>
+              </div>
+            ) : (
+              <button 
+                className="cta-connect"
+                onClick={() => setShowLanding(false)}
+              >
+                CONECTAR AO ROBÔ
+              </button>
+            )}
           </div>
 
           {/* Mobile hamburger menu toggle */}
@@ -2599,16 +2637,50 @@ export default function App() {
                   </button>
                 )}
 
-                <button 
-                  className="cta-connect"
-                  onClick={() => {
-                    setShowLanding(false);
-                    setMobileMenuOpen(false);
-                  }}
-                  style={{ width: '100%' }}
-                >
-                  CONECTAR AO ROBÔ
-                </button>
+                {userEmail ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                    <button 
+                      className="cta-connect"
+                      onClick={() => {
+                        setShowLanding(false);
+                        setMobileMenuOpen(false);
+                      }}
+                      style={{ width: '100%' }}
+                    >
+                      IR PARA O PAINEL
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        handleLogout();
+                      }}
+                      style={{
+                        width: '100%',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        color: 'var(--danger)',
+                        padding: '8px',
+                        borderRadius: '8px',
+                        fontSize: '0.75rem',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      SAIR DA CONTA
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    className="cta-connect"
+                    onClick={() => {
+                      setShowLanding(false);
+                      setMobileMenuOpen(false);
+                    }}
+                    style={{ width: '100%' }}
+                  >
+                    CONECTAR AO ROBÔ
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -2682,7 +2754,7 @@ export default function App() {
                       onClick={() => setShowLanding(false)}
                       style={{ padding: '0.95rem 2.5rem', fontSize: '0.95rem', borderRadius: '12px' }}
                     >
-                      CONECTAR AO ROBÔ
+                      {userEmail ? 'IR PARA O PAINEL' : 'CONECTAR AO ROBÔ'}
                     </button>
                     <button 
                       onClick={() => {
@@ -5362,6 +5434,48 @@ export default function App() {
 
               {/* Left Side: Chart, Timeline & Thermometers */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
+                
+                {/* Deriv Disconnected Warning Banner */}
+                {(!connected || !settings.token) && (
+                  <div className="glass-panel" style={{
+                    padding: '0.85rem 1.25rem',
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                    boxShadow: '0 8px 30px rgba(239, 68, 68, 0.15)',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '1rem',
+                    animation: 'slideIn 0.3s ease'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 10px #ef4444' }} />
+                      <div>
+                        <strong style={{ fontSize: '0.85rem', color: '#ffffff', display: 'block' }}>Deriv Não Conectada</strong>
+                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                          {!settings.token ? 'Insira seu Token da API Deriv para liberar operações automáticas.' : 'Aguardando sincronização com a corretora Deriv...'}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setActivePage('settings')}
+                      style={{
+                        background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+                        color: 'white',
+                        border: 'none',
+                        padding: '6px 14px',
+                        borderRadius: '8px',
+                        fontSize: '0.75rem',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      Configurar Token Deriv
+                    </button>
+                  </div>
+                )}
                 
                 {/* AI recommendations or suggestion banner */}
                 {aiSuggestion && aiSuggestion.active && (
