@@ -1,9 +1,27 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { calculateEMA } from '../strategies/tradingStrategies';
 
+// Helper para gerar velas sintéticas de pré-visualização quando a conexão inicial do mercado ainda não retornou velas
+function generateFallbackCandles(count = 40) {
+  const now = Math.floor(Date.now() / 1000);
+  const candles = [];
+  let basePrice = 149.45;
+  for (let i = count - 1; i >= 0; i--) {
+    const epoch = now - (i * 60);
+    const delta = (Math.random() - 0.48) * 0.45;
+    const open = basePrice;
+    const close = open + delta;
+    const high = Math.max(open, close) + Math.random() * 0.25;
+    const low = Math.min(open, close) - Math.random() * 0.25;
+    basePrice = close;
+    candles.push({ epoch, open, high, low, close });
+  }
+  return candles;
+}
+
 // ─── Pure canvas draw function (called from rAF loop) ───────────────────────
 function drawChart({ canvas, candles, trades, activeTrade, dims, strategy, granularity, viewport, mouse, timestamp }) {
-  if (!canvas || candles.length === 0) return;
+  if (!canvas || !candles || candles.length === 0) return;
 
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
@@ -286,23 +304,34 @@ function drawChart({ canvas, candles, trades, activeTrade, dims, strategy, granu
 }
 
 // ─── React Component ─────────────────────────────────────────────────────────
-export default function Chart({ candles, trades, activeTrade, granularity, strategy }) {
+export default function Chart({ candles = [], trades = [], activeTrade, granularity, strategy }) {
   const canvasRef    = useRef(null);
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 600, height: 350 });
 
-  // Refs so the rAF loop always reads latest values
-  const refs = useRef({ candles, trades, activeTrade, dimensions, strategy, granularity });
-  useEffect(() => { refs.current = { candles, trades, activeTrade, dimensions, strategy, granularity }; });
+  // Gerar velas de fallback sintéticas para que o gráfico NUNCA fique em branco
+  const fallbackCandlesRef = useRef(null);
+  if (!fallbackCandlesRef.current) {
+    fallbackCandlesRef.current = generateFallbackCandles(40);
+  }
+
+  const effectiveCandles = (candles && candles.length > 0) ? candles : fallbackCandlesRef.current;
+  const isSyncing = !candles || candles.length === 0;
+
+  // Refs para que a animação rAF leia sempre os dados mais recentes
+  const refs = useRef({ candles: effectiveCandles, trades, activeTrade, dimensions, strategy, granularity });
+  useEffect(() => { 
+    refs.current = { candles: effectiveCandles, trades, activeTrade, dimensions, strategy, granularity }; 
+  });
 
   // Viewport: { startIdx, count }
   const viewportRef = useRef({ startIdx: 0, count: 40 });
   useEffect(() => {
-    if (candles.length > 0) {
+    if (effectiveCandles.length > 0) {
       const count = viewportRef.current.count;
-      viewportRef.current.startIdx = Math.max(0, candles.length - count);
+      viewportRef.current.startIdx = Math.max(0, effectiveCandles.length - count);
     }
-  }, [candles.length]);
+  }, [effectiveCandles.length]);
 
   // Mouse state
   const mouseRef = useRef({ x: null, y: null, isDragging: false, dragX: 0, dragStart: 0 });
@@ -388,8 +417,8 @@ export default function Chart({ candles, trades, activeTrade, granularity, strat
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const latestPrice = candles.length > 0 ? candles[candles.length - 1].close : null;
-  const isUp = candles.length > 1 ? candles[candles.length - 1].close >= candles[candles.length - 2].close : true;
+  const latestPrice = effectiveCandles.length > 0 ? effectiveCandles[effectiveCandles.length - 1].close : null;
+  const isUp = effectiveCandles.length > 1 ? effectiveCandles[effectiveCandles.length - 1].close >= effectiveCandles[effectiveCandles.length - 2].close : true;
 
   return (
     <div
@@ -397,6 +426,42 @@ export default function Chart({ candles, trades, activeTrade, granularity, strat
       className="glass-panel"
       style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', padding: '10px' }}
     >
+      {/* Overlay de Sincronização Vivo */}
+      {isSyncing && (
+        <div style={{
+          position: 'absolute',
+          top: '46px',
+          left: '10px',
+          right: '10px',
+          bottom: '10px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(9, 14, 26, 0.75)',
+          backdropFilter: 'blur(3px)',
+          borderRadius: '8px',
+          border: '1px solid rgba(139, 92, 246, 0.25)',
+          zIndex: 8,
+          gap: '8px'
+        }}>
+          <div style={{
+            width: '24px',
+            height: '24px',
+            border: '2px solid rgba(139, 92, 246, 0.2)',
+            borderTopColor: '#a78bfa',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite'
+          }} />
+          <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#a78bfa', letterSpacing: '0.5px' }}>
+            SINCRONIZANDO VELAS DO MERCADO...
+          </span>
+          <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+            Conectando à Deriv API & Servidor VPS em Tempo Real
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', padding: '0 8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

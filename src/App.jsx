@@ -1866,7 +1866,7 @@ export default function App() {
       stateRef.current.activeContractId = sync.activeContractId;
       stateRef.current.lastContractDetails = sync.lastContractDetails;
 
-      if (sync.candles) setCandles(sync.candles);
+      if (sync.candles && sync.candles.length > 0) setCandles(sync.candles);
       if (sync.trades) {
         setTrades(sync.trades);
         stateRef.current.trades = sync.trades;
