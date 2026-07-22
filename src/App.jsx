@@ -39,6 +39,19 @@ import {
 import moonImg from './assets/moon.avif';
 import logoImg from './assets/newlogo.png';
 
+const ASSETS_LIST = [
+  { symbol: 'R_100', name: 'Volatilidade 100' },
+  { symbol: '1HZ100V', name: 'Volatilidade 100 (1s)' },
+  { symbol: 'R_75', name: 'Volatilidade 75' },
+  { symbol: '1HZ75V', name: 'Volatilidade 75 (1s)' },
+  { symbol: 'R_50', name: 'Volatilidade 50' },
+  { symbol: '1HZ50V', name: 'Volatilidade 50 (1s)' },
+  { symbol: 'R_25', name: 'Volatilidade 25' },
+  { symbol: '1HZ25V', name: 'Volatilidade 25 (1s)' },
+  { symbol: 'R_10', name: 'Volatilidade 10' },
+  { symbol: '1HZ10V', name: 'Volatilidade 10 (1s)' }
+];
+
 const presetAvatars = [
   // Preset 1: Purple Cyborg
   `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%238B5CF6"/><stop offset="100%" stop-color="%23EC4899"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(%23g1)"/><circle cx="50" cy="37" r="18" fill="%23ffffff" opacity="0.9"/><path d="M22,78 C22,60 34,52 50,52 C66,52 78,60 78,78" fill="%23ffffff" opacity="0.9"/><rect x="42" y="32" width="16" height="4" rx="2" fill="%231E1B4B"/><circle cx="45" cy="38" r="2" fill="%2306B6D4"/><circle cx="55" cy="38" r="2" fill="%2306B6D4"/></svg>`,
@@ -6065,7 +6078,7 @@ export default function App() {
                               borderRadius: '4px'
                             }}
                           >
-                            {assets.map(a => (
+                            {(ASSETS_LIST || []).map(a => (
                               <option key={a.symbol} value={a.symbol}>{a.name} ({a.symbol})</option>
                             ))}
                           </select>
@@ -6126,7 +6139,7 @@ export default function App() {
                         </span>
                       ) : (
                         activeBlacklist.map((item) => {
-                          const assetObj = assets.find(a => a.symbol === item.symbol);
+                          const assetObj = (ASSETS_LIST || []).find(a => a.symbol === item.symbol);
                           const assetLabel = assetObj ? assetObj.name : item.symbol;
                           const remainingMs = item.expiresAt - Date.now();
                           const remainingDays = Math.max(1, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
