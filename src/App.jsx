@@ -620,7 +620,12 @@ export default function App() {
   const [loginSequenceIndex, setLoginSequenceIndex] = useState(null);
 
   // Administrative Panel States
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => {
+    const savedToken = localStorage.getItem('astrobot_admin_token');
+    const savedEmail = localStorage.getItem('astrobot_user_email');
+    const adminEmails = ['deymonmachado@gmail.com', 'lucassmachado9@gmail.com'];
+    return savedToken === 'lucas_astro_admin' || (savedEmail && adminEmails.includes(savedEmail.toLowerCase()));
+  });
   const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
@@ -768,8 +773,10 @@ export default function App() {
             setKeyExpiresAt(user.expiresAt);
             setIsKeyValid(user.licenseStatus === 'active');
 
-            if (user.email === 'deymonmachado@gmail.com') {
+            const adminEmails = ['deymonmachado@gmail.com', 'lucassmachado9@gmail.com'];
+            if (adminEmails.includes(user.email.toLowerCase()) || user.isAdmin) {
               setIsAdminLoggedIn(true);
+              localStorage.setItem('astrobot_admin_token', 'lucas_astro_admin');
             }
 
             // Apply loaded settings if present
@@ -982,6 +989,12 @@ export default function App() {
             setCdKey(user.cdkey);
             setKeyExpiresAt(user.expiresAt);
             setIsKeyValid(user.licenseStatus === 'active');
+
+            const adminEmails = ['deymonmachado@gmail.com', 'lucassmachado9@gmail.com'];
+            if (adminEmails.includes(user.email.toLowerCase()) || user.isAdmin || localStorage.getItem('astrobot_admin_token') === 'lucas_astro_admin') {
+              setIsAdminLoggedIn(true);
+              localStorage.setItem('astrobot_admin_token', 'lucas_astro_admin');
+            }
 
             // Cache details
             localStorage.setItem('astrobot_user_email', user.email);
