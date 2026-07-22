@@ -5060,9 +5060,6 @@ export default function App() {
                 >
                   <IconComp size={13} />
                   <span>{tab.label}</span>
-                  {tab.shortcut && (
-                    <span className="nav-shortcut-badge">{tab.shortcut}</span>
-                  )}
                   {tab.badge && (
                     <span style={{
                       background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)',
