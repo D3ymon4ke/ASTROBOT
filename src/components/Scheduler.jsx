@@ -646,12 +646,17 @@ export default function Scheduler({
                 const isSelected = c.id === selectedCycleId;
                 const statusInfo = getStatusDisplay(c.status);
                 const isRunning = activeCycleId === c.id;
+                const isWin = c.status === 'Meta Batida';
+                const isLoss = c.status === 'Stop Atingido';
+                const isFinished = isWin || isLoss;
 
                 return (
                   <div
                     key={c.id}
                     onClick={() => setSelectedCycleId(c.id)}
                     style={{
+                      position: 'relative',
+                      overflow: 'hidden',
                       padding: '0.85rem 1rem',
                       background: isSelected ? 'rgba(139, 92, 246, 0.08)' : 'rgba(255,255,255,0.01)',
                       borderLeft: `3px solid ${c.color || 'var(--primary-light)'}`,
@@ -667,39 +672,102 @@ export default function Scheduler({
                       boxShadow: isSelected ? '0 4px 15px rgba(139, 92, 246, 0.1)' : 'none'
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 'bold' }}>
-                        <span>{c.icon}</span>
-                        <span style={{ color: c.active ? 'white' : 'var(--text-muted)' }}>{c.name}</span>
-                      </span>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 'bold', fontFamily: 'var(--font-mono)', color: 'var(--primary-light)' }}>
-                        {c.startTime}
-                      </span>
+                    {/* Inner Card Content (Blurred if Finished) */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.4rem',
+                      filter: isFinished ? 'blur(3.5px)' : 'none',
+                      opacity: isFinished ? 0.3 : 1,
+                      pointerEvents: isFinished ? 'none' : 'auto',
+                      transition: 'all 0.3s ease'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 'bold' }}>
+                          <span>{c.icon}</span>
+                          <span style={{ color: c.active ? 'white' : 'var(--text-muted)' }}>{c.name}</span>
+                        </span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 'bold', fontFamily: 'var(--font-mono)', color: 'var(--primary-light)' }}>
+                          {c.startTime}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                        <span>{getCleanSymbolName(c.symbol)}</span>
+                        <span>Stake: ${c.stakeValue}</span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '4px' }}>
+                        <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {c.days.length === 7 ? 'Todos os dias' : `${c.days.length} dias`}
+                        </span>
+                        <span style={{
+                          fontSize: '0.65rem',
+                          fontWeight: 'bold',
+                          color: statusInfo.color,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          {statusInfo.dotClass && (
+                            <span className={statusInfo.dotClass} style={{ width: '5px', height: '5px', boxShadow: 'none' }} />
+                          )}
+                          {statusInfo.text}
+                        </span>
+                      </div>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
-                      <span>{getCleanSymbolName(c.symbol)}</span>
-                      <span>Stake: ${c.stakeValue}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '4px' }}>
-                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        {c.days.length === 7 ? 'Todos os dias' : `${c.days.length} dias`}
-                      </span>
-                      <span style={{
-                        fontSize: '0.65rem',
-                        fontWeight: 'bold',
-                        color: statusInfo.color,
+                    {/* Translucent Profit/Loss Overlay on Finished Cycle */}
+                    {isFinished && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: isWin 
+                          ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 78, 59, 0.75) 100%)' 
+                          : 'linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(127, 29, 29, 0.75) 100%)',
+                        backdropFilter: 'blur(3px)',
                         display: 'flex',
+                        flexDirection: 'column',
                         alignItems: 'center',
-                        gap: '4px'
+                        justifyContent: 'center',
+                        gap: '2px',
+                        zIndex: 10,
+                        borderRadius: '8px',
+                        border: isWin ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(239, 68, 68, 0.5)',
+                        boxShadow: isWin ? '0 0 15px rgba(16, 185, 129, 0.3)' : '0 0 15px rgba(239, 68, 68, 0.3)',
+                        pointerEvents: 'auto'
                       }}>
-                        {statusInfo.dotClass && (
-                          <span className={statusInfo.dotClass} style={{ width: '5px', height: '5px', boxShadow: 'none' }} />
-                        )}
-                        {statusInfo.text}
-                      </span>
-                    </div>
+                        <div style={{
+                          fontSize: '0.62rem',
+                          fontWeight: '800',
+                          color: isWin ? '#34d399' : '#f87171',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          {isWin ? '🏆 META BATIDA' : '🛑 STOP LOSS ATINGIDO'}
+                        </div>
+                        <div style={{
+                          fontSize: '1.05rem',
+                          fontWeight: '900',
+                          fontFamily: 'var(--font-mono)',
+                          color: 'white',
+                          textShadow: isWin ? '0 0 10px rgba(16, 185, 129, 0.8)' : '0 0 10px rgba(239, 68, 68, 0.8)'
+                        }}>
+                          {c.finalProfit !== undefined 
+                            ? (c.finalProfit >= 0 ? `+$${parseFloat(c.finalProfit).toFixed(2)}` : `-$${Math.abs(parseFloat(c.finalProfit)).toFixed(2)}`)
+                            : (isWin ? `+$${c.takeProfit}` : `-$${c.stopLoss}`)}
+                        </div>
+                        <span style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.7)', fontWeight: '700' }}>
+                          Missão Concluída
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
               })

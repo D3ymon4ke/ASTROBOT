@@ -362,6 +362,42 @@ export default function App() {
   const [tempProfileImage, setTempProfileImage] = useState('');
   const [isProfileSaving, setIsProfileSaving] = useState(false);
 
+  // Asset Blacklist System State
+  const [blacklistedAssets, setBlacklistedAssets] = useState(() => {
+    try {
+      const saved = localStorage.getItem('astrobot_blacklisted_assets');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [showAddBlacklistForm, setShowAddBlacklistForm] = useState(false);
+  const [newBlacklistSymbol, setNewBlacklistSymbol] = useState('R_100');
+  const [newBlacklistDays, setNewBlacklistDays] = useState(3);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('astrobot_blacklisted_assets', JSON.stringify(blacklistedAssets));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [blacklistedAssets]);
+
+  const handleAddBlacklist = (symbol, days = 3, reason = 'Bloqueio Manual') => {
+    if (!symbol) return;
+    const expiresAt = Date.now() + (days * 24 * 60 * 60 * 1000);
+    setBlacklistedAssets(prev => {
+      const filtered = (prev || []).filter(b => b.symbol !== symbol && b.expiresAt > Date.now());
+      return [...filtered, { symbol, addedAt: Date.now(), expiresAt, days, reason }];
+    });
+  };
+
+  const handleRemoveBlacklist = (symbol) => {
+    setBlacklistedAssets(prev => (prev || []).filter(b => b.symbol !== symbol));
+  };
+
+  const activeBlacklist = (blacklistedAssets || []).filter(b => b.expiresAt > Date.now());
+
   useEffect(() => {
     if (showWelcome) {
       setTempProfileName(welcomeName || localStorage.getItem('astrobot_custom_name') || '');
@@ -5970,6 +6006,169 @@ export default function App() {
                         }
                         return "Escaneando dados históricos e EMAs 9/21. Permaneça conectado.";
                       })()}
+                    </div>
+                  </div>
+
+                  {/* Blacklisted Assets Widget (Below AI Virtual Assistant) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.65rem', marginTop: '0.2rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <ShieldAlert size={11} style={{ color: '#ef4444' }} />
+                        <span style={{ fontSize: '0.55rem', fontWeight: 'bold', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          Ativos em Blacklist ({activeBlacklist.length})
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setShowAddBlacklistForm(!showAddBlacklistForm)}
+                        style={{
+                          background: showAddBlacklistForm ? 'rgba(239, 68, 68, 0.25)' : 'rgba(239, 68, 68, 0.1)',
+                          border: '1px solid rgba(239, 68, 68, 0.35)',
+                          color: '#f87171',
+                          borderRadius: '4px',
+                          padding: '2px 7px',
+                          fontSize: '0.55rem',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {showAddBlacklistForm ? '✖ Fechar' : '+ Bloquear'}
+                      </button>
+                    </div>
+
+                    {showAddBlacklistForm && (
+                      <div style={{
+                        background: 'rgba(239, 68, 68, 0.08)',
+                        border: '1px solid rgba(239, 68, 68, 0.25)',
+                        borderRadius: '6px',
+                        padding: '8px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                        marginTop: '2px'
+                      }}>
+                        <span style={{ fontSize: '0.58rem', fontWeight: 'bold', color: 'white' }}>Bloquear ativo manualmente:</span>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <select
+                            value={newBlacklistSymbol}
+                            onChange={(e) => setNewBlacklistSymbol(e.target.value)}
+                            style={{
+                              flex: 1,
+                              padding: '4px',
+                              fontSize: '0.62rem',
+                              background: '#09090f',
+                              color: 'white',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            {assets.map(a => (
+                              <option key={a.symbol} value={a.symbol}>{a.name} ({a.symbol})</option>
+                            ))}
+                          </select>
+                          <select
+                            value={newBlacklistDays}
+                            onChange={(e) => setNewBlacklistDays(parseInt(e.target.value))}
+                            style={{
+                              width: '75px',
+                              padding: '4px',
+                              fontSize: '0.62rem',
+                              background: '#09090f',
+                              color: 'white',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            <option value={1}>1 dia</option>
+                            <option value={3}>3 dias</option>
+                            <option value={7}>7 dias</option>
+                            <option value={30}>30 dias</option>
+                          </select>
+                          <button
+                            onClick={() => {
+                              handleAddBlacklist(newBlacklistSymbol, newBlacklistDays, 'Bloqueio Manual');
+                              setShowAddBlacklistForm(false);
+                            }}
+                            style={{
+                              background: '#ef4444',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              fontSize: '0.6rem',
+                              fontWeight: 'bold',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Bloquear
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{
+                      background: 'rgba(9, 9, 15, 0.45)',
+                      borderRadius: '6px',
+                      padding: '7px 9px',
+                      borderLeft: '2px solid #ef4444',
+                      maxHeight: '110px',
+                      overflowY: 'auto',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '5px'
+                    }}>
+                      {activeBlacklist.length === 0 ? (
+                        <span style={{ fontSize: '0.6rem', color: '#64748b', fontStyle: 'italic' }}>
+                          Nenhum ativo bloqueado no momento. A IA opera livremente em todos os mercados.
+                        </span>
+                      ) : (
+                        activeBlacklist.map((item) => {
+                          const assetObj = assets.find(a => a.symbol === item.symbol);
+                          const assetLabel = assetObj ? assetObj.name : item.symbol;
+                          const remainingMs = item.expiresAt - Date.now();
+                          const remainingDays = Math.max(1, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
+
+                          return (
+                            <div key={item.symbol} style={{
+                              display: 'flex',
+                              justify: 'space-between',
+                              alignItems: 'center',
+                              background: 'rgba(239, 68, 68, 0.06)',
+                              border: '1px solid rgba(239, 68, 68, 0.15)',
+                              borderRadius: '4px',
+                              padding: '4px 6px'
+                            }}>
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <strong style={{ fontSize: '0.65rem', color: '#f87171' }}>
+                                  🚫 {assetLabel} <span style={{ fontSize: '0.55rem', color: '#94a3b8' }}>({item.symbol})</span>
+                                </strong>
+                                <span style={{ fontSize: '0.52rem', color: '#64748b' }}>
+                                  {item.reason || 'Stop Loss'} • Expira em {remainingDays}d
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handleRemoveBlacklist(item.symbol)}
+                                style={{
+                                  background: 'rgba(56, 189, 248, 0.1)',
+                                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                                  color: '#38bdf8',
+                                  fontSize: '0.58rem',
+                                  fontWeight: 'bold',
+                                  cursor: 'pointer',
+                                  padding: '2px 6px',
+                                  borderRadius: '3px'
+                                }}
+                                title="Desbloquear este ativo"
+                              >
+                                🔓 Liberar
+                              </button>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
 

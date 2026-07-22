@@ -51,7 +51,8 @@ const DEFAULT_SETTINGS = {
   telegramEnabled: false,
   telegramNotifWin: true,
   telegramNotifLoss: true,
-  telegramNotifDailySummary: true
+  telegramNotifDailySummary: true,
+  blacklistedAssets: []
 };
 
 const DEFAULT_PLANNING = {
@@ -861,7 +862,17 @@ export class UserSession {
     const prevGranularity = this.settings.granularity;
 
     // Apply optional settings from cycle if present
-    if (cycle.symbol) this.settings.symbol = cycle.symbol;
+    let chosenSymbol = cycle.symbol || this.settings.symbol;
+    if (this.isAssetBlacklisted(chosenSymbol)) {
+      this.addLog({
+        message: `⚠️ [Blacklist Protection] O ativo ${chosenSymbol} está bloqueado na blacklist! Chaveando automaticamente para um ativo seguro...`,
+        type: 'warning'
+      });
+      const altAssets = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_50', '1HZ50V', 'R_25', '1HZ25V', 'R_10', '1HZ10V'];
+      chosenSymbol = altAssets.find(s => !this.isAssetBlacklisted(s)) || 'R_100';
+    }
+    this.settings.symbol = chosenSymbol;
+
     if (cycle.granularity) this.settings.granularity = cycle.granularity.toString();
     if (cycle.disableSlowStrategies !== undefined) this.settings.disableSlowStrategies = cycle.disableSlowStrategies;
     if (cycle.disableMaCrossover !== undefined) this.settings.disableMaCrossover = cycle.disableMaCrossover;
@@ -1196,7 +1207,7 @@ export class UserSession {
 
       if (this.activeCycleId) {
         const cycleId = this.activeCycleId;
-        this.cycles = this.cycles.map(c => c.id === cycleId ? { ...c, status: 'Meta Batida' } : c);
+        this.cycles = this.cycles.map(c => c.id === cycleId ? { ...c, status: 'Meta Batida', finalProfit: profit } : c);
         this.activeCycleId = null;
         this.syncCyclesToFirestore();
       }
@@ -1215,9 +1226,14 @@ export class UserSession {
 
       if (this.activeCycleId) {
         const cycleId = this.activeCycleId;
-        this.cycles = this.cycles.map(c => c.id === cycleId ? { ...c, status: 'Stop Atingido' } : c);
+        this.cycles = this.cycles.map(c => c.id === cycleId ? { ...c, status: 'Stop Atingido', finalProfit: profit } : c);
         this.activeCycleId = null;
         this.syncCyclesToFirestore();
+      }
+
+      // Auto-blacklist current asset for 3 days to avoid repeat Stop Loss
+      if (this.settings.symbol) {
+        this.addAssetToBlacklist(this.settings.symbol, 3, 'Stop Loss Atingido');
       }
 
       this.autoShareSessionResult(profit, false);
@@ -1789,6 +1805,31 @@ export class UserSession {
         reply('⚠️ <b>Não foi possível limpar o chat.</b> ID da mensagem ausente.');
       }
     }
+  }
+
+  addAssetToBlacklist(symbol, days = 3, reason = 'Stop Loss Atingido') {
+    if (!symbol) return;
+    const expiresAt = Date.now() + (days * 24 * 60 * 60 * 1000);
+    const existing = this.settings.blacklistedAssets || [];
+    const updated = existing.filter(b => b.symbol !== symbol && b.expiresAt > Date.now());
+    updated.push({
+      symbol,
+      addedAt: Date.now(),
+      expiresAt,
+      days,
+      reason
+    });
+    this.settings.blacklistedAssets = updated;
+    this.addLog({
+      message: `[Blacklist System] Ativo ${symbol} foi colocado na lista negra por ${days} dias (${reason}).`,
+      type: 'warning'
+    });
+    this.saveSettings();
+  }
+
+  isAssetBlacklisted(symbol) {
+    const list = this.settings.blacklistedAssets || [];
+    return list.some(b => b.symbol === symbol && b.expiresAt > Date.now());
   }
 
   destroy() {
