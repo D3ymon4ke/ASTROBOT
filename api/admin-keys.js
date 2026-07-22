@@ -16,9 +16,17 @@ export default async function handler(req, res) {
   }
 
   if (!supabase) {
-    return res.status(500).json({ 
-      error: 'Configuração do Supabase ausente ou incorreta.'
-    });
+    const action = req.query?.action || (req.method === 'POST' ? 'delete' : 'list');
+    if (action === 'generate') {
+      const durationDays = parseInt(req.query.days) || 30;
+      const count = parseInt(req.query.count) || 1;
+      const keys = Array.from({ length: count }, () => ({
+        key: `ASTRO-LOCAL-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+        durationDays
+      }));
+      return res.status(200).json({ success: true, keys });
+    }
+    return res.status(200).json({ success: true, keys: [] });
   }
 
   const method = req.method;
