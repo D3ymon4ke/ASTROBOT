@@ -2118,7 +2118,7 @@ export default function App() {
     return <Overlay />;
   }
 
-  if (showWelcome) {
+  if (showWelcome && !showLanding) {
     return (
       <div style={{
         width: '100vw',
