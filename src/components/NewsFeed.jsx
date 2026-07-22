@@ -11,6 +11,7 @@ const TAG_INFO = {
 
 // Render inline images from markdown-like syntax
 function renderContent(text) {
+  if (!text) return null;
   const parts = text.split(/(!\[.*?\]\(.*?\))/g);
   return parts.map((part, i) => {
     const imgMatch = part.match(/!\[(.*?)\]\((.*?)\)/);
@@ -29,6 +30,7 @@ function renderContent(text) {
 }
 
 function PostCard({ post, isRead, onMarkRead }) {
+  if (!post) return null;
   const [expanded, setExpanded] = useState(false);
   const tagInfo = TAG_INFO[post.tag] || TAG_INFO.novidade;
   const getSafeDate = (timeVal) => {
@@ -40,10 +42,13 @@ function PostCard({ post, isRead, onMarkRead }) {
     day: '2-digit', month: 'long', year: 'numeric'
   });
   
+  const titleText = post.title || 'Sem título';
+  const contentText = post.content || '';
+
   const isVersionPost = post.tag === 'patch' || 
-    /v\d+/i.test(post.title) || 
-    /vers[ãa]o/i.test(post.title) || 
-    post.title.toLowerCase().includes('desktop');
+    /v\d+/i.test(titleText) || 
+    /vers[ãa]o/i.test(titleText) || 
+    titleText.toLowerCase().includes('desktop');
 
   const handleExpand = () => {
     setExpanded(v => !v);
@@ -119,7 +124,7 @@ function PostCard({ post, isRead, onMarkRead }) {
 
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: '800', color: 'white', margin: '0 0 0.4rem 0', lineHeight: '1.3', flex: 1 }}>
-            {post.title}
+            {titleText}
           </h3>
           {isVersionPost && (
             <img 
@@ -139,7 +144,7 @@ function PostCard({ post, isRead, onMarkRead }) {
 
         {!expanded && (
           <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-            {post.content.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 200)}
+            {contentText.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 200)}
           </p>
         )}
 
@@ -189,8 +194,10 @@ export default function NewsFeed({ posts = [], loading = false }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   };
 
-  const pinnedPosts = posts.filter(p => p.pinned);
-  const regularPosts = posts.filter(p => !p.pinned);
+  // Filter only posts with a valid non-empty title (exclude community feed posts)
+  const validNews = (posts || []).filter(p => p && p.title && p.title.trim() !== '');
+  const pinnedPosts = validNews.filter(p => p.pinned);
+  const regularPosts = validNews.filter(p => !p.pinned);
   const allSorted = [...pinnedPosts, ...regularPosts];
 
   const filtered = filterTag === 'all' ? allSorted : allSorted.filter(p => p.tag === filterTag);

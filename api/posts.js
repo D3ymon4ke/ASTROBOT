@@ -19,6 +19,7 @@ export default async function handler(req, res) {
       const { data: postsData, error } = await supabase
         .from('posts')
         .select('*')
+        .not('title', 'is', null)
         .order('created_at', { ascending: false })
         .limit(50);
 
