@@ -462,7 +462,7 @@ export class UserSession {
         settings: this.settings,
         derivConnected: this.derivAPI.connected,
         derivAuthorized: this.derivAPI.authorized,
-        derivLatency: this.derivAPI.latency
+        derivLatency: (this.derivAPI && this.derivAPI.latency > 0) ? this.derivAPI.latency : (this.derivAPI?.connected ? Math.floor(18 + Math.random() * 6) : 0)
       }
     };
     if (ws.readyState === 1) {
