@@ -1432,8 +1432,9 @@ input:checked + .slider:before {
 .animated-gradient-text {
   background: linear-gradient(135deg, #ffffff 0%, #c084fc 35%, #38bdf8 70%, #ffffff 100%);
   background-size: 200% 200%;
-  WebkitBackgroundClip: text;
-  WebkitTextFillColor: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
   animation: textGradientShift 6s ease infinite;
 }
 

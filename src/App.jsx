@@ -2967,7 +2967,7 @@ export default function App() {
                         <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }} />
                         <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#eab308' }} />
                         <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }} />
-                        <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontWeight: 'bold', marginLeft: '6px' }}>COMMAND_CENTER_IA 3D</span>
+                        <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontWeight: 'bold', marginLeft: '6px' }}>COMMAND_CENTER_IA</span>
                       </div>
                       <div style={{
                         background: 'rgba(34, 197, 94, 0.12)',
