@@ -1358,5 +1358,107 @@ input:checked + .slider:before {
   color: #fbbf24;
 }
 
+/* ----------------------------------------------------
+   3D PERSPECTIVE & MOTION EFFECTS FOR LANDING PAGE
+   ---------------------------------------------------- */
+.perspective-container {
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+.card-3d-tilt {
+  transition: transform 0.15s cubic-bezier(0.2, 0, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.card-3d-tilt:hover {
+  box-shadow: 
+    0 25px 50px -12px rgba(139, 92, 246, 0.25),
+    0 0 30px rgba(56, 189, 248, 0.15);
+  border-color: rgba(139, 92, 246, 0.5) !important;
+}
+
+.layer-3d-depth-1 {
+  transform: translateZ(20px);
+}
+.layer-3d-depth-2 {
+  transform: translateZ(40px);
+}
+.layer-3d-depth-3 {
+  transform: translateZ(60px);
+}
+
+@keyframes float3D {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(2deg);
+  }
+}
+
+.float-3d {
+  animation: float3D 6s ease-in-out infinite;
+}
+
+@keyframes pulseSphere3D {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.25;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 0.45;
+  }
+}
+
+.pulse-sphere-3d {
+  animation: pulseSphere3D 5s ease-in-out infinite;
+}
+
+@keyframes textGradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animated-gradient-text {
+  background: linear-gradient(135deg, #ffffff 0%, #c084fc 35%, #38bdf8 70%, #ffffff 100%);
+  background-size: 200% 200%;
+  WebkitBackgroundClip: text;
+  WebkitTextFillColor: transparent;
+  animation: textGradientShift 6s ease infinite;
+}
+
+.hologram-glow-border {
+  position: relative;
+}
+.hologram-glow-border::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(56, 189, 248, 0.4), rgba(217, 70, 239, 0.4));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+.hologram-glow-border:hover::after {
+  opacity: 1;
+}
+
+
 
 

@@ -23,6 +23,7 @@ import LightPillar from './components/LightPillar';
 import TelegramConfig from './components/TelegramConfig';
 import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, TrendingUp, Zap, CheckCircle, Menu, X, Percent, TrendingDown, Target, Newspaper, Bell, User, Camera, Upload, Send, Download, Users } from 'lucide-react';
 import CommunityFeed from './components/CommunityFeed';
+import Landing3DCard from './components/Landing3DCard';
 import { loadDbTrades, saveDbTrade, clearDbTrades, saveDbTrades } from './utils/db';
 import { playWinSound, playLossSound } from './utils/sound';
 import {
@@ -2855,18 +2856,14 @@ export default function App() {
                     </div>
                   </div>
 
-                  <h1 style={{
+                  <h1 className="animated-gradient-text" style={{
                     fontSize: '3.6rem',
                     fontWeight: '900',
                     lineHeight: '1.15',
                     margin: 0,
                     fontFamily: "'Outfit', sans-serif",
                     letterSpacing: '-1.5px',
-                    color: '#ffffff',
-                    textShadow: '0 0 30px rgba(139, 92, 246, 0.15)',
-                    background: 'linear-gradient(135deg, #ffffff 40%, #c084fc 100%)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent'
+                    textShadow: '0 0 30px rgba(139, 92, 246, 0.2)'
                   }}>
                     A Inteligência Artificial que Opera na Deriv por Você
                   </h1>
@@ -2929,39 +2926,37 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Lado Direito - Live Simulated Mockup */}
-                <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }} className="hero-mockup-container">
+                {/* Lado Direito - Live Simulated 3D Mockup */}
+                <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }} className="hero-mockup-container perspective-container">
                   {/* Glowing purple nebula behind */}
-                  <div style={{
+                  <div className="pulse-sphere-3d" style={{
                     position: 'absolute',
                     top: '50%',
                     left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    width: '320px',
-                    height: '320px',
+                    width: '340px',
+                    height: '340px',
                     borderRadius: '50%',
-                    background: 'radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, rgba(0,0,0,0) 70%)',
+                    background: 'radial-gradient(circle, rgba(139, 92, 246, 0.3) 0%, rgba(56, 189, 248, 0.1) 40%, rgba(0,0,0,0) 70%)',
                     zIndex: -1,
-                    filter: 'blur(30px)'
+                    filter: 'blur(35px)'
                   }} />
 
-                  {/* Panel Mockup container */}
-                  <div style={{
-                    background: 'rgba(14, 11, 24, 0.8)',
-                    border: '1px solid rgba(139, 92, 246, 0.25)',
-                    borderRadius: '24px',
-                    width: '100%',
-                    maxWidth: '460px',
-                    boxShadow: '0 20px 50px rgba(0,0,0,0.5), 0 0 30px rgba(139, 92, 246, 0.1)',
-                    overflow: 'hidden',
-                    fontFamily: 'var(--font-sans)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    backdropFilter: 'blur(16px)',
-                    position: 'relative'
-                  }}>
+                  {/* Panel Mockup container wrapped in Landing3DCard */}
+                  <Landing3DCard
+                    intensity={16}
+                    glowColor="rgba(139, 92, 246, 0.3)"
+                    style={{
+                      background: 'rgba(14, 11, 24, 0.85)',
+                      border: '1px solid rgba(139, 92, 246, 0.3)',
+                      borderRadius: '24px',
+                      width: '100%',
+                      maxWidth: '460px',
+                      backdropFilter: 'blur(16px)',
+                      overflow: 'hidden'
+                    }}
+                  >
                     {/* Mockup Header */}
-                    <div style={{
+                    <div className="layer-3d-depth-1" style={{
                       padding: '1rem 1.25rem',
                       borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
                       display: 'flex',
@@ -2972,7 +2967,7 @@ export default function App() {
                         <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }} />
                         <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#eab308' }} />
                         <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }} />
-                        <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontWeight: 'bold', marginLeft: '6px' }}>COMMAND_CENTER_IA</span>
+                        <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontWeight: 'bold', marginLeft: '6px' }}>COMMAND_CENTER_IA 3D</span>
                       </div>
                       <div style={{
                         background: 'rgba(34, 197, 94, 0.12)',
@@ -3096,7 +3091,66 @@ export default function App() {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </Landing3DCard>
+                </div>
+              </section>
+
+              {/* DEMO DEMONSTRAÇÃO 3D SECTION */}
+              <section id="painel-preview-section" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem', width: '100%', boxSizing: 'border-box' }}>
+                <div style={{ textAlign: 'center', marginBottom: '3rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#22C55E', letterSpacing: '1.5px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Sparkles size={14} /> DEMONSTRAÇÃO INTERATIVA 3D
+                  </span>
+                  <h2 className="animated-gradient-text" style={{ fontSize: '2.5rem', fontWeight: '900', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
+                    Experimente o ASTROBOT em Tempo Real
+                  </h2>
+                  <p style={{ fontSize: '1rem', color: '#94A3B8', maxWidth: '640px', margin: '0.5rem 0 0 0' }}>
+                    Veja como os módulos de inteligência tridimensional, ciclos automatizados e recuperações trabalham integrados.
+                  </p>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }} className="pricing-grid-responsive">
+                  <Landing3DCard intensity={14} glowColor="rgba(139, 92, 246, 0.3)" style={{ background: 'rgba(14, 11, 24, 0.7)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '20px', padding: '1.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
+                      <div className="feature-card-icon-container" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa' }}><Brain size={24} /></div>
+                      <h3 style={{ fontSize: '1.1rem', color: 'white', margin: 0, fontWeight: 'bold' }}>Piloto Automático IA</h3>
+                    </div>
+                    <p style={{ fontSize: '0.8rem', color: '#94A3B8', lineHeight: '1.6', marginBottom: '1.25rem' }}>
+                      Rastreia até 15 padrões simultaneamente e troca para a estratégia mais assertiva do minuto.
+                    </p>
+                    <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '12px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.05)', fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: '#94A3B8' }}>Assertividade Atual:</span>
+                      <strong style={{ color: '#10b981', fontFamily: 'var(--font-mono)' }}>94.2% Winrate</strong>
+                    </div>
+                  </Landing3DCard>
+
+                  <Landing3DCard intensity={14} glowColor="rgba(56, 189, 248, 0.3)" style={{ background: 'rgba(14, 11, 24, 0.7)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '20px', padding: '1.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
+                      <div className="feature-card-icon-container" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}><RefreshCw size={24} /></div>
+                      <h3 style={{ fontSize: '1.1rem', color: 'white', margin: 0, fontWeight: 'bold' }}>Reset & Renovação 00:10</h3>
+                    </div>
+                    <p style={{ fontSize: '0.8rem', color: '#94A3B8', lineHeight: '1.6', marginBottom: '1.25rem' }}>
+                      Ao término do ciclo, o robô envia um resumo completo no Telegram e reinicia o status automaticamente.
+                    </p>
+                    <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '12px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.05)', fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: '#94A3B8' }}>Status de Renovação:</span>
+                      <strong style={{ color: '#22C55E' }}>ATIVADO 🟢</strong>
+                    </div>
+                  </Landing3DCard>
+
+                  <Landing3DCard intensity={14} glowColor="rgba(239, 68, 68, 0.3)" style={{ background: 'rgba(14, 11, 24, 0.7)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '20px', padding: '1.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
+                      <div className="feature-card-icon-container" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}><ShieldCheck size={24} /></div>
+                      <h3 style={{ fontSize: '1.1rem', color: 'white', margin: 0, fontWeight: 'bold' }}>Gestão de Risco Soros</h3>
+                    </div>
+                    <p style={{ fontSize: '0.8rem', color: '#94A3B8', lineHeight: '1.6', marginBottom: '1.25rem' }}>
+                      Controle rigoroso de meta diária e stop loss com cálculo automatizado de alavancagem segura.
+                    </p>
+                    <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '12px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.05)', fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: '#94A3B8' }}>Proteção de Capital:</span>
+                      <strong style={{ color: '#38bdf8' }}>100% Protegido</strong>
+                    </div>
+                  </Landing3DCard>
                 </div>
               </section>
 
@@ -3116,46 +3170,46 @@ export default function App() {
                   gap: '1.5rem',
                   width: '100%'
                 }} className="pricing-grid-responsive">
-                  <div className="feature-card-premium">
+                  <Landing3DCard intensity={12} className="feature-card-premium hologram-glow-border">
                     <div className="feature-card-icon-container"><Calendar size={28} /></div>
                     <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Ciclos Inteligentes</h3>
                     <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Agende múltiplos ciclos de operação automáticos com metas de lucro, stops e stakes 100% autônomos.</p>
-                  </div>
-                  <div className="feature-card-premium">
+                  </Landing3DCard>
+                  <Landing3DCard intensity={12} className="feature-card-premium hologram-glow-border">
                     <div className="feature-card-icon-container"><Brain size={28} /></div>
                     <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Piloto Automático IA</h3>
                     <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>O robô calcula a assertividade histórica das estratégias probabilísticas e seleciona o melhor setup.</p>
-                  </div>
-                  <div className="feature-card-premium">
+                  </Landing3DCard>
+                  <Landing3DCard intensity={12} className="feature-card-premium hologram-glow-border">
                     <div className="feature-card-icon-container"><Shield size={28} /></div>
                     <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Gestão de Risco</h3>
                     <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Configurações flexíveis de Martingale (Tradicional/Inteligente) e Soros com travas automáticas.</p>
-                  </div>
-                  <div className="feature-card-premium">
+                  </Landing3DCard>
+                  <Landing3DCard intensity={12} className="feature-card-premium hologram-glow-border">
                     <div className="feature-card-icon-container"><TrendingUp size={28} /></div>
                     <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Painel Estatístico</h3>
                     <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Acompanhamento visual completo com winrate, lucro diário e histórico detalhado das operações.</p>
-                  </div>
-                  <div className="feature-card-premium">
+                  </Landing3DCard>
+                  <Landing3DCard intensity={12} className="feature-card-premium hologram-glow-border">
                     <div className="feature-card-icon-container"><Clock size={28} /></div>
                     <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Agendamento Diário</h3>
                     <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Planeje o robô para iniciar ou pausar em horários específicos de alta assertividade probabilística.</p>
-                  </div>
-                  <div className="feature-card-premium">
+                  </Landing3DCard>
+                  <Landing3DCard intensity={12} className="feature-card-premium hologram-glow-border">
                     <div className="feature-card-icon-container"><Zap size={28} /></div>
                     <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Recuperação Inteligente</h3>
                     <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Algoritmos avançados de recuperação pós-loss que buscam minimizar perdas indesejadas.</p>
-                  </div>
-                  <div className="feature-card-premium">
+                  </Landing3DCard>
+                  <Landing3DCard intensity={12} className="feature-card-premium hologram-glow-border">
                     <div className="feature-card-icon-container"><CheckCircle size={28} /></div>
                     <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Controle de Meta</h3>
                     <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Pausa automática assim que sua meta diária for atingida ou o stop loss configurado for tocado.</p>
-                  </div>
-                  <div className="feature-card-premium">
+                  </Landing3DCard>
+                  <Landing3DCard intensity={12} className="feature-card-premium hologram-glow-border">
                     <div className="feature-card-icon-container"><Layers size={28} /></div>
                     <h3 style={{ fontSize: '1.15rem', color: 'white', fontWeight: 'bold', margin: '0 0 0.75rem 0' }}>Histórico Completo</h3>
                     <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: '1.6' }}>Relatório completo de operações salvas em tempo real no banco de dados local com filtro inteligente.</p>
-                  </div>
+                  </Landing3DCard>
                 </div>
               </section>
 
