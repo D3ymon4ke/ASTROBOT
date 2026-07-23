@@ -20,6 +20,9 @@ export class DerivAPI {
     this.onErrorReceived = () => {};
     this.onLogMessage = () => {};
     this.onSyncReceived = () => {};
+    this.onCloudTradesSynced = () => {};
+    this.onCloudReportsSynced = () => {};
+    this.onCloudBackupReceived = () => {};
   }
 
   log(message, type = 'info') {
@@ -71,6 +74,12 @@ export class DerivAPI {
           this.latency = syncData.derivLatency;
           
           this.onSyncReceived(syncData);
+        } else if (type === 'sync_trades_result') {
+          this.onCloudTradesSynced(payload);
+        } else if (type === 'sync_monthly_reports_result') {
+          this.onCloudReportsSynced(payload);
+        } else if (type === 'get_cloud_backup_result') {
+          this.onCloudBackupReceived(payload.backup);
         } else if (type === 'tick') {
           this.onTickUpdate(payload.tick);
         } else if (type === 'candle_update') {
@@ -174,6 +183,29 @@ export class DerivAPI {
   triggerAutoReset() {
     this.send({
       type: 'trigger_auto_reset'
+    });
+  }
+
+  syncTrades(trades, isDemo = true) {
+    this.send({
+      type: 'sync_trades',
+      isDemo,
+      trades
+    });
+  }
+
+  syncMonthlyReports(reports, isDemo = true) {
+    this.send({
+      type: 'sync_monthly_reports',
+      isDemo,
+      reports
+    });
+  }
+
+  getCloudBackup(isDemo = true) {
+    this.send({
+      type: 'get_cloud_backup',
+      isDemo
     });
   }
 

@@ -231,3 +231,42 @@ export const deleteMonthlyReport = (id, isDemo = true) => {
   }
   return [];
 };
+
+// Cloud Backup Merge Helpers
+export const mergeCloudTradesWithLocal = (cloudTrades, isDemo = true) => {
+  if (!Array.isArray(cloudTrades)) return loadDbTrades(isDemo);
+  const localTrades = loadDbTrades(isDemo);
+  const map = new Map();
+
+  localTrades.forEach(t => map.set(t.id || t.timestamp || (t.epoch * 1000), t));
+  cloudTrades.forEach(t => map.set(t.id || t.timestamp || (t.epoch * 1000), t));
+
+  const merged = Array.from(map.values());
+  const paths = getDbPaths(isDemo);
+  if (fs && paths.trades) {
+    fs.writeFileSync(paths.trades, JSON.stringify(merged, null, 2), 'utf-8');
+  } else {
+    const keys = getLocalStorageKeys(isDemo);
+    localStorage.setItem(keys.trades, JSON.stringify(merged));
+  }
+  return merged;
+};
+
+export const mergeCloudMonthlyReportsWithLocal = (cloudReports, isDemo = true) => {
+  if (!Array.isArray(cloudReports)) return loadMonthlyReports(isDemo);
+  const localReports = loadMonthlyReports(isDemo);
+  const map = new Map();
+
+  localReports.forEach(r => map.set(r.id || r.monthKey || r.month, r));
+  cloudReports.forEach(r => map.set(r.id || r.monthKey || r.month, r));
+
+  const merged = Array.from(map.values());
+  const paths = getDbPaths(isDemo);
+  if (fs && paths.monthly) {
+    fs.writeFileSync(paths.monthly, JSON.stringify(merged, null, 2), 'utf-8');
+  } else {
+    const keys = getLocalStorageKeys(isDemo);
+    localStorage.setItem(keys.monthly, JSON.stringify(merged));
+  }
+  return merged;
+};

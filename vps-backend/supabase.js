@@ -250,3 +250,101 @@ export async function getUserProfile(email) {
   }
   return { fullname: '', profileImage: '' };
 }
+
+// Local Backup Fallback Directory
+const LOCAL_BACKUP_DIR = join(DATA_DIR, 'backups');
+if (!existsSync(LOCAL_BACKUP_DIR)) {
+  mkdirSync(LOCAL_BACKUP_DIR, { recursive: true });
+}
+
+function getLocalBackupPath(email, isDemo) {
+  const cleanEmail = email.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const suffix = isDemo ? 'demo' : 'real';
+  return join(LOCAL_BACKUP_DIR, `backup_${cleanEmail}_${suffix}.json`);
+}
+
+export async function saveUserBackup(email, isDemo, backupPayload) {
+  const cleanEmail = email.toLowerCase().trim();
+  const path = getLocalBackupPath(cleanEmail, isDemo);
+
+  // 1. Save locally on VPS disk
+  try {
+    writeFileSync(path, JSON.stringify(backupPayload, null, 2), 'utf8');
+  } catch (e) {
+    console.error(`Error saving local backup for ${cleanEmail}:`, e);
+  }
+
+  // 2. Sync to Supabase if available
+  if (supabase) {
+    try {
+      const fieldName = isDemo ? 'cloud_backup_demo' : 'cloud_backup_real';
+      const { error } = await withTimeout(
+        supabase
+          .from('users')
+          .update({ [fieldName]: backupPayload, updated_at: Date.now() })
+          .eq('email', cleanEmail),
+        4000
+      );
+      if (error) {
+        console.warn(`Supabase cloud backup update error for ${cleanEmail}:`, error.message);
+      }
+    } catch (err) {
+      console.error(`Supabase saveUserBackup failed or timed out:`, err.message);
+    }
+  }
+}
+
+export async function loadUserBackup(email, isDemo) {
+  const cleanEmail = email.toLowerCase().trim();
+  let cloudData = null;
+
+  if (supabase) {
+    try {
+      const fieldName = isDemo ? 'cloud_backup_demo' : 'cloud_backup_real';
+      const { data, error } = await withTimeout(
+        supabase
+          .from('users')
+          .select(fieldName)
+          .eq('email', cleanEmail)
+          .single(),
+        3000
+      );
+      if (!error && data && data[fieldName]) {
+        cloudData = data[fieldName];
+      }
+    } catch (err) {
+      console.warn(`Supabase loadUserBackup failed or timed out:`, err.message);
+    }
+  }
+
+  // Fallback to local VPS disk backup
+  const path = getLocalBackupPath(cleanEmail, isDemo);
+  if (existsSync(path)) {
+    try {
+      const raw = readFileSync(path, 'utf8');
+      const localData = JSON.parse(raw);
+      if (!cloudData) return localData;
+
+      // Merge local disk and Supabase data
+      const mergedTradesMap = new Map();
+      (localData.trades || []).forEach(t => mergedTradesMap.set(t.id || t.timestamp, t));
+      (cloudData.trades || []).forEach(t => mergedTradesMap.set(t.id || t.timestamp, t));
+
+      const mergedReportsMap = new Map();
+      (localData.monthlyReports || []).forEach(r => mergedReportsMap.set(r.id || r.monthKey || r.month, r));
+      (cloudData.monthlyReports || []).forEach(r => mergedReportsMap.set(r.id || r.monthKey || r.month, r));
+
+      return {
+        trades: Array.from(mergedTradesMap.values()),
+        monthlyReports: Array.from(mergedReportsMap.values()),
+        settings: cloudData.settings || localData.settings || {},
+        planning: cloudData.planning || localData.planning || {},
+        cycles: cloudData.cycles || localData.cycles || []
+      };
+    } catch (e) {
+      console.error(`Error reading local backup for ${cleanEmail}:`, e);
+    }
+  }
+
+  return cloudData || { trades: [], monthlyReports: [], settings: {}, planning: {}, cycles: [] };
+}

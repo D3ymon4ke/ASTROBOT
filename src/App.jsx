@@ -32,7 +32,7 @@ import CyclesSchedulerSection from './components/landing/CyclesSchedulerSection'
 import TelegramSimulatorSection from './components/landing/TelegramSimulatorSection';
 import SecurityDashboardSection from './components/landing/SecurityDashboardSection';
 import TestimonialsPricingFaq from './components/landing/TestimonialsPricingFaq';
-import { loadDbTrades, saveDbTrade, clearDbTrades, saveDbTrades } from './utils/db';
+import { loadDbTrades, saveDbTrade, clearDbTrades, saveDbTrades, mergeCloudTradesWithLocal, mergeCloudMonthlyReportsWithLocal, loadMonthlyReports } from './utils/db';
 import { playWinSound, playLossSound } from './utils/sound';
 import {
   sendTelegramMessage,
@@ -322,6 +322,39 @@ export default function App() {
         console.error('Failed to register Electron auto-update listeners:', e);
       }
     }
+  }, []);
+
+  // Cloud Sync states
+  const [cloudSyncStatus, setCloudSyncStatus] = useState('synced'); // 'synced' | 'syncing' | 'offline'
+
+  // Register Cloud Backup & Sync Callbacks
+  useEffect(() => {
+    derivAPI.onCloudTradesSynced = (payload) => {
+      setCloudSyncStatus('synced');
+      if (payload && payload.trades) {
+        const isDemoMode = payload.isDemo !== undefined ? payload.isDemo : (localStorage.getItem('deriv_is_demo') !== 'false');
+        const merged = mergeCloudTradesWithLocal(payload.trades, isDemoMode);
+        setDbTrades(merged);
+      }
+    };
+
+    derivAPI.onCloudReportsSynced = () => {
+      setCloudSyncStatus('synced');
+    };
+
+    derivAPI.onCloudBackupReceived = (backup) => {
+      setCloudSyncStatus('synced');
+      if (backup) {
+        const isDemoMode = localStorage.getItem('deriv_is_demo') !== 'false';
+        if (backup.trades && backup.trades.length > 0) {
+          const mergedTrades = mergeCloudTradesWithLocal(backup.trades, isDemoMode);
+          setDbTrades(mergedTrades);
+        }
+        if (backup.monthlyReports && backup.monthlyReports.length > 0) {
+          mergeCloudMonthlyReportsWithLocal(backup.monthlyReports, isDemoMode);
+        }
+      }
+    };
   }, []);
   
   // Market data states
@@ -1843,8 +1876,14 @@ export default function App() {
       const isFirstSync = !stateRef.current.hasReceivedSync;
       stateRef.current.hasReceivedSync = true;
 
-      if (isFirstSync && sync.trades) {
-        stateRef.current.trades = sync.trades;
+      const isDemoMode = sync.settings?.isDemo !== undefined ? sync.settings.isDemo : (localStorage.getItem('deriv_is_demo') !== 'false');
+
+      if (isFirstSync) {
+        // Fetch cloud DB backup on first sync payload received
+        derivAPI.getCloudBackup(isDemoMode);
+        if (sync.trades) {
+          stateRef.current.trades = sync.trades;
+        }
       }
 
       if (!isFirstSync && sync.trades && sync.trades.length > stateRef.current.trades.length) {
@@ -2043,6 +2082,17 @@ export default function App() {
   // Run backtests and check for live signals when a candle closes (handled on VPS backend)
   const handleCandleClosed = (activeCandles) => {
     return;
+  };
+
+  const handleForceCloudSync = () => {
+    setCloudSyncStatus('syncing');
+    const isDemoMode = isDemo;
+    const localTrades = loadDbTrades(isDemoMode);
+    const localReports = loadMonthlyReports(isDemoMode);
+
+    derivAPI.syncTrades(localTrades, isDemoMode);
+    derivAPI.syncMonthlyReports(localReports, isDemoMode);
+    derivAPI.getCloudBackup(isDemoMode);
   };
 
   // All trading logic (strategy analysis, stake calculation, order execution, contract updates)
@@ -4655,6 +4705,29 @@ export default function App() {
             <Radio size={11} style={{ color: 'var(--primary-light)' }} />
             <span>{latency}ms</span>
           </div>
+
+          {/* Cloud Sync Status Badge */}
+          <button
+            onClick={handleForceCloudSync}
+            title="Sincronização com a nuvem ativa. Clique para forçar sincronização manual agora."
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              fontSize: '0.66rem',
+              fontWeight: 'bold',
+              background: cloudSyncStatus === 'syncing' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(16, 185, 129, 0.08)',
+              border: cloudSyncStatus === 'syncing' ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(16, 185, 129, 0.25)',
+              color: cloudSyncStatus === 'syncing' ? '#a78bfa' : '#10b981',
+              padding: '4px 10px',
+              borderRadius: '20px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Sparkles size={11} className={cloudSyncStatus === 'syncing' ? 'spin' : ''} />
+            <span>{cloudSyncStatus === 'syncing' ? 'Sincronizando...' : 'Nuvem OK'}</span>
+          </button>
 
           {/* Notifications Bell */}
           <button

@@ -526,6 +526,15 @@ wss.on('connection', (ws) => {
         }
       } else if (type === 'trigger_auto_reset') {
         session.triggerAutoReset(true);
+      } else if (type === 'sync_trades') {
+        const mergedTrades = await session.syncTradesFromClient(payload.trades, payload.isDemo !== false);
+        ws.send(JSON.stringify({ type: 'sync_trades_result', isDemo: payload.isDemo !== false, trades: mergedTrades }));
+      } else if (type === 'sync_monthly_reports') {
+        const mergedReports = await session.syncMonthlyReportsFromClient(payload.reports, payload.isDemo !== false);
+        ws.send(JSON.stringify({ type: 'sync_monthly_reports_result', isDemo: payload.isDemo !== false, reports: mergedReports }));
+      } else if (type === 'get_cloud_backup') {
+        const backup = await session.getCloudBackup(payload.isDemo !== false);
+        ws.send(JSON.stringify({ type: 'get_cloud_backup_result', isDemo: payload.isDemo !== false, backup }));
       }
       
     } catch (err) {

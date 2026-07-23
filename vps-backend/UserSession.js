@@ -16,7 +16,7 @@ import {
   formatAutoResetMessage,
   deleteTelegramMessages
 } from './utils/telegram.js';
-import { supabase, addCommunityPost, getUserProfile } from './supabase.js';
+import { supabase, addCommunityPost, getUserProfile, saveUserBackup, loadUserBackup } from './supabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -813,6 +813,82 @@ export class UserSession {
     } catch (e) {
       console.error('Supabase cycles sync error:', e);
     }
+  }
+
+  async syncTradesFromClient(clientTrades, isDemo) {
+    const mode = isDemo ? 'demo' : 'real';
+    const currentTrades = this.modeStates[mode].trades || [];
+    const map = new Map();
+
+    currentTrades.forEach(t => map.set(t.id || t.timestamp || (t.epoch * 1000), t));
+    (clientTrades || []).forEach(t => map.set(t.id || t.timestamp || (t.epoch * 1000), t));
+
+    const mergedTrades = Array.from(map.values());
+    this.modeStates[mode].trades = mergedTrades;
+    this.saveToFile();
+
+    const backupPayload = {
+      trades: mergedTrades,
+      monthlyReports: this.modeStates[mode].monthlyReports || [],
+      settings: this.modeStates[mode].settings,
+      planning: this.modeStates[mode].planning,
+      cycles: this.modeStates[mode].cycles,
+      updatedAt: Date.now()
+    };
+    await saveUserBackup(this.email, isDemo, backupPayload);
+    return mergedTrades;
+  }
+
+  async syncMonthlyReportsFromClient(clientReports, isDemo) {
+    const mode = isDemo ? 'demo' : 'real';
+    const currentReports = this.modeStates[mode].monthlyReports || [];
+    const map = new Map();
+
+    currentReports.forEach(r => map.set(r.id || r.monthKey || r.month, r));
+    (clientReports || []).forEach(r => map.set(r.id || r.monthKey || r.month, r));
+
+    const mergedReports = Array.from(map.values());
+    this.modeStates[mode].monthlyReports = mergedReports;
+    this.saveToFile();
+
+    const backupPayload = {
+      trades: this.modeStates[mode].trades || [],
+      monthlyReports: mergedReports,
+      settings: this.modeStates[mode].settings,
+      planning: this.modeStates[mode].planning,
+      cycles: this.modeStates[mode].cycles,
+      updatedAt: Date.now()
+    };
+    await saveUserBackup(this.email, isDemo, backupPayload);
+    return mergedReports;
+  }
+
+  async getCloudBackup(isDemo) {
+    const cloudBackup = await loadUserBackup(this.email, isDemo);
+    const mode = isDemo ? 'demo' : 'real';
+
+    const tradesMap = new Map();
+    (this.modeStates[mode].trades || []).forEach(t => tradesMap.set(t.id || t.timestamp || (t.epoch * 1000), t));
+    (cloudBackup.trades || []).forEach(t => tradesMap.set(t.id || t.timestamp || (t.epoch * 1000), t));
+
+    const reportsMap = new Map();
+    (this.modeStates[mode].monthlyReports || []).forEach(r => reportsMap.set(r.id || r.monthKey || r.month, r));
+    (cloudBackup.monthlyReports || []).forEach(r => reportsMap.set(r.id || r.monthKey || r.month, r));
+
+    const mergedTrades = Array.from(tradesMap.values());
+    const mergedReports = Array.from(reportsMap.values());
+
+    this.modeStates[mode].trades = mergedTrades;
+    this.modeStates[mode].monthlyReports = mergedReports;
+    this.saveToFile();
+
+    return {
+      trades: mergedTrades,
+      monthlyReports: mergedReports,
+      settings: this.settings,
+      planning: this.planning,
+      cycles: this.cycles
+    };
   }
 
   async saveDbTradeFirestore(trade) {
