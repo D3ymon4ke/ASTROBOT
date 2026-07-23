@@ -37,6 +37,60 @@ export default function Planning({ dbTrades, onClearDb, planningState, onUpdateP
   const [selectedDayTrades, setSelectedDayTrades] = useState(null);
   const [selectedDayNum, setSelectedDayNum] = useState(null);
 
+  // Martingale Calculator States
+  const [calcStake, setCalcStake] = useState(1.0);
+  const [calcMultiplier, setCalcMultiplier] = useState(2.2);
+  const [calcMaxLevels, setCalcMaxLevels] = useState(3); // 3 = G0 + 2 Gales
+  const [calcPayout, setCalcPayout] = useState(88);
+  const [calcBank, setCalcBank] = useState(100.0);
+
+  // Helper to pull current settings from localStorage
+  const handlePullCurrentSettings = () => {
+    try {
+      const raw = localStorage.getItem('astrobot_settings');
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.stakeValue) setCalcStake(parseFloat(s.stakeValue) || 1.0);
+        if (s.martingaleMultiplier) setCalcMultiplier(parseFloat(s.martingaleMultiplier) || 2.2);
+        if (s.martingaleMaxLevels) setCalcMaxLevels((parseInt(s.martingaleMaxLevels) || 2) + 1);
+      }
+    } catch (e) {}
+  };
+
+  // Matrix levels calculation
+  const getMatrixLevels = () => {
+    const levels = [];
+    let currentStake = calcStake;
+    let accumulatedCost = 0;
+
+    for (let i = 0; i < calcMaxLevels; i++) {
+      if (i > 0) {
+        currentStake = currentStake * calcMultiplier;
+      }
+      accumulatedCost += currentStake;
+      const grossReturn = currentStake * (1 + calcPayout / 100);
+      const netProfit = grossReturn - accumulatedCost;
+      const bankRiskPercent = calcBank > 0 ? (accumulatedCost / calcBank) * 100 : 0;
+
+      levels.push({
+        level: i,
+        name: i === 0 ? 'G0 (Entrada)' : `Gale ${i}`,
+        stake: currentStake,
+        accumulatedCost,
+        grossReturn,
+        netProfit,
+        bankRiskPercent
+      });
+    }
+    return levels;
+  };
+
+  const matrixLevels = getMatrixLevels();
+  const maxRiskTotal = matrixLevels.length > 0 ? matrixLevels[matrixLevels.length - 1].accumulatedCost : 0;
+  const g0Profit = matrixLevels.length > 0 ? matrixLevels[0].netProfit : 1;
+  const winsToRecoverHit = g0Profit > 0 ? Math.ceil(maxRiskTotal / g0Profit) : 'N/A';
+  const survivalCount = maxRiskTotal > 0 ? Math.floor(calcBank / maxRiskTotal) : 0;
+
   // Sync state with incoming props
   useEffect(() => {
     if (planningState) {
@@ -1223,6 +1277,238 @@ export default function Planning({ dbTrades, onClearDb, planningState, onUpdateP
                 </div>
               );
             })}
+          </div>
+        </div>
+      </div>
+
+      {/* SIMULADOR E CALCULADORA DE MARTINGALE */}
+      <div className="glass-panel" style={{
+        padding: '1.75rem',
+        background: 'rgba(15, 11, 28, 0.55)',
+        border: '1px solid rgba(139, 92, 246, 0.25)',
+        borderRadius: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1.5rem',
+        boxShadow: '0 12px 40px rgba(0, 0, 0, 0.3)'
+      }}>
+        {/* Section Title */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <div style={{ padding: '0.6rem', background: 'rgba(139, 92, 246, 0.12)', borderRadius: '12px', color: 'var(--primary-light)' }}>
+              <Sliders size={22} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: 'white' }}>
+                Simulador & Calculadora de Martingale (Gale Matrix)
+              </h3>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                Simule cenários de recuperação, projete a margem de segurança da banca e meça os custos por nível.
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={handlePullCurrentSettings}
+            style={{
+              padding: '0.6rem 1.1rem',
+              fontSize: '0.78rem',
+              fontWeight: 'bold',
+              borderRadius: '10px',
+              background: 'rgba(139, 92, 246, 0.15)',
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              color: 'var(--primary-light)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <RefreshCw size={14} /> Puxar Configurações do Robô
+          </button>
+        </div>
+
+        {/* Control Inputs Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '1rem' }}>
+          {/* Initial Stake */}
+          <div>
+            <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              Stake Inicial ($)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              min="0.35"
+              value={calcStake}
+              onChange={(e) => setCalcStake(parseFloat(e.target.value) || 0)}
+              style={{ width: '100%', padding: '0.65rem', background: '#09090f', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'white', fontFamily: 'var(--font-mono)' }}
+            />
+          </div>
+
+          {/* Multiplier */}
+          <div>
+            <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              Multiplicador Gale
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              min="1.0"
+              max="5.0"
+              value={calcMultiplier}
+              onChange={(e) => setCalcMultiplier(parseFloat(e.target.value) || 0)}
+              style={{ width: '100%', padding: '0.65rem', background: '#09090f', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'white', fontFamily: 'var(--font-mono)' }}
+            />
+          </div>
+
+          {/* Max Levels */}
+          <div>
+            <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              Níveis de Gale (Total)
+            </label>
+            <select
+              value={calcMaxLevels}
+              onChange={(e) => setCalcMaxLevels(parseInt(e.target.value))}
+              style={{ width: '100%', padding: '0.65rem', background: '#09090f', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'white' }}
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(lvl => (
+                <option key={lvl} value={lvl}>{lvl} {lvl === 1 ? 'Nível (Apenas G0)' : `Níveis (G0 a G${lvl - 1})`}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Payout % */}
+          <div>
+            <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              Payout Corretora (%)
+            </label>
+            <input
+              type="number"
+              step="1"
+              min="50"
+              max="100"
+              value={calcPayout}
+              onChange={(e) => setCalcPayout(parseFloat(e.target.value) || 0)}
+              style={{ width: '100%', padding: '0.65rem', background: '#09090f', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'white', fontFamily: 'var(--font-mono)' }}
+            />
+          </div>
+
+          {/* User Capital */}
+          <div>
+            <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              Banca / Capital ($)
+            </label>
+            <input
+              type="number"
+              step="1"
+              min="1"
+              value={calcBank}
+              onChange={(e) => setCalcBank(parseFloat(e.target.value) || 0)}
+              style={{ width: '100%', padding: '0.65rem', background: '#09090f', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'white', fontFamily: 'var(--font-mono)' }}
+            />
+          </div>
+        </div>
+
+        {/* Quick Strategy Presets */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>PRESETS RÁPIDOS:</span>
+          {[
+            { label: '🛡️ Conservador (G1)', stake: 1, mult: 2.0, levels: 2 },
+            { label: '⚖️ Moderado (G2)', stake: 1, mult: 2.2, levels: 3 },
+            { label: '🔥 Agressivo (G3)', stake: 1, mult: 2.2, levels: 4 },
+            { label: '⚡ Rápido (2.5x)', stake: 1, mult: 2.5, levels: 3 }
+          ].map((preset, idx) => (
+            <button
+              key={idx}
+              onClick={() => {
+                setCalcStake(preset.stake);
+                setCalcMultiplier(preset.mult);
+                setCalcMaxLevels(preset.levels);
+              }}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '6px',
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                color: 'var(--text-secondary)',
+                fontSize: '0.68rem',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Simulation Table Matrix */}
+        <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ background: 'rgba(9, 9, 15, 0.75)', color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                <th style={{ padding: '0.75rem 1rem' }}>Nível</th>
+                <th style={{ padding: '0.75rem 1rem' }}>Entrada ($)</th>
+                <th style={{ padding: '0.75rem 1rem' }}>Custo Acumulado ($)</th>
+                <th style={{ padding: '0.75rem 1rem' }}>Retorno Bruto ($)</th>
+                <th style={{ padding: '0.75rem 1rem' }}>Lucro Líquido ($)</th>
+                <th style={{ padding: '0.75rem 1rem' }}>% Risco da Banca</th>
+                <th style={{ padding: '0.75rem 1rem' }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {matrixLevels.map((lvl) => (
+                <tr key={lvl.level} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: lvl.level % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent' }}>
+                  <td style={{ padding: '0.75rem 1rem', fontWeight: 'bold', color: 'white' }}>
+                    <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '4px', background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.3)', color: 'var(--primary-light)' }}>
+                      {lvl.name}
+                    </span>
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', fontFamily: 'var(--font-mono)', color: 'white' }}>${lvl.stake.toFixed(2)}</td>
+                  <td style={{ padding: '0.75rem 1rem', fontFamily: 'var(--font-mono)', color: '#f59e0b' }}>${lvl.accumulatedCost.toFixed(2)}</td>
+                  <td style={{ padding: '0.75rem 1rem', fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>${lvl.grossReturn.toFixed(2)}</td>
+                  <td style={{ padding: '0.75rem 1rem', fontFamily: 'var(--font-mono)', color: lvl.netProfit >= 0 ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
+                    {lvl.netProfit >= 0 ? '+' : ''}${lvl.netProfit.toFixed(2)}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', fontFamily: 'var(--font-mono)', color: lvl.bankRiskPercent > 100 ? '#ef4444' : 'var(--text-secondary)' }}>
+                    {lvl.bankRiskPercent.toFixed(1)}%
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <span style={{
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      fontSize: '0.68rem',
+                      fontWeight: 'bold',
+                      background: lvl.bankRiskPercent > 100 ? 'rgba(239, 68, 68, 0.15)' : lvl.bankRiskPercent > 50 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                      color: lvl.bankRiskPercent > 100 ? '#ef4444' : lvl.bankRiskPercent > 50 ? '#f59e0b' : '#10b981',
+                      border: `1px solid ${lvl.bankRiskPercent > 100 ? 'rgba(239, 68, 68, 0.3)' : lvl.bankRiskPercent > 50 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`
+                    }}>
+                      {lvl.bankRiskPercent > 100 ? '❌ Banca Insuficiente' : lvl.bankRiskPercent > 50 ? '⚠️ Risco Elevado' : '✅ Seguro'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Scenario Insights Summary Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+          <div style={{ background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '1rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '0.65rem', color: '#f87171', fontWeight: 'bold', textTransform: 'uppercase' }}>Stop Loss Total do Gale</span>
+            <strong style={{ fontSize: '1.2rem', color: '#ef4444', fontFamily: 'var(--font-mono)' }}>${maxRiskTotal.toFixed(2)}</strong>
+            <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Custo máximo em caso de hit no último nível</span>
+          </div>
+
+          <div style={{ background: 'rgba(16, 185, 129, 0.06)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '1rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '0.65rem', color: '#34d399', fontWeight: 'bold', textTransform: 'uppercase' }}>WINs p/ Recuperar 1 Hit</span>
+            <strong style={{ fontSize: '1.2rem', color: '#10b981', fontFamily: 'var(--font-mono)' }}>{winsToRecoverHit} WINs em G0</strong>
+            <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Para cobrir o prejuízo de 1 Stop Loss completo</span>
+          </div>
+
+          <div style={{ background: 'rgba(56, 189, 248, 0.06)', border: '1px solid rgba(56, 189, 248, 0.2)', padding: '1rem', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '0.65rem', color: '#38bdf8', fontWeight: 'bold', textTransform: 'uppercase' }}>Sobrevivência da Banca</span>
+            <strong style={{ fontSize: '1.2rem', color: '#38bdf8', fontFamily: 'var(--font-mono)' }}>{survivalCount} Hits seguidos</strong>
+            <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Quantos Stop Losses consecutivos sua banca suporta</span>
           </div>
         </div>
       </div>
