@@ -2093,6 +2093,10 @@ export default function App() {
     derivAPI.syncTrades(localTrades, isDemoMode);
     derivAPI.syncMonthlyReports(localReports, isDemoMode);
     derivAPI.getCloudBackup(isDemoMode);
+
+    setTimeout(() => {
+      setCloudSyncStatus('synced');
+    }, 1800);
   };
 
   // All trading logic (strategy analysis, stake calculation, order execution, contract updates)
