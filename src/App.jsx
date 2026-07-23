@@ -6302,9 +6302,64 @@ export default function App() {
             )}
 
             {updateStatus === 'downloaded' && (
-              <p style={{ fontSize: '0.82rem', color: '#10b981', fontWeight: 'bold' }}>
-                ✓ Download concluído! Reiniciando o aplicativo para instalar a nova versão...
-              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
+                <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px', padding: '0.85rem', color: '#10b981', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                  ✓ Download do instalador concluído!
+                </div>
+                <p style={{ fontSize: '0.78rem', color: '#cbd5e1', margin: 0, lineHeight: '1.5' }}>
+                  O instalador iniciará automaticamente em instantes. Você também pode clicar no botão abaixo para instalar imediatamente.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginTop: '0.4rem' }}>
+                  <button
+                    onClick={() => {
+                      const isElectron = window && window.process && window.process.type === 'renderer';
+                      if (isElectron) {
+                        try {
+                          const { ipcRenderer } = window.require('electron');
+                          ipcRenderer.send('install-update-now');
+                        } catch (e) {}
+                      }
+                    }}
+                    style={{
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      color: 'white',
+                      border: 'none',
+                      padding: '12px 20px',
+                      borderRadius: '12px',
+                      fontSize: '0.88rem',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 20px rgba(16, 185, 129, 0.4)',
+                      letterSpacing: '0.5px'
+                    }}
+                  >
+                    🚀 INSTALAR E REINICIAR AGORA
+                  </button>
+                  <button
+                    onClick={() => {
+                      const isElectron = window && window.process && window.process.type === 'renderer';
+                      if (isElectron) {
+                        try {
+                          const { ipcRenderer } = window.require('electron');
+                          ipcRenderer.send('open-installer-folder');
+                        } catch (e) {}
+                      }
+                    }}
+                    style={{
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      color: '#94a3b8',
+                      padding: '8px 16px',
+                      borderRadius: '10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    📁 Abrir Pasta do Instalador (Temp)
+                  </button>
+                </div>
+              </div>
             )}
 
             {updateStatus === 'error' && (

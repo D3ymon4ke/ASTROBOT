@@ -263,10 +263,57 @@ ipcMain.on('update-telegram-config', (event, config) => {
   pollTelegram();
 });
 
+// IPC Handlers for Auto-Update Manual Trigger
+ipcMain.on('install-update-now', () => {
+  const tempPath = app.getPath('temp');
+  const installerPath = path.join(tempPath, 'ASTROBOT_Setup.exe');
+  if (fs.existsSync(installerPath)) {
+    console.log('[Update] User clicked install-update-now. Executing:', installerPath);
+    executeInstaller(installerPath);
+  }
+});
+
+ipcMain.on('open-installer-folder', () => {
+  const tempPath = app.getPath('temp');
+  const installerPath = path.join(tempPath, 'ASTROBOT_Setup.exe');
+  if (fs.existsSync(installerPath)) {
+    const { shell } = require('electron');
+    shell.showItemInFolder(installerPath);
+  }
+});
+
+function executeInstaller(installerPath) {
+  const { exec } = require('child_process');
+  const { shell } = require('electron');
+
+  console.log('[Update] Executing installer via ShellExecute & cmd:', installerPath);
+
+  // Method A: cmd.exe start
+  exec(`cmd.exe /c start "" "${installerPath}"`, (err) => {
+    if (err) console.error('[Update] Error in cmd exec:', err);
+  });
+
+  // Method B: shell.openPath
+  shell.openPath(installerPath).catch((err) => {
+    console.error('[Update] shell.openPath error:', err);
+  });
+
+  // Wait 4 seconds for Windows UAC prompt to appear before quitting app
+  setTimeout(() => {
+    isQuitting = true;
+    app.quit();
+  }, 4000);
+}
+
 // Auto-Update Checker and Downloader
 async function checkForUpdates() {
+  if (!app.isPackaged) {
+    console.log('[Update] Dev mode detected (!app.isPackaged). Skipping auto-update.');
+    return;
+  }
+
   const pjson = require('../package.json');
-  const currentVersion = pjson.version || '2.5.0';
+  const currentVersion = app.getVersion() || pjson.version || '2.5.0';
   const checkUrl = `https://187-127-40-228.sslip.io/api/check-update?version=${encodeURIComponent(currentVersion)}`;
 
   console.log(`[Update] Checking version. Current: ${currentVersion}`);
@@ -283,51 +330,77 @@ async function checkForUpdates() {
         mainWindow.webContents.send('update-available', data.version);
       }
 
-      // Start downloading
+      // Helper function to download file with redirect support and proper finish event handling
       const tempPath = app.getPath('temp');
       const installerPath = path.join(tempPath, 'ASTROBOT_Setup.exe');
-      const fileStream = fs.createWriteStream(installerPath);
 
-      const https = require('https');
-      https.get(data.url, (res) => {
-        const totalSize = parseInt(res.headers['content-length'], 10) || 0;
-        let downloadedSize = 0;
+      const downloadFileWithRedirects = (url, destPath, redirectCount = 0) => {
+        if (redirectCount > 5) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('update-error', 'Muitos redirecionamentos ao baixar atualização.');
+          }
+          return;
+        }
 
-        res.on('data', (chunk) => {
-          downloadedSize += chunk.length;
-          fileStream.write(chunk);
+        const httpModule = url.startsWith('https') ? require('https') : require('http');
+        httpModule.get(url, (res) => {
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            console.log(`[Update] Redirecting to: ${res.headers.location}`);
+            return downloadFileWithRedirects(res.headers.location, destPath, redirectCount + 1);
+          }
 
-          if (totalSize > 0) {
-            const percent = Math.round((downloadedSize / totalSize) * 100);
+          if (res.statusCode !== 200) {
+            console.error(`[Update] Failed download with status code: ${res.statusCode}`);
             if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('update-error', `Erro ao baixar arquivo (HTTP ${res.statusCode})`);
+            }
+            return;
+          }
+
+          const totalSize = parseInt(res.headers['content-length'], 10) || 0;
+          let downloadedSize = 0;
+          const fileStream = fs.createWriteStream(destPath);
+
+          res.on('data', (chunk) => {
+            downloadedSize += chunk.length;
+            if (totalSize > 0 && mainWindow && !mainWindow.isDestroyed()) {
+              const percent = Math.round((downloadedSize / totalSize) * 100);
               mainWindow.webContents.send('update-download-progress', percent);
             }
-          }
-        });
+          });
 
-        res.on('end', () => {
-          fileStream.end();
-          console.log('[Update] Download complete.');
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('update-downloaded');
-          }
+          res.pipe(fileStream);
 
-          // Wait 2 seconds, then execute and exit
-          setTimeout(() => {
-            const { exec } = require('child_process');
-            exec(`"${installerPath}"`, (err) => {
-              if (err) console.error('Error running installer:', err);
+          fileStream.on('finish', () => {
+            fileStream.close(() => {
+              console.log('[Update] Download complete and file stream closed.');
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('update-downloaded');
+              }
+
+              // Auto execute installer after 4s fallback if user doesn't click
+              setTimeout(() => {
+                executeInstaller(installerPath);
+              }, 4000);
             });
-            isQuitting = true;
-            app.quit();
-          }, 2000);
+          });
+
+          fileStream.on('error', (err) => {
+            console.error('[Update] File stream error:', err);
+            fs.unlink(destPath, () => {});
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('update-error', err.message);
+            }
+          });
+        }).on('error', (err) => {
+          console.error('[Update] Download error:', err);
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('update-error', err.message);
+          }
         });
-      }).on('error', (err) => {
-        console.error('[Update] Download error:', err);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('update-error', err.message);
-        }
-      });
+      };
+
+      downloadFileWithRedirects(data.url, installerPath);
     } else {
       console.log('[Update] App is up to date.');
     }

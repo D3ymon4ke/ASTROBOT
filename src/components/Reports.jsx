@@ -55,7 +55,7 @@ const calculateStats = (tradesList) => {
       dailyProfit: 0,
       weeklyProfit: 0,
       monthlyProfit: 0,
-      martingaleDist: { G0: 0, G1: 0, G2Plus: 0 },
+      martingaleDist: { G0: 0, G1: 0, G2: 0, G3: 0, G4: 0, G5: 0, G2Plus: 0, byLevel: {}, maxLevel: 0 },
       hourlyWinrates: Array(24).fill({ total: 0, wins: 0, rate: 0 }),
       dailyWinrates: Array(7).fill({ total: 0, wins: 0, rate: 0 }),
       strategyStats: {},
@@ -85,10 +85,9 @@ const calculateStats = (tradesList) => {
   const oneWeekMs = 7 * oneDayMs;
   const oneMonthMs = 30 * oneDayMs;
 
-  // Martingale distribution
-  let g0 = 0;
-  let g1 = 0;
-  let g2Plus = 0;
+  // Dynamic Martingale distribution
+  const galeCounts = {};
+  let maxGaleFound = 0;
 
   // Heatmaps
   const hourlyData = Array.from({ length: 24 }, (_, i) => ({ hour: i, total: 0, wins: 0 }));
@@ -148,11 +147,10 @@ const calculateStats = (tradesList) => {
     if (diffMs <= oneMonthMs) monthlyProfit += profitVal;
 
     // Martingale dist
-    const gale = trade.galeLevel || 0;
+    const gale = Number(trade.galeLevel) || 0;
     if (isWin) {
-      if (gale === 0) g0++;
-      else if (gale === 1) g1++;
-      else g2Plus++;
+      galeCounts[gale] = (galeCounts[gale] || 0) + 1;
+      if (gale > maxGaleFound) maxGaleFound = gale;
     }
 
     // Hourly Heatmap
@@ -207,6 +205,14 @@ const calculateStats = (tradesList) => {
     rate: d.total > 0 ? (d.wins / d.total) * 100 : 0
   }));
 
+  const g0 = galeCounts[0] || 0;
+  const g1 = galeCounts[1] || 0;
+  const g2 = galeCounts[2] || 0;
+  const g3 = galeCounts[3] || 0;
+  const g4 = galeCounts[4] || 0;
+  const g5 = galeCounts[5] || 0;
+  const g2Plus = Object.entries(galeCounts).reduce((acc, [lvl, cnt]) => Number(lvl) >= 2 ? acc + cnt : acc, 0);
+
   return {
     totalTrades,
     wins,
@@ -221,13 +227,85 @@ const calculateStats = (tradesList) => {
     dailyProfit,
     weeklyProfit,
     monthlyProfit,
-    martingaleDist: { G0: g0, G1: g1, G2Plus: g2Plus },
+    martingaleDist: {
+      G0: g0,
+      G1: g1,
+      G2: g2,
+      G3: g3,
+      G4: g4,
+      G5: g5,
+      G2Plus: g2Plus,
+      byLevel: galeCounts,
+      maxLevel: maxGaleFound
+    },
     hourlyWinrates,
     dailyWinrates,
     strategyStats,
     assetStats,
     equityCurve
   };
+};
+
+// Dynamic Martingale Level Helpers
+const getGaleGradient = (level) => {
+  const gradients = [
+    'linear-gradient(90deg, #10b981, #059669)', // G0 - Emerald Green
+    'linear-gradient(90deg, #8b5cf6, #7c3aed)', // G1 - Purple
+    'linear-gradient(90deg, #ec4899, #db2777)', // G2 - Pink / Magenta
+    'linear-gradient(90deg, #06b6d4, #0284c7)', // G3 - Cyan / Blue
+    'linear-gradient(90deg, #f59e0b, #d97706)', // G4 - Amber / Orange
+    'linear-gradient(90deg, #f43f5e, #e11d48)', // G5 - Rose / Red
+    'linear-gradient(90deg, #a855f7, #9333ea)', // G6 - Violet
+    'linear-gradient(90deg, #14b8a6, #0d9488)', // G7 - Teal
+    'linear-gradient(90deg, #6366f1, #4f46e5)', // G8 - Indigo
+    'linear-gradient(90deg, #3b82f6, #1d4ed8)', // G9 - Blue
+    'linear-gradient(90deg, #e11d48, #9f1239)', // G10+ - Crimson
+  ];
+  return gradients[Math.min(level, gradients.length - 1)];
+};
+
+const getGaleTextColor = (level) => {
+  const colors = ['#10b981', '#a78bfa', '#f472b6', '#38bdf8', '#fbbf24', '#fb7185', '#c084fc', '#2dd4bf', '#818cf8', '#60a5fa', '#f43f5e'];
+  return colors[Math.min(level, colors.length - 1)];
+};
+
+const getMartingaleLevelsList = (dist) => {
+  if (!dist) return [];
+
+  if (dist.byLevel && Object.keys(dist.byLevel).length > 0) {
+    const levelsInObj = Object.keys(dist.byLevel).map(Number);
+    const maxLvl = Math.max(3, ...levelsInObj, dist.maxLevel || 0);
+    const list = [];
+    for (let i = 0; i <= maxLvl; i++) {
+      const cnt = dist.byLevel[i] || 0;
+      if (cnt > 0 || i <= 3) {
+        list.push({
+          level: i,
+          label: i === 0 ? 'Primeira Entrada (G0)' : `Martingale Nível ${i} (G${i})`,
+          shortLabel: i === 0 ? 'G0 (Entrada Direta)' : `Gale ${i} (G${i})`,
+          count: cnt
+        });
+      }
+    }
+    return list;
+  }
+
+  // Fallback for older stored formats
+  const list = [
+    { level: 0, label: 'Primeira Entrada (G0)', shortLabel: 'G0 (Entrada Direta)', count: dist.G0 || 0 },
+    { level: 1, label: 'Martingale Nível 1 (G1)', shortLabel: 'Gale 1 (G1)', count: dist.G1 || 0 }
+  ];
+
+  if (dist.G2 !== undefined || dist.G3 !== undefined || dist.G4 !== undefined || dist.G5 !== undefined) {
+    if (dist.G2 !== undefined) list.push({ level: 2, label: 'Martingale Nível 2 (G2)', shortLabel: 'Gale 2 (G2)', count: dist.G2 });
+    if (dist.G3 !== undefined) list.push({ level: 3, label: 'Martingale Nível 3 (G3)', shortLabel: 'Gale 3 (G3)', count: dist.G3 });
+    if (dist.G4 !== undefined) list.push({ level: 4, label: 'Martingale Nível 4 (G4)', shortLabel: 'Gale 4 (G4)', count: dist.G4 });
+    if (dist.G5 !== undefined) list.push({ level: 5, label: 'Martingale Nível 5 (G5)', shortLabel: 'Gale 5 (G5)', count: dist.G5 });
+  } else {
+    list.push({ level: 2, label: 'Gale 2 ou superior (G2+)', shortLabel: 'Gale 2+ (G2+)', count: dist.G2Plus || 0 });
+  }
+
+  return list;
 };
 
 export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
@@ -834,6 +912,68 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
               </div>
 
             </div>
+
+            {/* Martingale comparison block */}
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <BarChart2 size={16} style={{ color: '#a78bfa' }} />
+                <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>COMPARAÇÃO DE DISTRIBUIÇÃO MARTINGALE</h3>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700 }}>Nível Martingale</th>
+                      <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'center' }}>Período A (WINs)</th>
+                      <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'center' }}>Período B (WINs)</th>
+                      <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>Variação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const listA = getMartingaleLevelsList(statsA.martingaleDist);
+                      const listB = getMartingaleLevelsList(statsB.martingaleDist);
+                      const allLevelsMap = {};
+                      listA.forEach(item => { allLevelsMap[item.level] = { label: item.label, countA: item.count, countB: 0 }; });
+                      listB.forEach(item => {
+                        if (!allLevelsMap[item.level]) {
+                          allLevelsMap[item.level] = { label: item.label, countA: 0, countB: item.count };
+                        } else {
+                          allLevelsMap[item.level].countB = item.count;
+                        }
+                      });
+                      const sortedLevels = Object.keys(allLevelsMap).map(Number).sort((a, b) => a - b);
+                      if (sortedLevels.length === 0) {
+                        return (
+                          <tr><td colSpan="4" style={{ textAlign: 'center', color: '#475569', padding: '1.5rem' }}>Sem dados de martingale no período.</td></tr>
+                        );
+                      }
+                      return sortedLevels.map(lvl => {
+                        const item = allLevelsMap[lvl];
+                        const pctA = statsA.wins > 0 ? (item.countA / statsA.wins) * 100 : 0;
+                        const pctB = statsB.wins > 0 ? (item.countB / statsB.wins) * 100 : 0;
+                        const diffCount = item.countB - item.countA;
+                        const textColor = getGaleTextColor(lvl);
+                        return (
+                          <tr key={lvl} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.02)' }}>
+                            <td style={{ padding: '10px 6px', fontWeight: 700, color: textColor }}>{item.label}</td>
+                            <td style={{ padding: '10px 6px', textAlign: 'center', fontFamily: 'monospace', color: '#cbd5e1' }}>
+                              {item.countA} WINs ({pctA.toFixed(1)}%)
+                            </td>
+                            <td style={{ padding: '10px 6px', textAlign: 'center', fontFamily: 'monospace', color: '#ffffff' }}>
+                              {item.countB} WINs ({pctB.toFixed(1)}%)
+                            </td>
+                            <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 800, color: diffCount >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace' }}>
+                              {diffCount >= 0 ? '+' : ''}{diffCount} WINs
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </>
         ) : (
           <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
@@ -1390,68 +1530,51 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
 
         {/* Martingale Distribution Bar Chart */}
         <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <BarChart2 size={16} style={{ color: '#a78bfa' }} />
-            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>DISTRIBUIÇÃO DE RECUPERAÇÃO (MARTINGALE)</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <BarChart2 size={16} style={{ color: '#a78bfa' }} />
+              <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>DISTRIBUIÇÃO DE RECUPERAÇÃO (MARTINGALE)</h3>
+            </div>
+            {(() => {
+              const totalGaleWins = stats.wins - (stats.martingaleDist?.G0 || 0);
+              const galeWinPct = stats.wins > 0 ? ((totalGaleWins / stats.wins) * 100).toFixed(0) : 0;
+              return (
+                <span style={{ fontSize: '0.62rem', fontWeight: 'bold', color: '#a78bfa', background: 'rgba(167, 139, 250, 0.1)', padding: '3px 8px', borderRadius: '12px', border: '1px solid rgba(167, 139, 250, 0.2)' }}>
+                  Recuperação Gale: {totalGaleWins} WINs ({galeWinPct}%)
+                </span>
+              );
+            })()}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', flex: 1, justifyContent: 'center' }}>
-            {/* G0 */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', marginBottom: '4px' }}>
-                <span style={{ fontWeight: '600', color: '#94a3b8' }}>Primeira Entrada (G0)</span>
-                <strong style={{ fontFamily: 'monospace', color: '#10b981' }}>{stats.martingaleDist.G0} WINs</strong>
-              </div>
-              <div style={{ height: '6px', background: 'rgba(255,255,255,0.03)', borderRadius: '99px', overflow: 'hidden' }}>
-                <div 
-                  style={{ 
-                    width: `${stats.wins > 0 ? (stats.martingaleDist.G0 / stats.wins) * 100 : 0}%`, 
-                    height: '100%', 
-                    background: 'linear-gradient(90deg, #10b981, #059669)', 
-                    borderRadius: '99px', 
-                    transition: 'width 0.3s' 
-                  }} 
-                />
-              </div>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', flex: 1, justifyContent: 'center', maxHeight: '280px', overflowY: 'auto', paddingRight: '4px' }} className="modules-scrollbar">
+            {getMartingaleLevelsList(stats.martingaleDist).map((lvlItem) => {
+              const pct = stats.wins > 0 ? (lvlItem.count / stats.wins) * 100 : 0;
+              const textColor = getGaleTextColor(lvlItem.level);
+              const gradient = getGaleGradient(lvlItem.level);
 
-            {/* G1 */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', marginBottom: '4px' }}>
-                <span style={{ fontWeight: '600', color: '#94a3b8' }}>Gale 1 (G1)</span>
-                <strong style={{ fontFamily: 'monospace', color: '#a78bfa' }}>{stats.martingaleDist.G1} WINs</strong>
-              </div>
-              <div style={{ height: '6px', background: 'rgba(255,255,255,0.03)', borderRadius: '99px', overflow: 'hidden' }}>
-                <div 
-                  style={{ 
-                    width: `${stats.wins > 0 ? (stats.martingaleDist.G1 / stats.wins) * 100 : 0}%`, 
-                    height: '100%', 
-                    background: 'linear-gradient(90deg, #8b5cf6, #7c3aed)', 
-                    borderRadius: '99px', 
-                    transition: 'width 0.3s' 
-                  }} 
-                />
-              </div>
-            </div>
-
-            {/* G2+ */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', marginBottom: '4px' }}>
-                <span style={{ fontWeight: '600', color: '#94a3b8' }}>Gale 2 ou superior (G2+)</span>
-                <strong style={{ fontFamily: 'monospace', color: '#f472b6' }}>{stats.martingaleDist.G2Plus} WINs</strong>
-              </div>
-              <div style={{ height: '6px', background: 'rgba(255,255,255,0.03)', borderRadius: '99px', overflow: 'hidden' }}>
-                <div 
-                  style={{ 
-                    width: `${stats.wins > 0 ? (stats.martingaleDist.G2Plus / stats.wins) * 100 : 0}%`, 
-                    height: '100%', 
-                    background: 'linear-gradient(90deg, #ec4899, #db2777)', 
-                    borderRadius: '99px', 
-                    transition: 'width 0.3s' 
-                  }} 
-                />
-              </div>
-            </div>
+              return (
+                <div key={lvlItem.level}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', marginBottom: '4px' }}>
+                    <span style={{ fontWeight: '600', color: '#cbd5e1' }}>{lvlItem.label}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '0.62rem', color: '#64748b' }}>({pct.toFixed(1)}%)</span>
+                      <strong style={{ fontFamily: 'monospace', color: textColor, fontSize: '0.75rem' }}>{lvlItem.count} WINs</strong>
+                    </div>
+                  </div>
+                  <div style={{ height: '7px', background: 'rgba(255,255,255,0.04)', borderRadius: '99px', overflow: 'hidden' }}>
+                    <div 
+                      style={{ 
+                        width: `${pct}%`, 
+                        height: '100%', 
+                        background: gradient, 
+                        borderRadius: '99px', 
+                        transition: 'width 0.4s ease' 
+                      }} 
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
