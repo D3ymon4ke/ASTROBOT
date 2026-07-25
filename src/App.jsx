@@ -88,6 +88,52 @@ const DIAGNOSTIC_STEPS = [
   { text: 'Entrando...', progress: '██████████' }
 ];
 
+class SocialErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("Erro na área social:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '3rem 1rem', textAlign: 'center', color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ fontSize: '3rem' }}>⚠️</div>
+          <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#f87171' }}>Painel da Comunidade Atualizado</h3>
+          <p style={{ margin: 0, fontSize: '0.82rem', color: '#94a3b8', maxWidth: '450px' }}>
+            Identificamos dados em cache incompatíveis. Clique abaixo para atualizar seu feed com a versão limpa.
+          </p>
+          <button
+            onClick={() => {
+              localStorage.removeItem('astrobot_cached_community_posts');
+              this.setState({ hasError: false, error: null });
+            }}
+            style={{
+              padding: '8px 18px',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%)',
+              color: 'white',
+              border: 'none',
+              fontWeight: 'bold',
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              boxShadow: '0 4px 15px rgba(139, 92, 246, 0.4)'
+            }}
+          >
+            Atualizar e Recarregar Feed
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const LiveSimulatedChart = () => {
   const [candles, setCandles] = useState([
     { open: 120, close: 125, high: 128, low: 118, type: 'green' },
@@ -6553,17 +6599,19 @@ export default function App() {
         if (activePage === 'profile') {
           return (
             <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
-              <UserProfile
-                currentUserEmail={accountInfo?.email || userEmail || 'trader@astrobot.com'}
-                profileData={profileData}
-                dbTrades={dbTrades}
-                onSaveProfile={(updated) => {
-                  setProfileData(updated);
-                  localStorage.setItem('astrobot_user_profile', JSON.stringify(updated));
-                  if (updated.name) setWelcomeName(updated.name);
-                  if (updated.profileImage) setProfileImage(updated.profileImage);
-                }}
-              />
+              <SocialErrorBoundary>
+                <UserProfile
+                  currentUserEmail={accountInfo?.email || userEmail || 'trader@astrobot.com'}
+                  profileData={profileData}
+                  dbTrades={dbTrades}
+                  onSaveProfile={(updated) => {
+                    setProfileData(updated);
+                    localStorage.setItem('astrobot_user_profile', JSON.stringify(updated));
+                    if (updated.name) setWelcomeName(updated.name);
+                    if (updated.profileImage) setProfileImage(updated.profileImage);
+                  }}
+                />
+              </SocialErrorBoundary>
             </main>
           );
         }
@@ -6571,11 +6619,13 @@ export default function App() {
         if (activePage === 'community') {
           return (
             <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
-              <CommunityFeed
-                userEmail={accountInfo?.email || userEmail || localStorage.getItem('astrobot_user_email') || 'deymonmachado@gmail.com'}
-                userName={welcomeName || localStorage.getItem('astrobot_custom_name') || ''}
-                profileImage={profileImage || localStorage.getItem('astrobot_profile_image') || ''}
-              />
+              <SocialErrorBoundary>
+                <CommunityFeed
+                  userEmail={accountInfo?.email || userEmail || localStorage.getItem('astrobot_user_email') || 'deymonmachado@gmail.com'}
+                  userName={welcomeName || localStorage.getItem('astrobot_custom_name') || ''}
+                  profileImage={profileImage || localStorage.getItem('astrobot_profile_image') || ''}
+                />
+              </SocialErrorBoundary>
             </main>
           );
         }

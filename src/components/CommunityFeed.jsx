@@ -704,7 +704,7 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                               <img src={post.profileImage} alt={post.userName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                               <span style={{ fontSize: '0.85rem', fontWeight: '950', color: 'white' }}>
-                                {post.userName?.slice(0, 2).toUpperCase()}
+                                {(post.userName || 'Trader').slice(0, 2).toUpperCase()}
                               </span>
                             )}
                           </div>
@@ -1117,7 +1117,7 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                                     {c.profileImage ? (
                                       <img src={c.profileImage} alt={c.userName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                     ) : (
-                                      <span>{c.userName?.slice(0, 2).toUpperCase()}</span>
+                                      <span>{(c.userName || 'Trader').slice(0, 2).toUpperCase()}</span>
                                     )}
                                   </div>
 
@@ -1181,7 +1181,7 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                 {profileImage ? (
                   <img src={profileImage} alt={safeUserName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{safeUserName?.slice(0, 2).toUpperCase()}</span>
+                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{(safeUserName || 'Trader').slice(0, 2).toUpperCase()}</span>
                 )}
               </div>
               <h4 style={{ margin: '0 0 2px 0', fontSize: '0.9rem', fontWeight: '800' }}>{safeUserName}</h4>
