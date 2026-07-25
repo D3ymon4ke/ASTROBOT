@@ -6572,9 +6572,9 @@ export default function App() {
           return (
             <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
               <CommunityFeed
-                userEmail={userEmail}
-                userName={localStorage.getItem('astrobot_custom_name') || ''}
-                profileImage={profileImage}
+                userEmail={accountInfo?.email || userEmail || localStorage.getItem('astrobot_user_email') || 'deymonmachado@gmail.com'}
+                userName={welcomeName || localStorage.getItem('astrobot_custom_name') || ''}
+                profileImage={profileImage || localStorage.getItem('astrobot_profile_image') || ''}
               />
             </main>
           );

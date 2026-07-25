@@ -179,8 +179,9 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
         setPosts(prev => prev.map(p => p.id === postId ? { ...p, shares: data.shares } : p));
         
         // Dynamic clipboard content copying
-        const post = posts.find(p => p.id === postId);
-        const shareText = `🚀 ASTROBOT • Resultado Compartilhado!\n👤 Usuário: ${post?.userName}\n📈 Lucro da Sessão: ${post?.profit >= 0 ? '+' : ''}$${post?.profit.toFixed(2)}\n🎯 Win Rate: ${post?.winRate.toFixed(1)}%\n🤖 Estratégia: ${post?.strategy}\n📊 Ativo: ${post?.symbol}\nConsulte na plataforma!`;
+        const pProfit = Number(post?.profit) || 0;
+        const pWinRate = Number(post?.winRate) || 0;
+        const shareText = `🚀 ASTROBOT • Resultado Compartilhado!\n👤 Usuário: ${post?.userName || 'Trader'}\n📈 Lucro da Sessão: ${pProfit >= 0 ? '+' : ''}$${pProfit.toFixed(2)}\n🎯 Win Rate: ${pWinRate.toFixed(1)}%\n🤖 Estratégia: ${post?.strategy || 'Manual'}\n📊 Ativo: ${post?.symbol || 'Índice Sintético'}\nConsulte na plataforma!`;
         
         navigator.clipboard.writeText(shareText);
         alert('Dados do resultado copiados com sucesso! Compartilhe onde desejar.');
@@ -810,8 +811,8 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                           <span style={{ fontSize: '0.55rem', color: 'var(--text-secondary)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Retorno Líquido</span>
                           <span style={{ fontSize: '1.25rem', fontWeight: '950', color: profitColor, fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            {post.profit >= 0 ? '+' : ''}${post.profit.toFixed(2)}
-                            {post.profit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                            {(Number(post.profit) || 0) >= 0 ? '+' : ''}${(Number(post.profit) || 0).toFixed(2)}
+                            {(Number(post.profit) || 0) >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
                           </span>
                         </div>
 
@@ -819,7 +820,7 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                           <span style={{ fontSize: '0.55rem', color: 'var(--text-secondary)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Taxa de Vitória</span>
                           <span style={{ fontSize: '1.25rem', fontWeight: '900', color: '#38bdf8', fontFamily: 'var(--font-mono)' }}>
-                            {post.winRate.toFixed(1)}%
+                            {(Number(post.winRate) || 0).toFixed(1)}%
                           </span>
                         </div>
 
@@ -1262,7 +1263,7 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                           </span>
                           <span style={{ fontWeight: 'bold' }}>{item.userName}</span>
                         </div>
-                        <strong style={{ color: '#10b981', fontFamily: 'var(--font-mono)' }}>+${item.profit.toFixed(2)}</strong>
+                        <strong style={{ color: '#10b981', fontFamily: 'var(--font-mono)' }}>+${(Number(item.profit) || 0).toFixed(2)}</strong>
                       </div>
                     ))}
                   </div>
@@ -1287,7 +1288,7 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                           </span>
                           <span style={{ fontWeight: 'bold' }}>{item.userName}</span>
                         </div>
-                        <strong style={{ color: '#10b981', fontFamily: 'var(--font-mono)' }}>+${item.profit.toFixed(2)}</strong>
+                        <strong style={{ color: '#10b981', fontFamily: 'var(--font-mono)' }}>+${(Number(item.profit) || 0).toFixed(2)}</strong>
                       </div>
                     ))}
                   </div>
