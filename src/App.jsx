@@ -5774,6 +5774,8 @@ export default function App() {
                   <Chart
                     candles={candles}
                     trades={trades}
+                    dbTrades={dbTrades}
+                    symbol={settings.symbol}
                     activeTrade={stateRef.current.lastContractDetails}
                     granularity={settings.granularity}
                     strategy={settings.selectedStrategy}

@@ -1,5 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { calculateEMA } from '../strategies/tradingStrategies';
+import { analyzeMarketConditions } from '../utils/marketIntelligence';
+import { Clock, Calendar, ShieldCheck, Zap } from 'lucide-react';
 
 // Helper para gerar velas sintéticas de pré-visualização quando a conexão inicial do mercado ainda não retornou velas
 function generateFallbackCandles(count = 40) {
@@ -304,7 +306,7 @@ function drawChart({ canvas, candles, trades, activeTrade, dims, strategy, granu
 }
 
 // ─── React Component ─────────────────────────────────────────────────────────
-export default function Chart({ candles = [], trades = [], activeTrade, granularity, strategy }) {
+export default function Chart({ candles = [], trades = [], dbTrades = [], symbol = '', activeTrade, granularity, strategy }) {
   const canvasRef    = useRef(null);
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 600, height: 350 });
@@ -317,6 +319,13 @@ export default function Chart({ candles = [], trades = [], activeTrade, granular
 
   const effectiveCandles = (candles && candles.length > 0) ? candles : fallbackCandlesRef.current;
   const isSyncing = !candles || candles.length === 0;
+
+  // Motor de Inteligência de Horários & Mercado
+  const marketIntel = analyzeMarketConditions({
+    dbTrades,
+    candles: effectiveCandles,
+    currentSymbol: symbol
+  });
 
   // Refs para que a animação rAF leia sempre os dados mais recentes
   const refs = useRef({ candles: effectiveCandles, trades, activeTrade, dimensions, strategy, granularity });
@@ -461,6 +470,56 @@ export default function Chart({ candles = [], trades = [], activeTrade, granular
           </span>
         </div>
       )}
+
+      {/* Banner de Inteligência de Horários & Mercado */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '0.75rem',
+        padding: '6px 12px',
+        marginBottom: '8px',
+        background: 'rgba(15, 11, 28, 0.75)',
+        border: `1px solid ${marketIntel.statusBorder}`,
+        borderRadius: '8px',
+        fontSize: '0.75rem',
+        flexWrap: 'wrap'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{
+            background: marketIntel.statusBg,
+            color: marketIntel.statusColor,
+            border: `1px solid ${marketIntel.statusBorder}`,
+            padding: '2px 8px',
+            borderRadius: '6px',
+            fontWeight: '800',
+            fontSize: '0.68rem',
+            letterSpacing: '0.5px'
+          }}>
+            {marketIntel.statusBadge}
+          </span>
+          <span style={{ color: '#e2e8f0', fontWeight: 'bold' }}>
+            {marketIntel.statusLabel}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-secondary)', fontSize: '0.7rem' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title="Janela com maior taxa de acerto no banco de dados">
+            <Clock size={12} style={{ color: '#a78bfa' }} />
+            <strong style={{ color: '#a78bfa' }}>Janela Ideal:</strong> {marketIntel.bestWindowLabel}
+          </span>
+
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title="Dias da semana mais lucrativos no histórico">
+            <Calendar size={12} style={{ color: '#10b981' }} />
+            <strong style={{ color: '#10b981' }}>Melhores Dias:</strong> {marketIntel.bestDaysFormatted}
+          </span>
+
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Zap size={12} style={{ color: '#f59e0b' }} />
+            <span style={{ color: 'var(--text-muted)' }}>Velas:</span> {marketIntel.candleVolatility}
+          </span>
+        </div>
+      </div>
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', padding: '0 8px' }}>

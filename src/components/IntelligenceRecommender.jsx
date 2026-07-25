@@ -1,5 +1,6 @@
 import React from 'react';
-import { Brain, Cpu, Database, Award, Sparkles, TrendingUp, ShieldCheck } from 'lucide-react';
+import { Brain, Cpu, Database, Award, Sparkles, TrendingUp, ShieldCheck, Clock, AlertTriangle, Calendar } from 'lucide-react';
+import { analyzeMarketConditions } from '../utils/marketIntelligence';
 
 export default function IntelligenceRecommender({
   bestStrategy,
@@ -7,6 +8,8 @@ export default function IntelligenceRecommender({
   sessionAssetStats = {},
   dbTrades = []
 }) {
+  const intel = analyzeMarketConditions({ dbTrades, currentSymbol });
+
   // 1. Calculate best asset & strategy from DB history
   const getDbRecommendations = () => {
     if (!dbTrades || dbTrades.length === 0) return { asset: null, strategy: null };
@@ -97,140 +100,219 @@ export default function IntelligenceRecommender({
   };
 
   return (
-    <div style={{
-      padding: '0.85rem 1.5rem',
-      background: 'linear-gradient(90deg, rgba(124, 58, 237, 0.05) 0%, rgba(217, 70, 239, 0.05) 100%)',
-      border: '1px solid rgba(139, 92, 246, 0.25)',
-      boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)',
-      borderRadius: '14px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: '1.5rem',
-      flexWrap: 'wrap',
-      backdropFilter: 'blur(10px)'
-    }}>
-      {/* Title block */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: '200px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+      <div style={{
+        padding: '0.85rem 1.5rem',
+        background: 'linear-gradient(90deg, rgba(124, 58, 237, 0.05) 0%, rgba(217, 70, 239, 0.05) 100%)',
+        border: '1px solid rgba(139, 92, 246, 0.25)',
+        boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)',
+        borderRadius: '14px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '1.5rem',
+        flexWrap: 'wrap',
+        backdropFilter: 'blur(10px)'
+      }}>
+        {/* Title block */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: '200px' }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #7c3aed, #db2777)',
+            padding: '0.5rem',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: '0 0 12px rgba(124, 58, 237, 0.35)'
+          }}>
+            <Brain size={18} style={{ color: '#ffffff' }} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.58rem', color: '#a78bfa', display: 'block', fontWeight: 800, letterSpacing: '0.08em' }}>MOTOR DE INTELIGÊNCIA</span>
+            <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#ffffff', letterSpacing: '0.04em', background: 'linear-gradient(90deg, #ffffff, #e2e8f0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>RECOMENDAÇÕES AI</span>
+          </div>
+        </div>
+
+        {/* Recommended Strategy for CURRENT Asset */}
         <div style={{
-          background: 'linear-gradient(135deg, #7c3aed, #db2777)',
-          padding: '0.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          flex: 1,
+          minWidth: '200px',
+          padding: '0.5rem 0.75rem',
+          background: 'rgba(255,255,255,0.015)',
+          border: '1px solid rgba(255,255,255,0.03)',
+          borderRadius: '10px'
+        }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(236,72,153,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Sparkles size={14} style={{ color: '#f472b6' }} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block', fontWeight: 700, letterSpacing: '0.05em' }}>
+              ESTRATÉGIA RECOMENDADA ({formatSymbol(currentSymbol)})
+            </span>
+            {bestStrategy ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                <strong style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>
+                  {bestStrategy.name}
+                </strong>
+                <span style={{ fontSize: '0.7rem', color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                  {bestStrategy.winRate.toFixed(1)}% WR
+                </span>
+              </div>
+            ) : (
+              <span style={{ fontSize: '0.72rem', color: '#475569' }}>Analisando mercado...</span>
+            )}
+          </div>
+        </div>
+
+        {/* Recommended Asset based on LIVE backtests */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          flex: 1,
+          minWidth: '200px',
+          padding: '0.5rem 0.75rem',
+          background: 'rgba(255,255,255,0.015)',
+          border: '1px solid rgba(255,255,255,0.03)',
+          borderRadius: '10px'
+        }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(139,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <TrendingUp size={14} style={{ color: '#a78bfa' }} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block', fontWeight: 700, letterSpacing: '0.05em' }}>
+              MELHOR ATIVO (SESSÃO LIVE)
+            </span>
+            {sessionAsset ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                <strong style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>
+                  {formatSymbol(sessionAsset.symbol)}
+                </strong>
+                <span style={{ fontSize: '0.7rem', color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }} title={sessionAsset.strategy}>
+                  {sessionAsset.winRate.toFixed(1)}%
+                </span>
+              </div>
+            ) : (
+              <span style={{ fontSize: '0.72rem', color: '#475569' }}>Nenhum ativo analisado ainda</span>
+            )}
+          </div>
+        </div>
+
+        {/* Recommended Asset & Strategy based on DB history */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          flex: 1,
+          minWidth: '200px',
+          padding: '0.5rem 0.75rem',
+          background: 'rgba(255,255,255,0.015)',
+          border: '1px solid rgba(255,255,255,0.03)',
+          borderRadius: '10px'
+        }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Database size={14} style={{ color: '#34d399' }} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block', fontWeight: 700, letterSpacing: '0.05em' }}>
+              MAIS ASSERTIVO HISTÓRICO (BD)
+            </span>
+            {dbRecs.asset ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                <strong style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>
+                  {formatSymbol(dbRecs.asset.name)}
+                </strong>
+                <span style={{ fontSize: '0.7rem', color: '#34d399', background: 'rgba(52,211,153,0.1)', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                  {dbRecs.asset.winRate.toFixed(0)}% ({dbRecs.asset.total} op)
+                </span>
+              </div>
+            ) : (
+              <span style={{ fontSize: '0.72rem', color: '#475569' }}>Sem dados históricos</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* HORÁRIOS & DIAS IDEAIS RECOMENDADOS PELA IA */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+        gap: '0.85rem'
+      }}>
+        {/* Janela Ideal */}
+        <div style={{
+          padding: '0.65rem 1rem',
+          background: 'rgba(16, 185, 129, 0.04)',
+          border: '1px solid rgba(16, 185, 129, 0.25)',
           borderRadius: '10px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          boxShadow: '0 0 12px rgba(124, 58, 237, 0.35)'
+          gap: '0.75rem'
         }}>
-          <Brain size={18} style={{ color: '#ffffff' }} />
+          <div style={{ width: 32, height: 32, borderRadius: '8px', background: 'rgba(16, 185, 129, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Clock size={16} style={{ color: '#10b981' }} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>
+              Janela Ideal de Horário
+            </span>
+            <strong style={{ fontSize: '0.82rem', color: '#10b981', fontWeight: 800 }}>
+              {intel.bestWindowLabel}
+            </strong>
+          </div>
         </div>
-        <div>
-          <span style={{ fontSize: '0.58rem', color: '#a78bfa', display: 'block', fontWeight: 800, letterSpacing: '0.08em' }}>MOTOR DE INTELIGÊNCIA</span>
-          <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#ffffff', letterSpacing: '0.04em', background: 'linear-gradient(90deg, #ffffff, #e2e8f0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>RECOMENDAÇÕES AI</span>
-        </div>
-      </div>
 
-      {/* Recommended Strategy for CURRENT Asset */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.75rem',
-        flex: 1,
-        minWidth: '220px',
-        padding: '0.5rem 0.75rem',
-        background: 'rgba(255,255,255,0.015)',
-        border: '1px solid rgba(255,255,255,0.03)',
-        borderRadius: '10px'
-      }}>
-        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(236,72,153,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Sparkles size={14} style={{ color: '#f472b6' }} />
+        {/* Horário de Risco */}
+        <div style={{
+          padding: '0.65rem 1rem',
+          background: 'rgba(239, 68, 68, 0.04)',
+          border: '1px solid rgba(239, 68, 68, 0.25)',
+          borderRadius: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem'
+        }}>
+          <div style={{ width: 32, height: 32, borderRadius: '8px', background: 'rgba(239, 68, 68, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <AlertTriangle size={16} style={{ color: '#ef4444' }} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>
+              Horário de Maior Risco
+            </span>
+            <strong style={{ fontSize: '0.82rem', color: '#ef4444', fontWeight: 800 }}>
+              {intel.worstHourLabel} (Evitar)
+            </strong>
+          </div>
         </div>
-        <div>
-          <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block', fontWeight: 700, letterSpacing: '0.05em' }}>
-            ESTRATÉGIA RECOMENDADA ({formatSymbol(currentSymbol)})
-          </span>
-          {bestStrategy ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              <strong style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>
-                {bestStrategy.name}
-              </strong>
-              <span style={{ fontSize: '0.7rem', color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
-                {bestStrategy.winRate.toFixed(1)}% WR
-              </span>
-            </div>
-          ) : (
-            <span style={{ fontSize: '0.72rem', color: '#475569' }}>Analisando mercado...</span>
-          )}
-        </div>
-      </div>
 
-      {/* Recommended Asset based on LIVE backtests */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.75rem',
-        flex: 1,
-        minWidth: '220px',
-        padding: '0.5rem 0.75rem',
-        background: 'rgba(255,255,255,0.015)',
-        border: '1px solid rgba(255,255,255,0.03)',
-        borderRadius: '10px'
-      }}>
-        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(139,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <TrendingUp size={14} style={{ color: '#a78bfa' }} />
-        </div>
-        <div>
-          <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block', fontWeight: 700, letterSpacing: '0.05em' }}>
-            MELHOR ATIVO (SESSÃO LIVE)
-          </span>
-          {sessionAsset ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              <strong style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>
-                {formatSymbol(sessionAsset.symbol)}
-              </strong>
-              <span style={{ fontSize: '0.7rem', color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }} title={sessionAsset.strategy}>
-                {sessionAsset.winRate.toFixed(1)}%
-              </span>
-            </div>
-          ) : (
-            <span style={{ fontSize: '0.72rem', color: '#475569' }}>Nenhum ativo analisado ainda</span>
-          )}
-        </div>
-      </div>
-
-      {/* Recommended Asset & Strategy based on DB history */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.75rem',
-        flex: 1,
-        minWidth: '220px',
-        padding: '0.5rem 0.75rem',
-        background: 'rgba(255,255,255,0.015)',
-        border: '1px solid rgba(255,255,255,0.03)',
-        borderRadius: '10px'
-      }}>
-        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Database size={14} style={{ color: '#34d399' }} />
-        </div>
-        <div>
-          <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block', fontWeight: 700, letterSpacing: '0.05em' }}>
-            MAIS ASSERTIVO HISTÓRICO (BD)
-          </span>
-          {dbRecs.asset ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              <strong style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>
-                {formatSymbol(dbRecs.asset.name)}
-              </strong>
-              <span style={{ fontSize: '0.7rem', color: '#34d399', background: 'rgba(52,211,153,0.1)', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
-                {dbRecs.asset.winRate.toFixed(0)}% ({dbRecs.asset.total} op)
-              </span>
-            </div>
-          ) : (
-            <span style={{ fontSize: '0.72rem', color: '#475569' }}>Sem dados históricos</span>
-          )}
+        {/* Melhores Dias da Semana */}
+        <div style={{
+          padding: '0.65rem 1rem',
+          background: 'rgba(139, 92, 246, 0.04)',
+          border: '1px solid rgba(139, 92, 246, 0.25)',
+          borderRadius: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem'
+        }}>
+          <div style={{ width: 32, height: 32, borderRadius: '8px', background: 'rgba(139, 92, 246, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Calendar size={16} style={{ color: '#a78bfa' }} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>
+              Melhores Dias da Semana
+            </span>
+            <strong style={{ fontSize: '0.82rem', color: '#a78bfa', fontWeight: 800 }}>
+              {intel.bestDaysFormatted}
+            </strong>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
