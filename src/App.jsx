@@ -5784,7 +5784,7 @@ export default function App() {
                   {/* Absolute HUD overlays on top of the Chart */}
                   <div style={{
                     position: 'absolute',
-                    top: '50px',
+                    top: '88px',
                     left: '12px',
                     display: 'flex',
                     gap: '0.5rem',

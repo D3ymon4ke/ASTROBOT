@@ -535,7 +535,7 @@ export default function Chart({ candles = [], trades = [], dbTrades = [], symbol
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fb923c', display: 'inline-block' }} />
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>EMA 21</span>
           </div>
-          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: 4 }}>
+          <span style={{ fontSize: '0.65rem', color: '#94a3b8', marginLeft: 4, fontWeight: '500' }}>
             🖱 Scroll=Zoom · Drag=Pan
           </span>
         </div>
@@ -553,7 +553,7 @@ export default function Chart({ candles = [], trades = [], dbTrades = [], symbol
 
       <canvas
         ref={canvasRef}
-        style={{ display: 'block', width: '100%', height: 'calc(100% - 34px)', cursor: mouseRef.current.isDragging ? 'grabbing' : 'crosshair' }}
+        style={{ display: 'block', width: '100%', height: 'calc(100% - 76px)', cursor: mouseRef.current.isDragging ? 'grabbing' : 'crosshair' }}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         onMouseDown={handleMouseDown}
