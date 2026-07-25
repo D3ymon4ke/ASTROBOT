@@ -21,7 +21,7 @@ import Planning from './components/Planning';
 import Strands from './components/Strands';
 import LightPillar from './components/LightPillar';
 import TelegramConfig from './components/TelegramConfig';
-import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, ChevronDown, TrendingUp, Zap, CheckCircle, Menu, X, Percent, TrendingDown, Target, Newspaper, Bell, User, Camera, Upload, Send, Download, Users, GraduationCap } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, ChevronDown, TrendingUp, Zap, CheckCircle, Menu, X, Percent, TrendingDown, Target, Newspaper, Bell, User, Camera, Upload, Send, Download, Users, GraduationCap, BookOpen, StickyNote } from 'lucide-react';
 import CommunityFeed from './components/CommunityFeed';
 import UserProfile from './components/UserProfile';
 import TrainingModule from './components/TrainingModule';
@@ -5010,103 +5010,34 @@ export default function App() {
               <span>Downloads</span>
             </button>
 
-            {/* DROPDOWN 3: Social & Treinamento (Comunidade + Treinamento) */}
-            <div style={{ position: 'relative' }}>
-              <button
-                onClick={() => {
-                  setIsSocialDropdownOpen(!isSocialDropdownOpen);
-                  setIsAnalysisDropdownOpen(false);
-                  setIsManagementDropdownOpen(false);
-                  setIsProfileDropdownOpen(false);
-                  setIsNotificationsOpen(false);
-                }}
-                style={{
-                  background: (activePage === 'community' || activePage === 'training') ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
-                  border: 'none',
-                  color: (activePage === 'community' || activePage === 'training') ? 'var(--primary-light)' : 'var(--text-secondary)',
-                  borderBottom: (activePage === 'community' || activePage === 'training') ? '2px solid var(--primary-light)' : '2px solid transparent',
-                  padding: '0.5rem 0.6rem',
-                  fontSize: '0.8rem',
-                  fontWeight: (activePage === 'community' || activePage === 'training') ? '700' : '500',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  borderRadius: '6px 6px 0 0',
-                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                }}
-              >
-                <Users size={13} />
-                <span>Social & Treinamento</span>
-                <ChevronDown size={12} style={{ transform: isSocialDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
-              </button>
-
-              {isSocialDropdownOpen && (
-                <div className="glass-panel" style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  width: '200px',
-                  zIndex: 1100,
-                  padding: '0.4rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.25rem',
-                  background: 'rgba(14, 11, 24, 0.95)',
-                  border: '1px solid rgba(139, 92, 246, 0.25)',
-                  borderRadius: '8px',
-                  boxShadow: '0 10px 40px rgba(0, 0, 0, 0.6)'
-                }}>
-                  <button
-                    onClick={() => {
-                      setActivePage('community');
-                      setIsSocialDropdownOpen(false);
-                    }}
-                    style={{
-                      background: activePage === 'community' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
-                      border: 'none',
-                      color: activePage === 'community' ? 'var(--primary-light)' : 'white',
-                      padding: '8px 10px',
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <Users size={13} style={{ color: '#d946ef' }} />
-                    <span>Comunidade VIP</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setActivePage('training');
-                      setIsSocialDropdownOpen(false);
-                    }}
-                    style={{
-                      background: activePage === 'training' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
-                      border: 'none',
-                      color: activePage === 'training' ? 'var(--primary-light)' : 'white',
-                      padding: '8px 10px',
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <GraduationCap size={13} style={{ color: '#10b981' }} />
-                    <span>Treinamento & Provas</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* Treinamento */}
+            <button
+              onClick={() => {
+                setActivePage('training');
+                setIsAnalysisDropdownOpen(false);
+                setIsManagementDropdownOpen(false);
+                setIsProfileDropdownOpen(false);
+                setIsNotificationsOpen(false);
+              }}
+              style={{
+                background: activePage === 'training' ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
+                border: 'none',
+                color: activePage === 'training' ? 'var(--primary-light)' : 'var(--text-secondary)',
+                borderBottom: activePage === 'training' ? '2px solid var(--primary-light)' : '2px solid transparent',
+                padding: '0.5rem 0.6rem',
+                fontSize: '0.8rem',
+                fontWeight: activePage === 'training' ? '700' : '500',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: '6px 6px 0 0',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+              }}
+            >
+              <GraduationCap size={13} style={{ color: '#10b981' }} />
+              <span>Treinamento & Provas</span>
+            </button>
 
             {/* Admin (if Admin) */}
             {isAdminLoggedIn && (
@@ -6616,19 +6547,7 @@ export default function App() {
           );
         }
 
-        if (activePage === 'community') {
-          return (
-            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
-              <SocialErrorBoundary>
-                <CommunityFeed
-                  userEmail={accountInfo?.email || userEmail || localStorage.getItem('astrobot_user_email') || 'deymonmachado@gmail.com'}
-                  userName={welcomeName || localStorage.getItem('astrobot_custom_name') || ''}
-                  profileImage={profileImage || localStorage.getItem('astrobot_profile_image') || ''}
-                />
-              </SocialErrorBoundary>
-            </main>
-          );
-        }
+
 
         if (activePage === 'training') {
           return (
