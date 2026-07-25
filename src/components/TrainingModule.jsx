@@ -110,9 +110,16 @@ export default function TrainingModule({
   isAdmin = false,
   currentUserEmail = 'demo@astrobot.com',
   profileData = {},
-  onAddXp = () => {}
+  initialCompletedLessonIds = null,
+  initialLessons = null,
+  onAddXp = () => {},
+  onUpdateCompletedLessons = null,
+  onUpdateLessons = null
 }) {
   const [lessons, setLessons] = useState(() => {
+    if (initialLessons && Array.isArray(initialLessons) && initialLessons.length > 0) {
+      return initialLessons;
+    }
     try {
       const saved = localStorage.getItem('astrobot_training_lessons');
       return saved ? JSON.parse(saved) : DEFAULT_LESSONS;
@@ -122,6 +129,9 @@ export default function TrainingModule({
   });
 
   const [completedLessonIds, setCompletedLessonIds] = useState(() => {
+    if (initialCompletedLessonIds && Array.isArray(initialCompletedLessonIds)) {
+      return initialCompletedLessonIds;
+    }
     try {
       const saved = localStorage.getItem('astrobot_completed_lessons');
       return saved ? JSON.parse(saved) : [];
@@ -129,6 +139,19 @@ export default function TrainingModule({
       return [];
     }
   });
+
+  // Sync props from server if provided
+  useEffect(() => {
+    if (initialCompletedLessonIds && Array.isArray(initialCompletedLessonIds)) {
+      setCompletedLessonIds(initialCompletedLessonIds);
+    }
+  }, [initialCompletedLessonIds]);
+
+  useEffect(() => {
+    if (initialLessons && Array.isArray(initialLessons) && initialLessons.length > 0) {
+      setLessons(initialLessons);
+    }
+  }, [initialLessons]);
 
   const [activeCategory, setActiveCategory] = useState('Todas');
   const [searchQuery, setSearchQuery] = useState('');
@@ -166,6 +189,9 @@ export default function TrainingModule({
   const saveLessonsToStorage = (updated) => {
     setLessons(updated);
     localStorage.setItem('astrobot_training_lessons', JSON.stringify(updated));
+    if (onUpdateLessons) {
+      onUpdateLessons(updated);
+    }
   };
 
   const handleStartLesson = (lesson) => {
@@ -198,6 +224,9 @@ export default function TrainingModule({
       setCompletedLessonIds(newCompleted);
       localStorage.setItem('astrobot_completed_lessons', JSON.stringify(newCompleted));
       onAddXp(activeLesson.xpReward);
+      if (onUpdateCompletedLessons) {
+        onUpdateCompletedLessons(newCompleted, activeLesson.xpReward);
+      }
     }
   };
 

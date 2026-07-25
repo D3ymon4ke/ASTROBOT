@@ -141,6 +141,9 @@ export default function Planning({ dbTrades, onClearDb, planningState, onUpdateP
       if (planningState.notes && Array.isArray(planningState.notes)) {
         setNotes(planningState.notes);
       }
+      if (planningState.milestones && typeof planningState.milestones === 'object') {
+        setCompletedMilestones(planningState.milestones);
+      }
     }
   }, [planningState]);
 
@@ -538,6 +541,14 @@ export default function Planning({ dbTrades, onClearDb, planningState, onUpdateP
     const updated = { ...completedMilestones, [mId]: !completedMilestones[mId] };
     setCompletedMilestones(updated);
     localStorage.setItem('astrobot_planning_milestones', JSON.stringify(updated));
+    if (onUpdatePlanning) {
+      onUpdatePlanning({
+        goals,
+        simulator: { simStake, simSessions, simTarget, simWinrate },
+        notes,
+        milestones: updated
+      });
+    }
   };
 
   // Export Executive Summary to Clipboard

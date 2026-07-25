@@ -342,6 +342,127 @@ export default function App() {
     }
   });
 
+  // Financial Planning State
+  const [planning, setPlanning] = useState(() => {
+    try {
+      const savedGoals = localStorage.getItem('astrobot_planning_goals');
+      const savedNotes = localStorage.getItem('astrobot_user_notes');
+      const savedMilestones = localStorage.getItem('astrobot_planning_milestones');
+      const savedSim = localStorage.getItem('astrobot_planning_simulator');
+      return {
+        goals: savedGoals ? JSON.parse(savedGoals) : {
+          monthly: 500,
+          quarterly: 1500,
+          annual: 5000,
+          custom: 2000,
+          customName: 'Notebook Novo',
+          configured: false
+        },
+        notes: savedNotes ? JSON.parse(savedNotes) : null,
+        milestones: savedMilestones ? JSON.parse(savedMilestones) : null,
+        simulator: savedSim ? JSON.parse(savedSim) : {
+          simStake: 1.0,
+          simSessions: 2,
+          simTarget: 3.0,
+          simWinrate: 91
+        }
+      };
+    } catch (e) {
+      return {};
+    }
+  });
+
+  // Training & Provas State
+  const [completedLessons, setCompletedLessons] = useState(() => {
+    try {
+      const saved = localStorage.getItem('astrobot_completed_lessons');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [customLessons, setCustomLessons] = useState(() => {
+    try {
+      const saved = localStorage.getItem('astrobot_training_lessons');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  // Helper para restaurar e aplicar dados salvos no servidor ao perfil do usuário
+  const applyUserDataFromServer = (user) => {
+    if (!user) return;
+
+    if (user.settings && Object.keys(user.settings).length > 0) {
+      setSettings(prev => ({ ...prev, ...user.settings }));
+      localStorage.setItem('astrobot_settings', JSON.stringify(user.settings));
+      if (user.settings.token) localStorage.setItem('deriv_token', user.settings.token);
+      if (user.settings.appId) localStorage.setItem('deriv_app_id', user.settings.appId);
+      if (user.settings.isDemo !== undefined) {
+        localStorage.setItem('deriv_is_demo', user.settings.isDemo.toString());
+        setIsDemo(user.settings.isDemo);
+      }
+    }
+
+    if (user.telegramConfig && Object.keys(user.telegramConfig).length > 0) {
+      localStorage.setItem('astrobot_telegram_config', JSON.stringify(user.telegramConfig));
+    }
+
+    if (user.cycles && user.cycles.length > 0) {
+      const migratedCycles = user.cycles.map(c => ({
+        ...c,
+        selectedStrategy: 'autopilot'
+      }));
+      setCycles(migratedCycles);
+      localStorage.setItem('astrobot_scheduler_cycles', JSON.stringify(migratedCycles));
+    }
+
+    if (user.profile && Object.keys(user.profile).length > 0) {
+      setProfileData(prev => ({ ...prev, ...user.profile }));
+      localStorage.setItem('astrobot_user_profile', JSON.stringify(user.profile));
+      if (user.profile.fullname) {
+        setWelcomeName(user.profile.fullname);
+        localStorage.setItem('astrobot_custom_name', user.profile.fullname);
+      }
+      if (user.profile.profileImage) {
+        setProfileImage(user.profile.profileImage);
+        localStorage.setItem('astrobot_profile_image', user.profile.profileImage);
+      }
+      if (user.profile.fullname || user.profile.profileImage) {
+        setIsProfileConfigured(true);
+        localStorage.setItem('astrobot_profile_configured', 'true');
+      }
+    }
+
+    if (user.planning && Object.keys(user.planning).length > 0) {
+      setPlanning(user.planning);
+      if (user.planning.goals) localStorage.setItem('astrobot_planning_goals', JSON.stringify(user.planning.goals));
+      if (user.planning.notes) localStorage.setItem('astrobot_user_notes', JSON.stringify(user.planning.notes));
+      if (user.planning.milestones) localStorage.setItem('astrobot_planning_milestones', JSON.stringify(user.planning.milestones));
+      if (user.planning.simulator) localStorage.setItem('astrobot_planning_simulator', JSON.stringify(user.planning.simulator));
+    }
+
+    if (user.training && Object.keys(user.training).length > 0) {
+      if (user.training.completed_lessons) {
+        setCompletedLessons(user.training.completed_lessons);
+        localStorage.setItem('astrobot_completed_lessons', JSON.stringify(user.training.completed_lessons));
+      }
+      if (user.training.lessons) {
+        setCustomLessons(user.training.lessons);
+        localStorage.setItem('astrobot_training_lessons', JSON.stringify(user.training.lessons));
+      }
+      if (user.training.xp !== undefined) {
+        setProfileData(prev => {
+          const updated = { ...prev, xp: user.training.xp };
+          localStorage.setItem('astrobot_user_profile', JSON.stringify(updated));
+          return updated;
+        });
+      }
+    }
+  };
+
   // Auto-Update states
   const [updateStatus, setUpdateStatus] = useState(null); // 'available' | 'downloading' | 'downloaded' | 'error' | null
   const [updateVersion, setUpdateVersion] = useState('');
@@ -926,50 +1047,8 @@ export default function App() {
               localStorage.setItem('astrobot_admin_token', 'lucas_astro_admin');
             }
 
-            // Apply loaded settings if present
-            if (user.settings && Object.keys(user.settings).length > 0) {
-              setSettings(prev => ({ ...prev, ...user.settings }));
-              localStorage.setItem('astrobot_settings', JSON.stringify(user.settings));
-              
-              if (user.settings.token) {
-                localStorage.setItem('deriv_token', user.settings.token);
-              }
-              if (user.settings.appId) {
-                localStorage.setItem('deriv_app_id', user.settings.appId);
-              }
-              if (user.settings.isDemo !== undefined) {
-                localStorage.setItem('deriv_is_demo', user.settings.isDemo.toString());
-                setIsDemo(user.settings.isDemo);
-              }
-            }
-
-            if (user.telegramConfig && Object.keys(user.telegramConfig).length > 0) {
-              localStorage.setItem('astrobot_telegram_config', JSON.stringify(user.telegramConfig));
-            }
-
-            if (user.cycles && user.cycles.length > 0) {
-              const migratedCycles = user.cycles.map(c => ({
-                ...c,
-                selectedStrategy: 'autopilot'
-              }));
-              setCycles(migratedCycles);
-              localStorage.setItem('astrobot_scheduler_cycles', JSON.stringify(migratedCycles));
-            }
-
-            if (user.profile) {
-              if (user.profile.fullname) {
-                setWelcomeName(user.profile.fullname);
-                localStorage.setItem('astrobot_custom_name', user.profile.fullname);
-              }
-              if (user.profile.profileImage) {
-                setProfileImage(user.profile.profileImage);
-                localStorage.setItem('astrobot_profile_image', user.profile.profileImage);
-              }
-              if (user.profile.fullname || user.profile.profileImage) {
-                setIsProfileConfigured(true);
-                localStorage.setItem('astrobot_profile_configured', 'true');
-              }
-            }
+            // Apply loaded settings, profile, planning and training from server
+            applyUserDataFromServer(user);
 
             addLog({
               message: `[Sistema] Bem-vindo! Login realizado com sucesso.`,
@@ -1165,20 +1244,8 @@ export default function App() {
           if (user.cdkey) localStorage.setItem('astrobot_cdkey', user.cdkey);
           if (user.expiresAt) localStorage.setItem('astrobot_expires_at', user.expiresAt.toString());
 
-          if (user.settings) {
-            setSettings(prev => ({ ...prev, ...user.settings }));
-            localStorage.setItem('astrobot_settings', JSON.stringify(user.settings));
-          }
-          if (user.profile) {
-            if (user.profile.fullname) {
-              setWelcomeName(user.profile.fullname);
-              localStorage.setItem('astrobot_custom_name', user.profile.fullname);
-            }
-            if (user.profile.profileImage) {
-              setProfileImage(user.profile.profileImage);
-              localStorage.setItem('astrobot_profile_image', user.profile.profileImage);
-            }
-          }
+          // Apply settings, profile, planning, and training from server
+          applyUserDataFromServer(user);
         } catch (err) {
           console.error('Failed to restore user session:', err);
         }
@@ -1500,23 +1567,7 @@ export default function App() {
     fetchDownloads();
   }, []);
 
-  // Planning / Goals States
-  const [planning, setPlanning] = useState({
-    goals: {
-      monthly: 500,
-      quarterly: 1500,
-      annual: 5000,
-      custom: 2000,
-      customName: 'Notebook Novo',
-      configured: false
-    },
-    simulator: {
-      simStake: 1.0,
-      simSessions: 2,
-      simTarget: 3.0,
-      simWinrate: 91
-    }
-  });
+
 
   // Scheduler / Automation States
   const [schedulerState, setSchedulerState] = useState(() => {
@@ -6393,7 +6444,13 @@ export default function App() {
                 initialViewMode={activePage === 'notes' ? 'notes' : 'overview'}
                 onUpdatePlanning={(newPlanning) => {
                   setPlanning(newPlanning);
+                  if (newPlanning.goals) localStorage.setItem('astrobot_planning_goals', JSON.stringify(newPlanning.goals));
+                  if (newPlanning.notes) localStorage.setItem('astrobot_user_notes', JSON.stringify(newPlanning.notes));
+                  if (newPlanning.milestones) localStorage.setItem('astrobot_planning_milestones', JSON.stringify(newPlanning.milestones));
+                  if (newPlanning.simulator) localStorage.setItem('astrobot_planning_simulator', JSON.stringify(newPlanning.simulator));
+
                   derivAPI.updatePlanning(newPlanning);
+                  syncSettingsToDb({ planning: newPlanning });
                 }}
                 onClearDb={() => {
                   clearDbTrades(isDemo);
@@ -6562,11 +6619,36 @@ export default function App() {
                 isAdmin={isAdminLoggedIn}
                 currentUserEmail={accountInfo?.email || userEmail || 'trader@astrobot.com'}
                 profileData={profileData}
+                initialCompletedLessonIds={completedLessons}
+                initialLessons={customLessons}
                 onAddXp={(earnedXp) => {
                   const currentXp = profileData.xp || 0;
                   const updated = { ...profileData, xp: currentXp + earnedXp };
                   setProfileData(updated);
                   localStorage.setItem('astrobot_user_profile', JSON.stringify(updated));
+                }}
+                onUpdateCompletedLessons={(newCompleted, earnedXp) => {
+                  setCompletedLessons(newCompleted);
+                  localStorage.setItem('astrobot_completed_lessons', JSON.stringify(newCompleted));
+                  const updatedXp = (profileData.xp || 0) + (earnedXp || 0);
+                  syncSettingsToDb({
+                    training: {
+                      completed_lessons: newCompleted,
+                      xp: updatedXp,
+                      lessons: customLessons
+                    }
+                  });
+                }}
+                onUpdateLessons={(updatedLessons) => {
+                  setCustomLessons(updatedLessons);
+                  localStorage.setItem('astrobot_training_lessons', JSON.stringify(updatedLessons));
+                  syncSettingsToDb({
+                    training: {
+                      completed_lessons: completedLessons,
+                      xp: profileData.xp || 0,
+                      lessons: updatedLessons
+                    }
+                  });
                 }}
               />
             </main>
@@ -7041,11 +7123,36 @@ export default function App() {
                     isAdmin={true}
                     currentUserEmail={accountInfo?.email || userEmail || 'trader@astrobot.com'}
                     profileData={profileData}
+                    initialCompletedLessonIds={completedLessons}
+                    initialLessons={customLessons}
                     onAddXp={(earnedXp) => {
                       const currentXp = profileData.xp || 0;
                       const updated = { ...profileData, xp: currentXp + earnedXp };
                       setProfileData(updated);
                       localStorage.setItem('astrobot_user_profile', JSON.stringify(updated));
+                    }}
+                    onUpdateCompletedLessons={(newCompleted, earnedXp) => {
+                      setCompletedLessons(newCompleted);
+                      localStorage.setItem('astrobot_completed_lessons', JSON.stringify(newCompleted));
+                      const updatedXp = (profileData.xp || 0) + (earnedXp || 0);
+                      syncSettingsToDb({
+                        training: {
+                          completed_lessons: newCompleted,
+                          xp: updatedXp,
+                          lessons: customLessons
+                        }
+                      });
+                    }}
+                    onUpdateLessons={(updatedLessons) => {
+                      setCustomLessons(updatedLessons);
+                      localStorage.setItem('astrobot_training_lessons', JSON.stringify(updatedLessons));
+                      syncSettingsToDb({
+                        training: {
+                          completed_lessons: completedLessons,
+                          xp: profileData.xp || 0,
+                          lessons: updatedLessons
+                        }
+                      });
                     }}
                   />
                 )}

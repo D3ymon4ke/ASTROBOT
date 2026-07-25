@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS public.users (
     telegram_config JSONB DEFAULT '{}'::jsonb,
     cycles JSONB DEFAULT '[]'::jsonb,
     profile JSONB DEFAULT '{"fullname": "", "profileImage": ""}'::jsonb,
+    planning JSONB DEFAULT '{}'::jsonb,
+    training JSONB DEFAULT '{}'::jsonb,
     is_running BOOLEAN DEFAULT false,
     active_cycle_id TEXT,
     pending_command JSONB,
@@ -85,3 +87,7 @@ CREATE TABLE IF NOT EXISTS public.trades (
 CREATE INDEX IF NOT EXISTS idx_trades_user_email ON public.trades(user_email);
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON public.posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_downloads_created_at ON public.downloads(created_at DESC);
+
+-- Migrações seguras para tabelas existentes
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS planning JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS training JSONB DEFAULT '{}'::jsonb;

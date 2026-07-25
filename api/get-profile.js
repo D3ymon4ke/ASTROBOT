@@ -41,7 +41,9 @@ export default async function handler(req, res) {
         settings: {},
         telegramConfig: {},
         cycles: [],
-        profile: { fullname: cleanEmail.split('@')[0], profileImage: '' }
+        profile: { fullname: cleanEmail.split('@')[0], profileImage: '' },
+        planning: {},
+        training: {}
       }
     });
   }
@@ -90,7 +92,9 @@ export default async function handler(req, res) {
         settings: userData.settings || {},
         telegramConfig: userData.telegram_config || {},
         cycles: userData.cycles || [],
-        profile: userData.profile || {}
+        profile: userData.profile || {},
+        planning: userData.planning || {},
+        training: userData.training || {}
       }
     });
 

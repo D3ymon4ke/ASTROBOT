@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const { email, settings, telegramConfig, cycles, profile } = req.body;
+  const { email, settings, telegramConfig, cycles, profile, planning, training } = req.body;
 
   if (!email) {
     return res.status(400).json({ success: false, message: 'O e-mail do usuário é obrigatório.' });
@@ -54,6 +54,8 @@ export default async function handler(req, res) {
     if (telegramConfig !== undefined) updateData.telegram_config = telegramConfig;
     if (cycles !== undefined) updateData.cycles = cycles;
     if (profile !== undefined) updateData.profile = profile;
+    if (planning !== undefined) updateData.planning = planning;
+    if (training !== undefined) updateData.training = training;
 
     const { error: updateErr } = await supabase
       .from('users')
