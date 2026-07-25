@@ -652,6 +652,12 @@ export default function App() {
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
+  // Welcome Onboarding Modal for New Users State
+  const [showWelcomeModal, setShowWelcomeModal] = useState(() => {
+    return localStorage.getItem('astrobot_hide_welcome_onboarding') !== 'true';
+  });
+  const [dontShowWelcomeAgain, setDontShowWelcomeAgain] = useState(false);
+
   // News / Patch Notes state
   const [posts, setPosts] = useState([]);
   const [postsLoading, setPostsLoading] = useState(false);
@@ -6708,6 +6714,23 @@ export default function App() {
                   >
                     🏅 Selos & Conquistas
                   </button>
+                  <button
+                    onClick={() => setAdminSubTab('training')}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: adminSubTab === 'training' ? 'var(--primary-light)' : 'var(--text-muted)',
+                      borderBottom: adminSubTab === 'training' ? '2px solid var(--primary-light)' : '2px solid transparent',
+                      padding: '0.5rem 1rem',
+                      fontSize: '0.85rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      outline: 'none'
+                    }}
+                  >
+                    🎓 Postar Aulas & Provas
+                  </button>
                 </div>
 
                 {adminSubTab === 'licenses' && (
@@ -7012,6 +7035,20 @@ export default function App() {
                 {adminSubTab === 'gamification' && (
                   <AdminGamificationEditor />
                 )}
+
+                {adminSubTab === 'training' && (
+                  <TrainingModule
+                    isAdmin={true}
+                    currentUserEmail={accountInfo?.email || userEmail || 'trader@astrobot.com'}
+                    profileData={profileData}
+                    onAddXp={(earnedXp) => {
+                      const currentXp = profileData.xp || 0;
+                      const updated = { ...profileData, xp: currentXp + earnedXp };
+                      setProfileData(updated);
+                      localStorage.setItem('astrobot_user_profile', JSON.stringify(updated));
+                    }}
+                  />
+                )}
               </div>
             </main>
           );
@@ -7171,6 +7208,156 @@ export default function App() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* WELCOME ONBOARDING MODAL FOR NEW USERS */}
+      {showWelcomeModal && isActivated && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          background: 'rgba(5, 3, 12, 0.85)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.25rem',
+          animation: 'fadeIn 0.3s ease'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '520px',
+            width: '100%',
+            padding: '2rem',
+            borderRadius: '24px',
+            background: 'linear-gradient(135deg, rgba(24, 18, 48, 0.98) 0%, rgba(10, 7, 22, 0.98) 100%)',
+            border: '1px solid rgba(139, 92, 246, 0.4)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+            color: 'white',
+            position: 'relative'
+          }}>
+            {/* Header Badge */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{
+                background: 'rgba(139, 92, 246, 0.15)',
+                border: '1px solid rgba(139, 92, 246, 0.3)',
+                padding: '0.6rem 1rem',
+                borderRadius: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: 'var(--primary-light)',
+                fontSize: '0.78rem',
+                fontWeight: 'bold'
+              }}>
+                <Sparkles size={16} /> Bem-vindo ao ASTROBOT VIP!
+              </div>
+
+              <button
+                onClick={() => {
+                  if (dontShowWelcomeAgain) {
+                    localStorage.setItem('astrobot_hide_welcome_onboarding', 'true');
+                  }
+                  setShowWelcomeModal(false);
+                }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: '900', margin: '0 0 0.5rem 0', background: 'linear-gradient(to right, #ffffff, var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                Comece por Treinamento & Provas 🎓
+              </h3>
+              <p style={{ fontSize: '0.88rem', color: '#cbd5e1', lineHeight: '1.55', margin: 0 }}>
+                Para otimizar suas entradas, preservar sua banca e utilizar todo o potencial do Piloto Automático e da Inteligência Artificial, recomendamos realizar a nossa grade de treinamento rápida.
+              </p>
+            </div>
+
+            {/* Highlights List */}
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '1rem', borderRadius: '14px', border: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', color: '#e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle size={15} style={{ color: '#10b981' }} />
+                <span>Vídeos educativos passo a passo sobre robôs e deriv.</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle size={15} style={{ color: '#10b981' }} />
+                <span>Simulações de Martingale, SorosGale e Gestão de Banca.</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle size={15} style={{ color: '#10b981' }} />
+                <span>Provas interativas que somam <b>XP</b> para subir seu nível VIP.</span>
+              </div>
+            </div>
+
+            {/* Checkbox Don't Show Again */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={dontShowWelcomeAgain}
+                onChange={(e) => setDontShowWelcomeAgain(e.target.checked)}
+                style={{ accentColor: 'var(--primary)', width: '16px', height: '16px', cursor: 'pointer' }}
+              />
+              <span>Não mostrar este aviso novamente</span>
+            </label>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '10px', marginTop: '0.25rem' }}>
+              <button
+                onClick={() => {
+                  if (dontShowWelcomeAgain) {
+                    localStorage.setItem('astrobot_hide_welcome_onboarding', 'true');
+                  }
+                  setActivePage('training');
+                  setShowWelcomeModal(false);
+                }}
+                style={{
+                  flex: 1,
+                  padding: '0.85rem',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+                  color: 'white',
+                  border: 'none',
+                  fontWeight: '800',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 20px rgba(139, 92, 246, 0.4)'
+                }}
+              >
+                <GraduationCap size={18} /> Ir para Treinamento & Provas
+              </button>
+
+              <button
+                onClick={() => {
+                  if (dontShowWelcomeAgain) {
+                    localStorage.setItem('astrobot_hide_welcome_onboarding', 'true');
+                  }
+                  setShowWelcomeModal(false);
+                }}
+                style={{
+                  padding: '0.85rem 1.25rem',
+                  borderRadius: '12px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  color: 'white',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  fontWeight: 'bold',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Explorar Dashboard
+              </button>
+            </div>
           </div>
         </div>
       )}
