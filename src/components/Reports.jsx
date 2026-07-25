@@ -129,16 +129,31 @@ const calculateStats = (tradesList) => {
     netProfit += profitVal;
     totalStake += stakeVal;
 
-    // Drawdown calculation
+    // Drawdown calculation & Rich Equity Curve
     runningBalance += profitVal;
-    equityCurve.push({ time: date.toLocaleDateString(), value: runningBalance });
     if (runningBalance > maxBalance) {
       maxBalance = runningBalance;
     }
-    const dd = maxBalance > 0 ? ((maxBalance - runningBalance) / maxBalance) * 100 : 0;
-    if (dd > maxDrawdown) {
-      maxDrawdown = dd;
+    const currentDd = maxBalance > 0 ? ((maxBalance - runningBalance) / maxBalance) * 100 : 0;
+    if (currentDd > maxDrawdown) {
+      maxDrawdown = currentDd;
     }
+
+    equityCurve.push({
+      tradeIndex: wins + losses,
+      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      date: date.toLocaleDateString(),
+      fullDate: date.toLocaleString(),
+      value: parseFloat(runningBalance.toFixed(2)),
+      profit: parseFloat(profitVal.toFixed(2)),
+      stake: parseFloat(stakeVal.toFixed(2)),
+      result: isWin ? 'WIN' : 'LOSS',
+      symbol: trade.symbol || 'Volatilidade 10 (1s)',
+      strategyName: trade.strategyName ? trade.strategyName.replace('_', ' ') : 'Piloto Automático',
+      galeLevel: Number(trade.galeLevel) || 0,
+      drawdown: parseFloat(currentDd.toFixed(1)),
+      isAth: runningBalance === maxBalance && runningBalance > 0
+    });
 
     // Time filters
     const diffMs = now - date;
@@ -321,6 +336,10 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
   const [exportHover, setExportHover] = useState(null);
   const [toast, setToast] = useState(null);
 
+  // Equity Curve Interactive States
+  const [equityZoom, setEquityZoom] = useState('all'); // 'all' | 20 | 50 | 100
+  const [hoveredEquityPoint, setHoveredEquityPoint] = useState(null);
+
   // Load saved monthly reports on mount and when isDemo changes
   useEffect(() => {
     setMonthlyReports(loadMonthlyReports(isDemo));
@@ -492,81 +511,325 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
 
   const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-  // Equity SVG Line Chart Calculations
+  // Advanced Interactive Equity SVG Line Chart
   const renderEquityChart = () => {
-    if (stats.equityCurve.length < 2) {
+    const rawCurve = stats.equityCurve || [];
+
+    if (rawCurve.length < 2) {
       return (
-        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#475569', gap: '0.4rem' }}>
-          <Activity size={24} style={{ opacity: 0.3 }} />
-          <span style={{ fontSize: '0.72rem' }}>Requer pelo menos 2 operações persistidas no período.</span>
+        <div style={{ height: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#475569', gap: '0.5rem', background: 'rgba(9, 9, 15, 0.4)', borderRadius: '14px', border: '1px dashed rgba(255,255,255,0.06)' }}>
+          <Activity size={28} style={{ opacity: 0.3, color: '#a78bfa' }} />
+          <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Requer pelo menos 2 operações executadas para gerar a curva patrimonial.</span>
         </div>
       );
     }
 
-    const width = 600;
-    const height = 180;
-    const padding = { top: 20, right: 30, bottom: 20, left: 35 };
+    // Apply Zoom Filter
+    const activeCurve = equityZoom === 'all' ? rawCurve : rawCurve.slice(-parseInt(equityZoom));
 
-    const values = stats.equityCurve.map(c => c.value);
-    const minVal = Math.min(0, ...values) - 5;
-    const maxVal = Math.max(10, ...values) + 5;
+    const width = 800;
+    const height = 240;
+    const padding = { top: 30, right: 40, bottom: 35, left: 55 };
+
+    const values = activeCurve.map(c => c.value);
+    const minVal = Math.min(0, ...values) - 4;
+    const maxVal = Math.max(10, ...values) + 4;
     const valRange = maxVal - minVal || 1;
 
-    const points = stats.equityCurve.map((d, index) => {
-      const x = padding.left + (index / (stats.equityCurve.length - 1)) * (width - padding.left - padding.right);
-      const y = height - padding.bottom - ((d.value - minVal) / valRange) * (height - padding.top - padding.bottom);
-      return `${x},${y}`;
-    }).join(' ');
+    // Highest Peak & Lowest Point
+    let peakPoint = activeCurve[0];
+    let lowestPoint = activeCurve[0];
 
+    activeCurve.forEach(pt => {
+      if (pt.value > peakPoint.value) peakPoint = pt;
+      if (pt.value < lowestPoint.value) lowestPoint = pt;
+    });
+
+    // Compute Canvas Points
+    const chartPoints = activeCurve.map((d, index) => {
+      const x = padding.left + (index / Math.max(1, activeCurve.length - 1)) * (width - padding.left - padding.right);
+      const y = height - padding.bottom - ((d.value - minVal) / valRange) * (height - padding.top - padding.bottom);
+      return { x, y, data: d, index };
+    });
+
+    const pathString = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
     const zeroLineY = height - padding.bottom - ((0 - minVal) / valRange) * (height - padding.top - padding.bottom);
 
+    // Peak and Lowest Y
+    const peakCanvasY = height - padding.bottom - ((peakPoint.value - minVal) / valRange) * (height - padding.top - padding.bottom);
+    const peakCanvasX = padding.left + (activeCurve.findIndex(p => p === peakPoint) / Math.max(1, activeCurve.length - 1)) * (width - padding.left - padding.right);
+
+    // Mouse Movement Handler for Crosshair and Tooltip
+    const handleMouseMove = (e) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const svgMouseX = (mouseX / rect.width) * width;
+
+      // Find closest point by X coordinate
+      let closest = chartPoints[0];
+      let minDistance = Math.abs(chartPoints[0].x - svgMouseX);
+
+      for (let i = 1; i < chartPoints.length; i++) {
+        const dist = Math.abs(chartPoints[i].x - svgMouseX);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closest = chartPoints[i];
+        }
+      }
+
+      setHoveredEquityPoint(closest);
+    };
+
+    const handleMouseLeave = () => {
+      setHoveredEquityPoint(null);
+    };
+
+    const isPositiveTotal = (activeCurve[activeCurve.length - 1]?.value || 0) >= 0;
+
     return (
-      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-        <defs>
-          <linearGradient id="equityGrad2" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#db2777" stopOpacity="0" />
-          </linearGradient>
-          <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#a78bfa" />
-            <stop offset="100%" stopColor="#f472b6" />
-          </linearGradient>
-        </defs>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', width: '100%' }}>
+        
+        {/* Top Control Bar & High-Level Metrics */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', background: 'rgba(9, 9, 15, 0.4)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.04)' }}>
+          
+          {/* Quick Metrics */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+            <div>
+              <span style={{ fontSize: '0.58rem', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Maior Pico (ATH)</span>
+              <strong style={{ fontSize: '0.88rem', color: '#10b981', fontFamily: 'var(--font-mono)' }}>+${peakPoint.value.toFixed(2)}</strong>
+            </div>
 
-        {/* Grid lines */}
-        <line x1={padding.left} y1={zeroLineY} x2={width - padding.right} y2={zeroLineY} stroke="rgba(255,255,255,0.06)" strokeDasharray="3,3" />
-        <line x1={padding.left} y1={padding.top} x2={padding.left} y2={height - padding.bottom} stroke="rgba(255,255,255,0.06)" />
-        <line x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} stroke="rgba(255,255,255,0.06)" />
+            <div style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: '1rem' }}>
+              <span style={{ fontSize: '0.58rem', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Saldo Atual</span>
+              <strong style={{ fontSize: '0.88rem', color: isPositiveTotal ? '#10b981' : '#ef4444', fontFamily: 'var(--font-mono)' }}>
+                {isPositiveTotal ? '+' : ''}${activeCurve[activeCurve.length - 1]?.value.toFixed(2)}
+              </strong>
+            </div>
 
-        {/* Fill Area */}
-        <path
-          d={`M ${padding.left},${height - padding.bottom} L ${points} L ${width - padding.right},${height - padding.bottom} Z`}
-          fill="url(#equityGrad2)"
-        />
+            <div style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: '1rem' }}>
+              <span style={{ fontSize: '0.58rem', color: '#64748b', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Max Drawdown</span>
+              <strong style={{ fontSize: '0.88rem', color: '#f59e0b', fontFamily: 'var(--font-mono)' }}>{stats.maxDrawdown.toFixed(1)}%</strong>
+            </div>
+          </div>
 
-        {/* Line Path */}
-        <path
-          d={`M ${points}`}
-          fill="none"
-          stroke="url(#lineGrad)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+          {/* Zoom Filter Buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(0,0,0,0.3)', padding: '3px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 'bold', padding: '0 6px' }}>Exibir:</span>
+            {[
+              { id: 'all', label: `Todos (${rawCurve.length})` },
+              { id: '20', label: '20 Ops' },
+              { id: '50', label: '50 Ops' },
+              { id: '100', label: '100 Ops' }
+            ].map(btn => (
+              <button
+                key={btn.id}
+                onClick={() => setEquityZoom(btn.id)}
+                style={{
+                  background: equityZoom === btn.id ? 'linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%)' : 'transparent',
+                  color: equityZoom === btn.id ? 'white' : '#94a3b8',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '3px 9px',
+                  fontSize: '0.65rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
 
-        {/* Endpoint indicator dot */}
-        {stats.equityCurve.length > 0 && (() => {
-          const lastIndex = stats.equityCurve.length - 1;
-          const x = padding.left + (lastIndex / lastIndex) * (width - padding.left - padding.right);
-          const y = height - padding.bottom - ((values[lastIndex] - minVal) / valRange) * (height - padding.top - padding.bottom);
-          return (
-            <g>
-              <circle cx={x} cy={y} r="6" fill="#f472b6" opacity="0.3" className="ping" />
-              <circle cx={x} cy={y} r="4" fill="#ffffff" stroke="#7c3aed" strokeWidth="2" />
-            </g>
-          );
-        })()}
-      </svg>
+        </div>
+
+        {/* SVG Container with Interactive Overlay */}
+        <div 
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          style={{ position: 'relative', width: '100%', minHeight: '240px', cursor: 'crosshair', userSelect: 'none' }}
+        >
+          <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+            <defs>
+              <linearGradient id="equityPositiveGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id="equityLineGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#10b981" />
+                <stop offset="50%" stopColor="#38bdf8" />
+                <stop offset="100%" stopColor="#a78bfa" />
+              </linearGradient>
+              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+
+            {/* Horizontal Reference Grid Lines */}
+            <line x1={padding.left} y1={zeroLineY} x2={width - padding.right} y2={zeroLineY} stroke="rgba(255,255,255,0.12)" strokeDasharray="4,4" />
+            <text x={padding.left - 8} y={zeroLineY + 4} fill="#64748b" fontSize="9" textAnchor="end" fontFamily="monospace">$0.00</text>
+
+            <line x1={padding.left} y1={padding.top} x2={width - padding.right} y2={padding.top} stroke="rgba(255,255,255,0.04)" />
+            <text x={padding.left - 8} y={padding.top + 4} fill="#64748b" fontSize="9" textAnchor="end" fontFamily="monospace">+${maxVal.toFixed(0)}</text>
+
+            <line x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} stroke="rgba(255,255,255,0.04)" />
+            <text x={padding.left - 8} y={height - padding.bottom + 4} fill="#64748b" fontSize="9" textAnchor="end" fontFamily="monospace">${minVal.toFixed(0)}</text>
+
+            {/* Peak ATH Line */}
+            {peakPoint && (
+              <>
+                <line x1={padding.left} y1={peakCanvasY} x2={width - padding.right} y2={peakCanvasY} stroke="rgba(16, 185, 129, 0.25)" strokeDasharray="2,2" />
+                <rect x={width - padding.right - 65} y={peakCanvasY - 9} width="65" height="15" rx="4" fill="rgba(16, 185, 129, 0.2)" stroke="rgba(16, 185, 129, 0.4)" />
+                <text x={width - padding.right - 32} y={peakCanvasY + 2} fill="#10b981" fontSize="8" fontWeight="bold" textAnchor="middle">🏆 PICO ATH</text>
+              </>
+            )}
+
+            {/* Fill Area below line */}
+            <path
+              d={`M ${padding.left},${height - padding.bottom} L ${pathString.replace('M ', '')} L ${width - padding.right},${height - padding.bottom} Z`}
+              fill="url(#equityPositiveGrad)"
+            />
+
+            {/* Main Equity Path Line */}
+            <path
+              d={pathString}
+              fill="none"
+              stroke="url(#equityLineGrad)"
+              strokeWidth="2.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              filter="url(#glow)"
+            />
+
+            {/* ATH Peak Marker Dot */}
+            {peakPoint && (
+              <g>
+                <circle cx={peakCanvasX} cy={peakCanvasY} r="5" fill="#10b981" opacity="0.4" className="ping" />
+                <circle cx={peakCanvasX} cy={peakCanvasY} r="3" fill="#ffffff" stroke="#10b981" strokeWidth="2" />
+              </g>
+            )}
+
+            {/* Endpoint Indicator */}
+            {chartPoints.length > 0 && (() => {
+              const lastPt = chartPoints[chartPoints.length - 1];
+              return (
+                <g>
+                  <circle cx={lastPt.x} cy={lastPt.y} r="6" fill="#a78bfa" opacity="0.3" className="ping" />
+                  <circle cx={lastPt.x} cy={lastPt.y} r="4" fill="#ffffff" stroke="#7c3aed" strokeWidth="2" />
+                </g>
+              );
+            })()}
+
+            {/* Interactive Crosshairs & Selected Point Highlight */}
+            {hoveredEquityPoint && (
+              <g>
+                {/* Vertical Crosshair Line */}
+                <line
+                  x1={hoveredEquityPoint.x}
+                  y1={padding.top}
+                  x2={hoveredEquityPoint.x}
+                  y2={height - padding.bottom}
+                  stroke="rgba(167, 139, 250, 0.5)"
+                  strokeDasharray="3,3"
+                  strokeWidth="1.2"
+                />
+
+                {/* Horizontal Crosshair Line */}
+                <line
+                  x1={padding.left}
+                  y1={hoveredEquityPoint.y}
+                  x2={width - padding.right}
+                  y2={hoveredEquityPoint.y}
+                  stroke="rgba(167, 139, 250, 0.5)"
+                  strokeDasharray="3,3"
+                  strokeWidth="1.2"
+                />
+
+                {/* Pulsing Active Circle */}
+                <circle
+                  cx={hoveredEquityPoint.x}
+                  cy={hoveredEquityPoint.y}
+                  r="8"
+                  fill="rgba(167, 139, 250, 0.3)"
+                  className="ping"
+                />
+                <circle
+                  cx={hoveredEquityPoint.x}
+                  cy={hoveredEquityPoint.y}
+                  r="5"
+                  fill="#ffffff"
+                  stroke="#7c3aed"
+                  strokeWidth="2.5"
+                />
+              </g>
+            )}
+          </svg>
+
+          {/* Rich Floating Tooltip Card */}
+          {hoveredEquityPoint && (
+            <div style={{
+              position: 'absolute',
+              top: Math.max(10, Math.min(140, (hoveredEquityPoint.y / height) * 240 - 70)),
+              left: hoveredEquityPoint.x > width / 2 
+                ? `${(hoveredEquityPoint.x / width) * 100 - 32}%` 
+                : `${(hoveredEquityPoint.x / width) * 100 + 4}%`,
+              background: 'rgba(10, 8, 20, 0.95)',
+              backdropFilter: 'blur(16px)',
+              border: '1px solid rgba(139, 92, 246, 0.35)',
+              borderRadius: '12px',
+              padding: '0.85rem 1rem',
+              color: 'white',
+              boxShadow: '0 12px 35px rgba(0,0,0,0.6)',
+              zIndex: 50,
+              pointerEvents: 'none',
+              minWidth: '210px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '5px' }}>
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 'bold' }}>
+                  Op nº {hoveredEquityPoint.data.tradeIndex} • {hoveredEquityPoint.data.time}
+                </span>
+                <span style={{
+                  fontSize: '0.6rem',
+                  fontWeight: '800',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  background: hoveredEquityPoint.data.result === 'WIN' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                  color: hoveredEquityPoint.data.result === 'WIN' ? '#10b981' : '#ef4444',
+                  border: `1px solid ${hoveredEquityPoint.data.result === 'WIN' ? '#10b981' : '#ef4444'}`
+                }}>
+                  {hoveredEquityPoint.data.result} ({hoveredEquityPoint.data.profit >= 0 ? '+' : ''}${hoveredEquityPoint.data.profit})
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.72rem', marginTop: '2px' }}>
+                <div>
+                  <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block' }}>Saldo Acumulado</span>
+                  <strong style={{ color: hoveredEquityPoint.data.value >= 0 ? '#10b981' : '#ef4444', fontFamily: 'var(--font-mono)' }}>
+                    {hoveredEquityPoint.data.value >= 0 ? '+' : ''}${hoveredEquityPoint.data.value.toFixed(2)}
+                  </strong>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block' }}>Drawdown do Pico</span>
+                  <strong style={{ color: '#f59e0b', fontFamily: 'var(--font-mono)' }}>
+                    {hoveredEquityPoint.data.drawdown}%
+                  </strong>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px dashed rgba(255,255,255,0.06)', paddingTop: '4px', fontSize: '0.65rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div>🤖 <strong>Estratégia:</strong> {hoveredEquityPoint.data.strategyName} {hoveredEquityPoint.data.galeLevel > 0 && `(Gale ${hoveredEquityPoint.data.galeLevel})`}</div>
+                <div>📊 <strong>Ativo:</strong> {hoveredEquityPoint.data.symbol}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+      </div>
     );
   };
 

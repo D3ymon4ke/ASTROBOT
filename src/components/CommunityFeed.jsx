@@ -24,6 +24,11 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
   const [shareIsPublic, setShareIsPublic] = useState(true);
   const [showShareModal, setShowShareModal] = useState(false);
   
+  // Simple Post Modal States (Thoughts, Media, Questions - No trade results)
+  const [showSimplePostModal, setShowSimplePostModal] = useState(false);
+  const [simplePostText, setSimplePostText] = useState('');
+  const [simplePostMediaUrl, setSimplePostMediaUrl] = useState('');
+  
   // Custom manual post sharing modal states
   const [shareSessionData, setShareSessionData] = useState({
     profit: 15.50,
@@ -179,6 +184,78 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
       }
     } catch (err) {
       console.error('Error sharing post:', err);
+    }
+  };
+
+  const handleCreateSimplePost = async () => {
+    if (!simplePostText.trim() && !simplePostMediaUrl.trim()) {
+      alert('Por favor, digite uma mensagem ou adicione um link de imagem/vídeo para publicar.');
+      return;
+    }
+
+    const activeEmail = userEmail || localStorage.getItem('astrobot_user_email') || 'deymonmachado@gmail.com';
+    const activeName = userName || localStorage.getItem('astrobot_custom_name') || activeEmail.split('@')[0];
+
+    const newPostObj = {
+      id: 'post_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      email: activeEmail,
+      userName: activeName,
+      profileImage: profileImage || localStorage.getItem('astrobot_profile_image') || '',
+      timestamp: Date.now(),
+      comment: simplePostText,
+      mediaUrl: simplePostMediaUrl.trim(),
+      postType: 'general',
+      isPublic: shareIsPublic,
+      likes: [],
+      reactions: { '🔥': [], '🚀': [], '👏': [], '💎': [] },
+      comments: [],
+      shares: 0
+    };
+
+    try {
+      const res = await fetch(`${REST_URL}/api/community/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: activeEmail,
+          comment: simplePostText,
+          mediaUrl: simplePostMediaUrl.trim(),
+          postType: 'general',
+          isPublic: shareIsPublic
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const created = data.post || newPostObj;
+        
+        const cached = localStorage.getItem('astrobot_cached_community_posts');
+        const postsList = cached ? JSON.parse(cached) : [];
+        localStorage.setItem('astrobot_cached_community_posts', JSON.stringify([created, ...postsList]));
+
+        setShowSimplePostModal(false);
+        setSimplePostText('');
+        setSimplePostMediaUrl('');
+        fetchPosts();
+        alert('Publicação enviada com sucesso!');
+        return;
+      }
+    } catch (err) {
+      console.warn('Erro na conexão VPS, salvando localmente:', err);
+    }
+
+    try {
+      const cached = localStorage.getItem('astrobot_cached_community_posts');
+      const postsList = cached ? JSON.parse(cached) : [];
+      const updated = [newPostObj, ...postsList];
+      localStorage.setItem('astrobot_cached_community_posts', JSON.stringify(updated));
+
+      setPosts(prev => [newPostObj, ...prev]);
+      setShowSimplePostModal(false);
+      setSimplePostText('');
+      setSimplePostMediaUrl('');
+      alert('Publicação compartilhada com sucesso!');
+    } catch (e) {
+      alert('Erro ao criar publicação.');
     }
   };
 
@@ -410,28 +487,52 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
           </div>
         </div>
 
-        {/* Action Button: Share session result */}
-        <button 
-          onClick={() => setShowShareModal(true)}
-          className="action-btn"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'linear-gradient(90deg, var(--primary) 0%, #7c3aed 100%)',
-            color: 'white',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '12px',
-            fontWeight: 'bold',
-            fontSize: '0.8rem',
-            cursor: 'pointer',
-            boxShadow: '0 4px 15px rgba(124, 58, 237, 0.3)',
-            borderTop: '1px solid rgba(255,255,255,0.1)'
-          }}
-        >
-          <Plus size={16} /> Compartilhar Resultado
-        </button>
+        {/* Action Buttons: Create Post & Share Result */}
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={() => setShowSimplePostModal(true)}
+            className="action-btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
+              color: 'white',
+              border: 'none',
+              padding: '10px 18px',
+              borderRadius: '12px',
+              fontWeight: 'bold',
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)',
+              borderTop: '1px solid rgba(255,255,255,0.1)'
+            }}
+          >
+            <MessageSquare size={16} /> Nova Publicação
+          </button>
+
+          <button 
+            onClick={() => setShowShareModal(true)}
+            className="action-btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'linear-gradient(90deg, var(--primary) 0%, #7c3aed 100%)',
+              color: 'white',
+              border: 'none',
+              padding: '10px 18px',
+              borderRadius: '12px',
+              fontWeight: 'bold',
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              boxShadow: '0 4px 15px rgba(124, 58, 237, 0.3)',
+              borderTop: '1px solid rgba(255,255,255,0.1)'
+            }}
+          >
+            <Plus size={16} /> Compartilhar Resultado
+          </button>
+        </div>
       </div>
 
       {/* TABS SWITCHER (Twitter/Discord Hybrid Navigation) */}
@@ -662,7 +763,26 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                         </p>
                       )}
 
-                      {/* 3. SESSION PARAMETRIC DASHBOARD (X/Twitter inspired high-tech widget grid) */}
+                      {/* 2.5 ATTACHED MEDIA (Images or Videos) */}
+                      {post.mediaUrl && (
+                        <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', marginTop: '4px' }}>
+                          {post.mediaUrl.includes('youtube.com') || post.mediaUrl.includes('youtu.be') ? (
+                            <div style={{ width: '100%', aspectRatio: '16/9' }}>
+                              <iframe
+                                src={post.mediaUrl.replace('watch?v=', 'embed/')}
+                                title="Vídeo anexado"
+                                style={{ width: '100%', height: '100%', border: 'none' }}
+                                allowFullScreen
+                              />
+                            </div>
+                          ) : (
+                            <img src={post.mediaUrl} alt="Mídia anexada" style={{ width: '100%', maxHeight: '400px', objectFit: 'cover', display: 'block' }} />
+                          )}
+                        </div>
+                      )}
+
+                      {/* 3. SESSION PARAMETRIC DASHBOARD (Only for trade session posts) */}
+                      {post.postType !== 'general' && post.profit !== undefined && (
                       <div style={{
                         background: 'rgba(9, 9, 15, 0.35)',
                         border: '1px solid rgba(255, 255, 255, 0.04)',
@@ -750,13 +870,40 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                             color: 'var(--text-secondary)',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '4px',
-                            marginLeft: 'auto'
+                            gap: '4px'
                           }}>
                             <Clock size={10} /> {formatTime(post.sessionTime)}
                           </span>
+
+                          <button
+                            onClick={() => {
+                              localStorage.setItem('astrobot_imported_strategy', JSON.stringify({
+                                strategy: post.strategy,
+                                symbol: post.symbol
+                              }));
+                              alert(`⚡ Estratégia "${post.strategy}" no ativo "${post.symbol}" importada com sucesso! Acesse a aba Automação para operar.`);
+                            }}
+                            style={{
+                              background: 'linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%)',
+                              color: 'white',
+                              border: 'none',
+                              padding: '3px 10px',
+                              borderRadius: '6px',
+                              fontSize: '0.62rem',
+                              fontWeight: 'bold',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              marginLeft: 'auto',
+                              boxShadow: '0 0 10px rgba(139, 92, 246, 0.4)'
+                            }}
+                          >
+                            <Zap size={11} /> Importar para o Robô
+                          </button>
                         </div>
                       </div>
+                      )}
 
                       {/* 4. SOCIAL INTERACTION TOOLBAR (Twitter style metrics + LinkedIn actions) */}
                       <div style={{ 
@@ -1436,6 +1583,170 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                   padding: '8px 20px',
                   cursor: 'pointer',
                   boxShadow: '0 4px 15px rgba(124, 58, 237, 0.2)'
+                }}
+              >
+                Publicar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SIMPLE POST MODAL (Thoughts, Questions, Media, Links - No trade results) */}
+      {showSimplePostModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: 'rgba(14, 11, 24, 0.98)',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
+            borderRadius: '20px',
+            width: '100%',
+            maxWidth: '520px',
+            padding: '1.5rem',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+            animation: 'fadeIn 0.25s ease'
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <MessageSquare size={20} style={{ color: '#10b981' }} />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>Criar Nova Publicação</h3>
+              </div>
+              <button 
+                onClick={() => setShowSimplePostModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content Textarea */}
+            <div>
+              <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 'bold', display: 'block', marginBottom: '6px' }}>
+                No que você está pensando sobre o mercado hoje?
+              </label>
+              <textarea 
+                rows={4}
+                value={simplePostText}
+                onChange={(e) => setSimplePostText(e.target.value)}
+                placeholder="Compartilhe uma ideia, visão de gráfico, pergunta ou pensamento com os outros traders..."
+                style={{
+                  width: '100%',
+                  background: 'rgba(9, 9, 15, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '10px',
+                  color: 'white',
+                  fontSize: '0.85rem',
+                  padding: '10px',
+                  outline: 'none',
+                  resize: 'none'
+                }}
+              />
+            </div>
+
+            {/* Optional Media URL (Image or Video) */}
+            <div>
+              <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 'bold', display: 'block', marginBottom: '6px' }}>
+                Link de Mídia / Imagem / Vídeo (Opcional)
+              </label>
+              <input 
+                type="text"
+                value={simplePostMediaUrl}
+                onChange={(e) => setSimplePostMediaUrl(e.target.value)}
+                placeholder="Cole o link de uma imagem (http/https) ou vídeo do YouTube..."
+                style={{
+                  width: '100%',
+                  background: 'rgba(9, 9, 15, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '10px',
+                  color: 'white',
+                  fontSize: '0.8rem',
+                  padding: '8px 10px',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            {/* Visibility Selector */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Visibilidade:</span>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button 
+                  onClick={() => setShareIsPublic(true)}
+                  style={{
+                    background: shareIsPublic ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.02)',
+                    border: '1px solid ' + (shareIsPublic ? '#10b981' : 'rgba(255,255,255,0.08)'),
+                    color: shareIsPublic ? '#10b981' : 'var(--text-secondary)',
+                    fontSize: '0.7rem',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🌐 Todo Mundo
+                </button>
+                <button 
+                  onClick={() => setShareIsPublic(false)}
+                  style={{
+                    background: !shareIsPublic ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255,255,255,0.02)',
+                    border: '1px solid ' + (!shareIsPublic ? '#f59e0b' : 'rgba(255,255,255,0.08)'),
+                    color: !shareIsPublic ? '#f59e0b' : 'var(--text-secondary)',
+                    fontSize: '0.7rem',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🔒 Apenas Eu
+                </button>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '6px' }}>
+              <button 
+                onClick={() => setShowSimplePostModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.8rem',
+                  fontWeight: 'bold',
+                  padding: '8px 16px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleCreateSimplePost}
+                style={{
+                  background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontSize: '0.8rem',
+                  fontWeight: 'bold',
+                  padding: '8px 22px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)'
                 }}
               >
                 Publicar

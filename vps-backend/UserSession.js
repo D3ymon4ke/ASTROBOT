@@ -77,7 +77,8 @@ const DEFAULT_PLANNING = {
     simSessions: 2,
     simTarget: 3.0,
     simWinrate: 91
-  }
+  },
+  notes: []
 };
 
 export class UserSession {
@@ -760,7 +761,8 @@ export class UserSession {
     const currentPlanning = this.planning || { ...DEFAULT_PLANNING };
     this.planning = {
       goals: { ...currentPlanning.goals, ...(newPlanning.goals || {}) },
-      simulator: { ...currentPlanning.simulator, ...(newPlanning.simulator || {}) }
+      simulator: { ...currentPlanning.simulator, ...(newPlanning.simulator || {}) },
+      notes: newPlanning.notes !== undefined ? newPlanning.notes : (currentPlanning.notes || [])
     };
     this.saveToFile();
     this.syncToClients();

@@ -40,8 +40,8 @@ export class DerivAPI {
       return;
     }
 
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const vpsUrl = isLocal ? 'ws://localhost:8080' : 'wss://187-127-40-228.sslip.io:443';
+    const forceLocal = localStorage.getItem('force_local_vps') === 'true';
+    const vpsUrl = forceLocal ? 'ws://localhost:8080' : 'wss://187-127-40-228.sslip.io:443';
     
     console.log(`[VPS WS] Connecting to ${vpsUrl}...`);
     this.ws = new WebSocket(vpsUrl);

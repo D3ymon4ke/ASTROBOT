@@ -348,3 +348,137 @@ export async function loadUserBackup(email, isDemo) {
 
   return cloudData || { trades: [], monthlyReports: [], settings: {}, planning: {}, cycles: [] };
 }
+
+// User Profile Full Metadata (Bio, Banner, Privacy, Badges)
+export async function updateUserProfileFull(email, profilePayload) {
+  if (!email) return false;
+  const cleanEmail = email.toLowerCase().trim();
+  const dir = join(process.cwd(), 'data', 'profiles');
+  if (!existsSync(dir)) {
+    try { mkdirSync(dir, { recursive: true }); } catch (e) {}
+  }
+  const path = join(dir, `profile_${cleanEmail}.json`);
+
+  let current = {};
+  if (existsSync(path)) {
+    try { current = JSON.parse(readFileSync(path, 'utf8')); } catch (e) {}
+  }
+
+  const updated = {
+    ...current,
+    ...profilePayload,
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    writeFileSync(path, JSON.stringify(updated, null, 2), 'utf8');
+  } catch (e) {
+    console.error(`Failed to write local profile for ${cleanEmail}:`, e);
+  }
+
+  if (supabase) {
+    try {
+      await withTimeout(
+        supabase
+          .from('users')
+          .update({ profile_data: updated })
+          .eq('email', cleanEmail),
+        3000
+      );
+    } catch (err) {
+      console.warn(`Supabase profile update failed:`, err.message);
+    }
+  }
+  return updated;
+}
+
+export async function getUserFullProfile(email) {
+  if (!email) return null;
+  const cleanEmail = email.toLowerCase().trim();
+  const path = join(process.cwd(), 'data', 'profiles', `profile_${cleanEmail}.json`);
+
+  if (existsSync(path)) {
+    try {
+      return JSON.parse(readFileSync(path, 'utf8'));
+    } catch (e) {}
+  }
+
+  if (supabase) {
+    try {
+      const { data } = await withTimeout(
+        supabase
+          .from('users')
+          .select('profile_data')
+          .eq('email', cleanEmail)
+          .single(),
+        3000
+      );
+      if (data && data.profile_data) return data.profile_data;
+    } catch (err) {}
+  }
+
+  return {
+    email: cleanEmail,
+    bio: '',
+    bannerUrl: '',
+    privacy: 'public', // 'public' | 'friends' | 'private'
+    badges: ['beta_tester'],
+    friends: [],
+    pendingRequests: []
+  };
+}
+
+// Social System: Friends Requests
+export async function sendFriendRequest(senderEmail, targetEmail) {
+  if (!senderEmail || !targetEmail || senderEmail === targetEmail) return { success: false, message: 'Operação inválida' };
+  
+  const senderProf = await getUserFullProfile(senderEmail);
+  const targetProf = await getUserFullProfile(targetEmail);
+
+  if (!senderProf || !targetProf) return { success: false, message: 'Usuário não encontrado' };
+
+  // Check if already friends
+  if ((targetProf.friends || []).includes(senderEmail)) {
+    return { success: false, message: 'Vocês já são amigos!' };
+  }
+
+  // Check if request already pending
+  const existingReqs = targetProf.pendingRequests || [];
+  if (existingReqs.some(r => r.from === senderEmail)) {
+    return { success: false, message: 'Solicitação já enviada anteriormente.' };
+  }
+
+  existingReqs.push({
+    from: senderEmail,
+    sentAt: new Date().toISOString()
+  });
+
+  await updateUserProfileFull(targetEmail, { pendingRequests: existingReqs });
+  return { success: true, message: 'Pedido de amizade enviado!' };
+}
+
+export async function respondFriendRequest(userEmail, senderEmail, accept = true) {
+  const userProf = await getUserFullProfile(userEmail);
+  const senderProf = await getUserFullProfile(senderEmail);
+
+  if (!userProf || !senderProf) return { success: false, message: 'Perfil não encontrado' };
+
+  // Remove request from pending list
+  const updatedReqs = (userProf.pendingRequests || []).filter(r => r.from !== senderEmail);
+  const userFriends = userProf.friends || [];
+  const senderFriends = senderProf.friends || [];
+
+  if (accept) {
+    if (!userFriends.includes(senderEmail)) userFriends.push(senderEmail);
+    if (!senderFriends.includes(userEmail)) senderFriends.push(userEmail);
+
+    await updateUserProfileFull(senderEmail, { friends: senderFriends });
+  }
+
+  await updateUserProfileFull(userEmail, {
+    pendingRequests: updatedReqs,
+    friends: userFriends
+  });
+
+  return { success: true, message: accept ? 'Solicitação aceita!' : 'Solicitação recusada.' };
+}
