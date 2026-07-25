@@ -6323,7 +6323,7 @@ export default function App() {
                     };
                     localStorage.setItem('astrobot_cached_community_posts', JSON.stringify([newPostObj, ...postsList]));
                     alert(`📢 Estratégia "${strat.name}" compartilhada no Feed Social com sucesso!`);
-                    setActivePage('community');
+                    setActivePage('training');
                   }}
                 />
               ) : (
@@ -6361,7 +6361,7 @@ export default function App() {
                     };
                     localStorage.setItem('astrobot_cached_community_posts', JSON.stringify([newPostObj, ...postsList]));
                     alert(`📢 Estratégia "${strat.name}" compartilhada no Feed Social!`);
-                    setActivePage('community');
+                    setActivePage('training');
                   }}
                 />
               )}
@@ -7054,7 +7054,28 @@ export default function App() {
           );
         }
 
-        return null;
+        // Fallback safety to Dashboard if activePage is invalid or undefined
+        if (activePage === 'community') {
+          setTimeout(() => setActivePage('dashboard'), 0);
+        }
+
+        return (
+          <main className="dashboard-grid" style={{
+            flex: 1,
+            display: 'grid',
+            gridTemplateColumns: sidebarCollapsed ? '1fr' : '1fr 340px',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            padding: '1.25rem',
+            gap: '1.25rem',
+            overflow: 'hidden',
+            position: 'relative'
+          }}>
+            {/* Fallback Dashboard Content */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <Chart candles={candles} trades={trades} activeTrade={stateRef.current.lastContractDetails} granularity={settings.granularity} strategy={settings.selectedStrategy} />
+            </div>
+          </main>
+        );
       })()}
       </div>
 
@@ -7213,7 +7234,7 @@ export default function App() {
       )}
 
       {/* WELCOME ONBOARDING MODAL FOR NEW USERS */}
-      {showWelcomeModal && isActivated && (
+      {showWelcomeModal && authorized && (
         <div style={{
           position: 'fixed',
           inset: 0,
