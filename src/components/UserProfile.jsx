@@ -701,7 +701,7 @@ export default function UserProfile({
                     <User size={16} style={{ color: 'var(--primary-light)' }} />
                   </div>
                   <div>
-                    <strong style={{ fontSize: '0.8rem', color: 'white', display: 'block' }}>{fEmail.split('@')[0]}</strong>
+                    <strong style={{ fontSize: '0.8rem', color: 'white', display: 'block' }}>{(fEmail || 'trader').split('@')[0]}</strong>
                     <span style={{ fontSize: '0.62rem', color: '#10b981' }}>🟢 Amigo Conectado</span>
                   </div>
                 </div>

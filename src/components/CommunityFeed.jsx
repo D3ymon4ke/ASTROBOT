@@ -12,6 +12,9 @@ const getBaseRestUrl = () => {
 };
 
 export default function CommunityFeed({ userEmail, userName, profileImage }) {
+  const safeUserEmail = (userEmail || localStorage.getItem('astrobot_user_email') || 'deymonmachado@gmail.com').toLowerCase();
+  const safeUserName = userName || localStorage.getItem('astrobot_custom_name') || safeUserEmail.split('@')[0] || 'Trader';
+
   const [activeSubTab, setActiveSubTab] = useState('feed'); // 'feed' | 'ranking'
   const [posts, setPosts] = useState([]);
   const [filter, setFilter] = useState('all');
@@ -659,7 +662,7 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 {posts.map((post) => {
                   const profitColor = post.profit >= 0 ? '#10b981' : '#ef4444';
-                  const hasLiked = post.likes?.includes(userEmail.toLowerCase());
+                  const hasLiked = Array.isArray(post.likes) && post.likes.includes(safeUserEmail);
                   const commentsList = post.comments || [];
                   const isExpanded = expandedComments[post.id];
                   
@@ -999,7 +1002,7 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                             { emoji: '💎', label: 'Brilhante' }
                           ].map((r) => {
                             const usersReacted = post.reactions?.[r.emoji] || [];
-                            const hasReacted = usersReacted.includes(userEmail.toLowerCase());
+                            const hasReacted = Array.isArray(usersReacted) && usersReacted.includes(safeUserEmail);
                             return (
                               <button
                                 key={r.emoji}
@@ -1126,7 +1129,7 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                                       </div>
                                       
                                       {/* Allow deleting own comments */}
-                                      {c.email.toLowerCase() === userEmail.toLowerCase() && (
+                                      {c.email && c.email.toLowerCase() === safeUserEmail && (
                                         <button 
                                           onClick={() => handleDeleteComment(post.id, c.id)}
                                           style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}
@@ -1166,7 +1169,7 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                 width: '60px', 
                 height: '60px', 
                 borderRadius: '50%', 
-                background: profileImage ? 'none' : getAvatarGradient(userName),
+                background: profileImage ? 'none' : getAvatarGradient(safeUserName),
                 border: '2px solid var(--primary-light)',
                 display: 'flex',
                 alignItems: 'center',
@@ -1175,13 +1178,13 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                 margin: '0 auto 10px auto'
               }}>
                 {profileImage ? (
-                  <img src={profileImage} alt={userName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src={profileImage} alt={safeUserName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{userName?.slice(0, 2).toUpperCase()}</span>
+                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{safeUserName?.slice(0, 2).toUpperCase()}</span>
                 )}
               </div>
-              <h4 style={{ margin: '0 0 2px 0', fontSize: '0.9rem', fontWeight: '800' }}>{userName}</h4>
-              <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '12px' }}>{userEmail}</span>
+              <h4 style={{ margin: '0 0 2px 0', fontSize: '0.9rem', fontWeight: '800' }}>{safeUserName}</h4>
+              <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '12px' }}>{safeUserEmail}</span>
               
               <div style={{ 
                 display: 'grid', 
@@ -1194,13 +1197,13 @@ export default function CommunityFeed({ userEmail, userName, profileImage }) {
                 <div style={{ background: 'rgba(255,255,255,0.02)', padding: '6px', borderRadius: '8px' }}>
                   <span style={{ color: 'var(--text-secondary)', display: 'block', fontSize: '0.55rem' }}>PUBLICAÇÕES</span>
                   <strong style={{ fontSize: '0.9rem', color: 'white' }}>
-                    {posts.filter(p => p.email.toLowerCase() === userEmail.toLowerCase()).length}
+                    {posts.filter(p => p.email && p.email.toLowerCase() === safeUserEmail).length}
                   </strong>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', padding: '6px', borderRadius: '8px' }}>
                   <span style={{ color: 'var(--text-secondary)', display: 'block', fontSize: '0.55rem' }}>TOTAL CURTIDAS</span>
                   <strong style={{ fontSize: '0.9rem', color: '#ef4444' }}>
-                    {posts.filter(p => p.email.toLowerCase() === userEmail.toLowerCase()).reduce((sum, p) => sum + (p.likes?.length || 0), 0)} ❤️
+                    {posts.filter(p => p.email && p.email.toLowerCase() === safeUserEmail).reduce((sum, p) => sum + (p.likes?.length || 0), 0)} ❤️
                   </strong>
                 </div>
               </div>
