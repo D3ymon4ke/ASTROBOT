@@ -97,40 +97,48 @@ export const formatOpportunityFound = (symbol, strategy, direction, winRate, sta
 };
 
 // Format Order Executed
-export const formatOrderExecuted = (symbol, direction, stake) => {
-  const dirEmoji = direction.toUpperCase() === 'CALL' ? '🟩' : '🟥';
-  return `🤖 <b>ASTROBOT - ORDEM EXECUTADA</b>\n` +
+export const formatOrderExecuted = (symbol, direction, stake, strategyName = '') => {
+  const dirEmoji = direction.toUpperCase() === 'CALL' ? '🟩 CALL (COMPRA)' : '🟥 PUT (VENDA)';
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const stratLine = strategyName ? `🧠 <b>Estratégia:</b> <code>${strategyName}</code>\n` : '';
+
+  return `🤖 <b>ASTROBOT • ORDEM ENVIADA À CORRETORA</b>\n` +
          `━━━━━━━━━━━━━━━━━━━━━━\n` +
-         `Ordem enviada com sucesso para a corretora.\n\n` +
-         `<b>Ativo:</b> <code>${symbol}</code>\n` +
-         `<b>Direção:</b> ${dirEmoji} <code>${direction.toUpperCase()}</code>\n` +
-         `<b>Stake:</b> <code>$${parseFloat(stake).toFixed(2)}</code>\n` +
+         `📈 <b>Ativo:</b> <code>${symbol}</code>\n` +
+         stratLine +
+         `↕️ <b>Direção:</b> <code>${dirEmoji}</code>\n` +
+         `💵 <b>Stake Aplicada:</b> <code>$${parseFloat(stake).toFixed(2)}</code>\n` +
+         `⏰ <b>Horário de Envio:</b> <code>${timeStr}</code>\n` +
          `━━━━━━━━━━━━━━━━━━━━━━\n` +
-         `⏳ <i>Aguardando expiração do contrato...</i>`;
+         `⏳ <i>Aguardando expiração do contrato na Deriv...</i>`;
 };
 
 // Format Take Profit (Meta Batida)
 export const formatTakeProfitMessage = (profit, tradesCount, winRate, sessionName = 'Principal') => {
-  return `🏆 <b>META DIÁRIA ATINGIDA!</b>\n` +
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return `🏆 <b>ASTROBOT • META DIÁRIA BATIDA (TAKE PROFIT)!</b>\n` +
          `━━━━━━━━━━━━━━━━━━━━━━\n` +
-         `<b>Sessão:</b> <code>${sessionName}</code>\n` +
-         `<b>Lucro Total:</b> <code>+$${parseFloat(profit).toFixed(2)}</code>\n` +
-         `<b>Operações:</b> <code>${tradesCount}</code>\n` +
-         `<b>Winrate:</b> <code>${parseFloat(winRate).toFixed(1)}%</code>\n` +
+         `⏰ <b>Horário da Meta:</b> <code>${timeStr}</code>\n` +
+         `📅 <b>Sessão/Ciclo:</b> <code>${sessionName}</code>\n` +
+         `💵 <b>Lucro Acumulado:</b> <code>+$${parseFloat(profit).toFixed(2)}</code>\n` +
+         `🔄 <b>Operações Realizadas:</b> <code>${tradesCount}</code>\n` +
+         `🎯 <b>Winrate da Sessão:</b> <code>${parseFloat(winRate).toFixed(1)}%</code>\n` +
          `━━━━━━━━━━━━━━━━━━━━━━\n` +
          `🔒 <i>O robô encerrou automaticamente esta sessão para proteger seus lucros. Parabéns!</i>`;
 };
 
 // Format Stop Loss Hit
 export const formatStopLossMessage = (loss, tradesCount, winRate, sessionName = 'Principal') => {
-  return `🛑 <b>LIMITE DE PERDA (STOP LOSS) ATINGIDO!</b>\n` +
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return `🛑 <b>ASTROBOT • LIMITE DE PERDA (STOP LOSS) ATINGIDO</b>\n` +
          `━━━━━━━━━━━━━━━━━━━━━━\n` +
-         `<b>Sessão:</b> <code>${sessionName}</code>\n` +
-         `<b>Prejuízo Total:</b> <code>-$${Math.abs(parseFloat(loss)).toFixed(2)}</code>\n` +
-         `<b>Operações Realizadas:</b> <code>${tradesCount}</code>\n` +
-         `<b>Winrate Geral:</b> <code>${parseFloat(winRate).toFixed(1)}%</code>\n` +
+         `⏰ <b>Horário do Stop Loss:</b> <code>${timeStr}</code>\n` +
+         `📅 <b>Sessão/Ciclo:</b> <code>${sessionName}</code>\n` +
+         `🔴 <b>Perda Acumulada:</b> <code>-$${Math.abs(parseFloat(loss)).toFixed(2)}</code>\n` +
+         `🔄 <b>Operações Realizadas:</b> <code>${tradesCount}</code>\n` +
+         `🎯 <b>Winrate Geral:</b> <code>${parseFloat(winRate).toFixed(1)}%</code>\n` +
          `━━━━━━━━━━━━━━━━━━━━━━\n` +
-         `🚫 <i>Bot desligado automaticamente. Revise seus parâmetros antes de iniciar um novo ciclo.</i>`;
+         `🚫 <i>Bot desligado automaticamente. Respeite seu plano de gerenciamento!</i>`;
 };
 
 // Format Status Report

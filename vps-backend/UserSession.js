@@ -1388,7 +1388,8 @@ export class UserSession {
 
       if (this.activeCycleId) {
         const cycleId = this.activeCycleId;
-        this.cycles = this.cycles.map(c => c.id === cycleId ? { ...c, status: 'Meta Batida', finalProfit: profit } : c);
+        const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        this.cycles = this.cycles.map(c => c.id === cycleId ? { ...c, status: 'Meta Batida', finalProfit: profit, winTime: timeNow } : c);
         this.activeCycleId = null;
         this.syncCyclesToFirestore();
       }
@@ -1407,7 +1408,8 @@ export class UserSession {
 
       if (this.activeCycleId) {
         const cycleId = this.activeCycleId;
-        this.cycles = this.cycles.map(c => c.id === cycleId ? { ...c, status: 'Stop Atingido', finalProfit: profit } : c);
+        const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        this.cycles = this.cycles.map(c => c.id === cycleId ? { ...c, status: 'Stop Atingido', finalProfit: profit, stopTime: timeNow } : c);
         this.activeCycleId = null;
         this.syncCyclesToFirestore();
       }
@@ -1904,21 +1906,35 @@ export class UserSession {
       const schedulerStatusText = this.schedulerState ? '🟢 Automação Online' : '🔴 Automação Offline';
       
       let concluidosCount = 0;
+      let metaBatidaCount = 0;
+      let stopLossCount = 0;
       let execucaoCount = 0;
       let aguardandoCount = 0;
 
       const cycleListText = this.cycles.map(c => {
-        let emoji = '⏳';
+        let statusBadge = '';
         if (!c.active) {
-          emoji = '⏸';
+          statusBadge = '⏸ <i>Desativado</i>';
         } else if (c.id === this.activeCycleId && this.isRunning) {
-          emoji = '▶';
+          statusBadge = '⚡ <b>Executando...</b>';
           execucaoCount++;
-        } else if (c.status === 'Meta Batida' || c.status === 'Stop Atingido' || c.status === 'Finalizado') {
-          emoji = '🏆';
+        } else if (c.status === 'Meta Batida') {
+          metaBatidaCount++;
           concluidosCount++;
+          const val = c.finalProfit !== undefined ? ` (+$${parseFloat(c.finalProfit).toFixed(2)})` : '';
+          const t = c.winTime ? ` [${c.winTime}]` : '';
+          statusBadge = `🏆 <b>Meta Batida</b>${val}${t}`;
+        } else if (c.status === 'Stop Atingido') {
+          stopLossCount++;
+          concluidosCount++;
+          const val = c.finalProfit !== undefined ? ` (-$${Math.abs(parseFloat(c.finalProfit)).toFixed(2)})` : '';
+          const t = c.stopTime ? ` [${c.stopTime}]` : '';
+          statusBadge = `🛑 <b>Stop Loss</b>${val}${t}`;
+        } else if (c.status === 'Finalizado') {
+          concluidosCount++;
+          statusBadge = '🏁 <b>Finalizado</b>';
         } else {
-          emoji = '⏳';
+          statusBadge = '⏳ <i>Aguardando</i>';
           aguardandoCount++;
         }
 
@@ -1926,16 +1942,21 @@ export class UserSession {
           .replace(/^(Madrugada|Manhã|Tarde|Noite)\s*-\s*/gi, '')
           .replace(/\s*\(Auto\)$/gi, '');
 
-        return `<code>${c.startTime}</code> ${emoji} <b>${cleanName}</b>`;
+        return `<code>${c.startTime}</code> • <b>${cleanName}</b> ➔ ${statusBadge}`;
       }).join('\n');
+
+      const summaryStats = [
+        `<b>${schedulerStatusText}</b>`,
+        `🏆 <b>${metaBatidaCount}</b> meta${metaBatidaCount !== 1 ? 's' : ''} batida${metaBatidaCount !== 1 ? 's' : ''}`,
+        stopLossCount > 0 ? `🛑 <b>${stopLossCount}</b> Stop Loss` : null,
+        `▶ <b>${execucaoCount}</b> em execução`,
+        `⏳ <b>${aguardandoCount}</b> aguardando`
+      ].filter(Boolean).join('\n');
 
       const message = 
         `🚀 <b>ASTROBOT • CICLOS AUTOMÁTICOS</b>\n\n` +
         `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `<b>${schedulerStatusText}</b>\n` +
-        `🏆 <b>${concluidosCount}</b> ciclo${concluidosCount !== 1 ? 's' : ''} concluído${concluidosCount !== 1 ? 's' : ''}\n` +
-        `▶ <b>${execucaoCount}</b> ciclo${execucaoCount !== 1 ? 's' : ''} em execução\n` +
-        `⏳ <b>${aguardandoCount}</b> ciclo${aguardandoCount !== 1 ? 's' : ''} aguardando\n\n` +
+        `${summaryStats}\n\n` +
         `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
         `${cycleListText || '<i>Nenhum ciclo cadastrado.</i>'}`;
 
