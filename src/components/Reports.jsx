@@ -17,7 +17,19 @@ import {
   Scale,
   ArrowLeft,
   Save,
-  Check
+  Check,
+  Filter,
+  Sliders,
+  Zap,
+  ShieldAlert,
+  PieChart,
+  Target,
+  Cpu,
+  Layers,
+  Eye,
+  HelpCircle,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { loadMonthlyReports, saveMonthlyReport, deleteMonthlyReport } from '../utils/db';
 
@@ -60,7 +72,13 @@ const calculateStats = (tradesList) => {
       dailyWinrates: Array(7).fill({ total: 0, wins: 0, rate: 0 }),
       strategyStats: {},
       assetStats: {},
-      equityCurve: []
+      equityCurve: [],
+      hourlyDetailed: Array.from({ length: 24 }, (_, i) => ({ hour: i, total: 0, wins: 0, losses: 0, profit: 0, lossAmount: 0, rate: 0, lossRate: 0, gales: { G0: 0, G1: 0, G2: 0, G3Plus: 0 }, totalGales: 0 })),
+      worstHoursByLoss: [],
+      worstHoursByCount: [],
+      galeRiskHours: [],
+      assetDetailed: [],
+      worstAssets: []
     };
   }
 
@@ -89,8 +107,8 @@ const calculateStats = (tradesList) => {
   const galeCounts = {};
   let maxGaleFound = 0;
 
-  // Heatmaps
-  const hourlyData = Array.from({ length: 24 }, (_, i) => ({ hour: i, total: 0, wins: 0 }));
+  // Heatmaps & Hourly Analysis
+  const hourlyData = Array.from({ length: 24 }, (_, i) => ({ hour: i, total: 0, wins: 0, losses: 0, profit: 0, lossAmount: 0, gales: { G0: 0, G1: 0, G2: 0, G3Plus: 0 } }));
   const dailyData = Array.from({ length: 7 }, (_, i) => ({ day: i, total: 0, wins: 0 }));
 
   // Strategy & Asset tables
@@ -112,6 +130,9 @@ const calculateStats = (tradesList) => {
     const stakeVal = trade.stake || 0;
     const timestamp = trade.timestamp || (trade.epoch * 1000);
     const date = new Date(timestamp);
+    const hour = date.getHours();
+    const day = date.getDay(); // 0 is Sunday
+    const gale = Number(trade.galeLevel) || 0;
 
     // Core stats
     if (isWin) {
@@ -150,7 +171,7 @@ const calculateStats = (tradesList) => {
       result: isWin ? 'WIN' : 'LOSS',
       symbol: trade.symbol || 'Volatilidade 10 (1s)',
       strategyName: trade.strategyName ? trade.strategyName.replace('_', ' ') : 'Piloto Automático',
-      galeLevel: Number(trade.galeLevel) || 0,
+      galeLevel: gale,
       drawdown: parseFloat(currentDd.toFixed(1)),
       isAth: runningBalance === maxBalance && runningBalance > 0
     });
@@ -162,19 +183,25 @@ const calculateStats = (tradesList) => {
     if (diffMs <= oneMonthMs) monthlyProfit += profitVal;
 
     // Martingale dist
-    const gale = Number(trade.galeLevel) || 0;
     if (isWin) {
       galeCounts[gale] = (galeCounts[gale] || 0) + 1;
       if (gale > maxGaleFound) maxGaleFound = gale;
     }
 
-    // Hourly Heatmap
-    const hour = date.getHours();
+    // Hourly Breakdown
     hourlyData[hour].total++;
-    if (isWin) hourlyData[hour].wins++;
+    hourlyData[hour].profit += profitVal;
+    const galeKey = gale === 0 ? 'G0' : gale === 1 ? 'G1' : gale === 2 ? 'G2' : 'G3Plus';
+    hourlyData[hour].gales[galeKey] = (hourlyData[hour].gales[galeKey] || 0) + 1;
+
+    if (isWin) {
+      hourlyData[hour].wins++;
+    } else {
+      hourlyData[hour].losses++;
+      hourlyData[hour].lossAmount += Math.abs(profitVal);
+    }
 
     // Daily Heatmap
-    const day = date.getDay(); // 0 is Sunday
     dailyData[day].total++;
     if (isWin) dailyData[day].wins++;
 
@@ -191,11 +218,36 @@ const calculateStats = (tradesList) => {
     // Asset breakdown
     const assetKey = trade.symbol || 'Unknown';
     if (!assetStats[assetKey]) {
-      assetStats[assetKey] = { trades: 0, wins: 0, profit: 0, name: trade.symbol };
+      assetStats[assetKey] = { 
+        symbol: assetKey, 
+        name: trade.symbol, 
+        trades: 0, 
+        wins: 0, 
+        losses: 0, 
+        profit: 0, 
+        lossAmount: 0, 
+        totalStake: 0, 
+        gales: { G0: 0, G1: 0, G2: 0, G3Plus: 0 },
+        currentLossStreak: 0,
+        maxLossStreak: 0
+      };
     }
     assetStats[assetKey].trades++;
     assetStats[assetKey].profit += profitVal;
-    if (isWin) assetStats[assetKey].wins++;
+    assetStats[assetKey].totalStake += stakeVal;
+    assetStats[assetKey].gales[galeKey] = (assetStats[assetKey].gales[galeKey] || 0) + 1;
+
+    if (isWin) {
+      assetStats[assetKey].wins++;
+      assetStats[assetKey].currentLossStreak = 0;
+    } else {
+      assetStats[assetKey].losses++;
+      assetStats[assetKey].lossAmount += Math.abs(profitVal);
+      assetStats[assetKey].currentLossStreak++;
+      if (assetStats[assetKey].currentLossStreak > assetStats[assetKey].maxLossStreak) {
+        assetStats[assetKey].maxLossStreak = assetStats[assetKey].currentLossStreak;
+      }
+    }
   });
 
   // Finalize streaks
@@ -219,6 +271,38 @@ const calculateStats = (tradesList) => {
     wins: d.wins,
     rate: d.total > 0 ? (d.wins / d.total) * 100 : 0
   }));
+
+  // Process Detailed Hourly Analysis
+  const hourlyDetailedProcessed = hourlyData.map(h => ({
+    ...h,
+    rate: h.total > 0 ? (h.wins / h.total) * 100 : 0,
+    lossRate: h.total > 0 ? (h.losses / h.total) * 100 : 0,
+    totalGales: (h.gales.G1 || 0) + (h.gales.G2 || 0) + (h.gales.G3Plus || 0)
+  }));
+
+  const worstHoursByLoss = [...hourlyDetailedProcessed]
+    .filter(h => h.total > 0 && h.losses > 0)
+    .sort((a, b) => b.lossAmount - a.lossAmount);
+
+  const worstHoursByCount = [...hourlyDetailedProcessed]
+    .filter(h => h.total > 0 && h.losses > 0)
+    .sort((a, b) => b.losses - a.losses);
+
+  const galeRiskHours = [...hourlyDetailedProcessed]
+    .filter(h => h.total > 0 && h.totalGales > 0)
+    .sort((a, b) => b.totalGales - a.totalGales);
+
+  // Process Detailed Asset Analysis
+  const assetDetailedProcessed = Object.values(assetStats).map(a => ({
+    ...a,
+    rate: a.trades > 0 ? (a.wins / a.trades) * 100 : 0,
+    lossRate: a.trades > 0 ? (a.losses / a.trades) * 100 : 0,
+    totalGales: (a.gales.G1 || 0) + (a.gales.G2 || 0) + (a.gales.G3Plus || 0)
+  }));
+
+  const worstAssets = [...assetDetailedProcessed]
+    .filter(a => a.trades > 0)
+    .sort((a, b) => a.profit - b.profit); // Most negative profit first
 
   const g0 = galeCounts[0] || 0;
   const g1 = galeCounts[1] || 0;
@@ -257,7 +341,72 @@ const calculateStats = (tradesList) => {
     dailyWinrates,
     strategyStats,
     assetStats,
-    equityCurve
+    equityCurve,
+    hourlyDetailed: hourlyDetailedProcessed,
+    worstHoursByLoss,
+    worstHoursByCount,
+    galeRiskHours,
+    assetDetailed: assetDetailedProcessed,
+    worstAssets
+  };
+};
+
+// Simulation Engine helper ("What-If" Analysis)
+const runSimulation = (tradesList, simParams = {}) => {
+  const {
+    excludedHours = [], // Array of hour numbers [14, 15]
+    excludedAssets = [], // Array of asset symbols
+    maxGaleAllowed = null // null (unlimited), 0 (G0 only), 1 (Max G1), 2 (Max G2)
+  } = simParams;
+
+  if (!tradesList || tradesList.length === 0) {
+    return {
+      simulatedTrades: [],
+      stats: calculateStats([])
+    };
+  }
+
+  const simulatedTrades = [];
+
+  tradesList.forEach(trade => {
+    const timestamp = trade.timestamp || (trade.epoch * 1000);
+    const date = new Date(timestamp);
+    const hour = date.getHours();
+    const symbol = trade.symbol || 'Unknown';
+    const galeLevel = Number(trade.galeLevel) || 0;
+
+    // Filter out excluded hours
+    if (excludedHours.includes(hour)) {
+      return;
+    }
+
+    // Filter out excluded assets
+    if (excludedAssets.includes(symbol)) {
+      return;
+    }
+
+    // Martingale cap simulation logic
+    if (maxGaleAllowed !== null && maxGaleAllowed !== undefined) {
+      if (galeLevel > maxGaleAllowed) {
+        // Trade reached a gale level higher than the max allowed limit.
+        // It counts as stopping at maxGaleAllowed as a LOSS.
+        const baseStake = trade.stake || 1;
+        simulatedTrades.push({
+          ...trade,
+          result: 'LOSS',
+          profit: -Math.abs(baseStake),
+          galeLevel: maxGaleAllowed
+        });
+        return;
+      }
+    }
+
+    simulatedTrades.push(trade);
+  });
+
+  return {
+    simulatedTrades,
+    stats: calculateStats(simulatedTrades)
   };
 };
 
@@ -392,6 +541,719 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
     }
     return filteredTrades;
   }, [filteredTrades, viewingArchivedReport]);
+
+  // Sub-Tab Navigation State
+  const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'risk' | 'simulator' | 'compare'
+  
+  // Simulator States
+  const [simExcludedHours, setSimExcludedHours] = useState([]);
+  const [simExcludedAssets, setSimExcludedAssets] = useState([]);
+  const [simMaxGale, setSimMaxGale] = useState(null); // null (unlimited), 0 (G0), 1 (G1), 2 (G2)
+
+  // Simulation computation result
+  const simResult = useMemo(() => {
+    return runSimulation(displayedTrades, {
+      excludedHours: simExcludedHours,
+      excludedAssets: simExcludedAssets,
+      maxGaleAllowed: simMaxGale
+    });
+  }, [displayedTrades, simExcludedHours, simExcludedAssets, simMaxGale]);
+
+  // Dual Equity Chart SVG for Simulation Tab
+  const renderSimulatedEquityChart = () => {
+    const realCurve = stats.equityCurve || [];
+    const simCurve = simResult.stats.equityCurve || [];
+
+    if (realCurve.length < 2) {
+      return (
+        <div style={{ height: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', gap: '0.5rem', background: 'rgba(9, 9, 15, 0.4)', borderRadius: '14px', border: '1px dashed rgba(255,255,255,0.06)' }}>
+          <Activity size={28} style={{ opacity: 0.3, color: '#38bdf8' }} />
+          <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Requer pelo menos 2 operações executadas para gerar a curva simulada.</span>
+        </div>
+      );
+    }
+
+    const width = 800;
+    const height = 240;
+    const padding = { top: 30, right: 40, bottom: 35, left: 55 };
+
+    const allVals = [...realCurve.map(c => c.value), ...simCurve.map(c => c.value)];
+    const minVal = Math.min(0, ...allVals) - 4;
+    const maxVal = Math.max(10, ...allVals) + 4;
+    const valRange = maxVal - minVal || 1;
+
+    const realPoints = realCurve.map((d, index) => {
+      const x = padding.left + (index / Math.max(1, realCurve.length - 1)) * (width - padding.left - padding.right);
+      const y = height - padding.bottom - ((d.value - minVal) / valRange) * (height - padding.top - padding.bottom);
+      return { x, y, data: d };
+    });
+
+    const simPoints = simCurve.map((d, index) => {
+      const x = padding.left + (index / Math.max(1, Math.max(1, simCurve.length - 1))) * (width - padding.left - padding.right);
+      const y = height - padding.bottom - ((d.value - minVal) / valRange) * (height - padding.top - padding.bottom);
+      return { x, y, data: d };
+    });
+
+    const realPathString = realPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
+    const simPathString = simPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
+    const zeroLineY = height - padding.bottom - ((0 - minVal) / valRange) * (height - padding.top - padding.bottom);
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', width: '100%' }}>
+        <div style={{ position: 'relative', width: '100%', minHeight: '240px' }}>
+          <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+            <defs>
+              <linearGradient id="simPositiveGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+
+            {/* Grid */}
+            <line x1={padding.left} y1={zeroLineY} x2={width - padding.right} y2={zeroLineY} stroke="rgba(255,255,255,0.12)" strokeDasharray="4,4" />
+            <text x={padding.left - 8} y={zeroLineY + 4} fill="#64748b" fontSize="9" textAnchor="end" fontFamily="monospace">$0.00</text>
+
+            <line x1={padding.left} y1={padding.top} x2={width - padding.right} y2={padding.top} stroke="rgba(255,255,255,0.04)" />
+            <text x={padding.left - 8} y={padding.top + 4} fill="#64748b" fontSize="9" textAnchor="end" fontFamily="monospace">+${maxVal.toFixed(0)}</text>
+
+            {/* Real Curve Path (Original - Dashed Purple) */}
+            <path
+              d={realPathString}
+              fill="none"
+              stroke="rgba(167, 139, 250, 0.45)"
+              strokeWidth="2"
+              strokeDasharray="4,4"
+            />
+
+            {/* Sim Area Fill */}
+            {simPoints.length > 0 && (
+              <path
+                d={`M ${padding.left},${height - padding.bottom} L ${simPathString.replace('M ', '')} L ${width - padding.right},${height - padding.bottom} Z`}
+                fill="url(#simPositiveGrad)"
+              />
+            )}
+
+            {/* Simulated Curve Path (Optimized - Solid Emerald) */}
+            <path
+              d={simPathString}
+              fill="none"
+              stroke="#10b981"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+
+        {/* Legend */}
+        <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '0.4rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)', fontSize: '0.7rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#a78bfa' }}>
+            <span style={{ width: 16, height: 2, background: '#a78bfa', display: 'inline-block', borderStyle: 'dashed' }}></span>
+            <span>Resultado Real (Original)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontWeight: 'bold' }}>
+            <span style={{ width: 16, height: 3, background: '#10b981', display: 'inline-block' }}></span>
+            <span>Resultado Simulado (Otimizado)</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render Risk Analysis Sub-Tab
+  const renderRiskAnalysisView = () => {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', width: '100%' }}>
+        
+        {/* Risk Banner */}
+        <div className="glass-panel" style={{
+          padding: '1.5rem',
+          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(14, 11, 24, 0.5) 100%)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          borderRadius: '16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ShieldAlert size={22} style={{ color: '#f87171' }} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'white', margin: 0, letterSpacing: '0.04em' }}>DIAGNÓSTICO DE RISCO & ZONAS CRÍTICAS</h3>
+              <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '3px 0 0 0' }}>Análise detalhada de horários de prejuízo acumulado, picos de Martingale e ativos de maior drawdown.</p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              const top3Worst = stats.worstHoursByLoss.slice(0, 3).map(h => h.hour);
+              setSimExcludedHours(top3Worst);
+              setActiveSubTab('simulator');
+              showToast('Piores 3 horários pré-carregados no Simulador!');
+            }}
+            style={{
+              padding: '0.6rem 1.1rem',
+              background: 'linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)',
+              border: 'none',
+              borderRadius: '10px',
+              color: 'white',
+              fontSize: '0.75rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 4px 15px rgba(6, 182, 212, 0.25)'
+            }}
+          >
+            <Sliders size={14} /> Simular Exclusão dos Piores Horários
+          </button>
+        </div>
+
+        {/* Grid 1: Horários Zica (Worst Hours by Loss) */}
+        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Clock size={18} style={{ color: '#ef4444' }} />
+              <h3 style={{ fontSize: '0.9rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>🔥 HORÁRIOS ZICA (MAIOR PREJUÍZO ACUMULADO)</h3>
+            </div>
+            <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Ordenado pelo valor total em USD perdido no horário</span>
+          </div>
+
+          {stats.worstHoursByLoss.length > 0 ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+              {stats.worstHoursByLoss.slice(0, 4).map((item, idx) => {
+                const hourFormatted = `${String(item.hour).padStart(2, '0')}:00h - ${String(item.hour).padStart(2, '0')}:59h`;
+                const isExcludedInSim = simExcludedHours.includes(item.hour);
+                return (
+                  <div
+                    key={item.hour}
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%)',
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                      borderRadius: '12px',
+                      padding: '1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.75rem'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ background: '#ef4444', color: 'white', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: '900' }}>
+                          #{idx + 1}
+                        </span>
+                        <strong style={{ fontSize: '0.85rem', color: 'white' }}>{hourFormatted}</strong>
+                      </div>
+                      <span style={{ fontSize: '0.62rem', fontWeight: 'bold', color: item.rate >= 50 ? '#10b981' : '#f87171', background: 'rgba(0,0,0,0.3)', padding: '2px 7px', borderRadius: '6px' }}>
+                        {item.rate.toFixed(0)}% Acertos
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '0.5rem' }}>
+                      <div>
+                        <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block' }}>Prejuízo Acumulado</span>
+                        <strong style={{ color: '#ef4444', fontFamily: 'monospace', fontSize: '0.95rem' }}>-${item.lossAmount.toFixed(2)}</strong>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.58rem', color: '#64748b', display: 'block' }}>Contagem de Losses</span>
+                        <strong style={{ color: '#f87171', fontFamily: 'monospace', fontSize: '0.95rem' }}>{item.losses} / {item.total} ops</strong>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed rgba(255,255,255,0.06)', paddingTop: '0.5rem', fontSize: '0.65rem' }}>
+                      <span style={{ color: '#94a3b8' }}>⚡ Gales: G1({item.gales.G1 || 0}) G2({item.gales.G2 || 0}) G3+({item.gales.G3Plus || 0})</span>
+                      <button
+                        onClick={() => {
+                          if (isExcludedInSim) {
+                            setSimExcludedHours(prev => prev.filter(h => h !== item.hour));
+                          } else {
+                            setSimExcludedHours(prev => [...prev, item.hour]);
+                            setActiveSubTab('simulator');
+                            showToast(`Hora ${item.hour}h adicionada ao Simulador!`);
+                          }
+                        }}
+                        style={{
+                          background: isExcludedInSim ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255,255,255,0.05)',
+                          border: `1px solid ${isExcludedInSim ? '#ef4444' : 'rgba(255,255,255,0.1)'}`,
+                          color: isExcludedInSim ? '#f87171' : 'white',
+                          borderRadius: '6px',
+                          padding: '3px 8px',
+                          fontSize: '0.62rem',
+                          fontWeight: 'bold',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {isExcludedInSim ? '✓ Excluído no Sim' : '🚫 Excluir no Sim'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b', fontSize: '0.8rem' }}>
+              Nenhuma perda registrada no histórico selecionado.
+            </div>
+          )}
+        </div>
+
+        {/* Grid 2: Matriz de Martingales por Hora */}
+        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <BarChart2 size={18} style={{ color: '#a78bfa' }} />
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>📊 FATOR DE RISCO MARTINGALE POR FAIXA HORÁRIA</h3>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.65rem' }}>
+            {stats.hourlyDetailed.map(h => {
+              const totalG = h.totalGales;
+              const hasHighRisk = totalG >= 3 || h.gales.G3Plus > 0;
+              return (
+                <div
+                  key={h.hour}
+                  style={{
+                    background: hasHighRisk ? 'rgba(245, 158, 11, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                    border: hasHighRisk ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(255, 255, 255, 0.04)',
+                    borderRadius: '10px',
+                    padding: '0.65rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ fontSize: '0.72rem', color: '#cbd5e1' }}>{String(h.hour).padStart(2, '0')}:00h</strong>
+                    <span style={{ fontSize: '0.58rem', color: totalG > 0 ? '#fbbf24' : '#64748b', fontWeight: 'bold' }}>
+                      {totalG} gales
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.62rem', color: '#94a3b8', display: 'flex', gap: '4px' }}>
+                    <span>G1: <strong style={{ color: '#a78bfa' }}>{h.gales.G1 || 0}</strong></span>
+                    <span>G2: <strong style={{ color: '#f472b6' }}>{h.gales.G2 || 0}</strong></span>
+                    <span>G3+: <strong style={{ color: '#ef4444' }}>{h.gales.G3Plus || 0}</strong></span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Grid 3: Ativos Danosos (Ativos com mais Loss) */}
+        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Activity size={18} style={{ color: '#db2777' }} />
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>📉 DIAGNÓSTICO DE ATIVOS (ORDENADO POR MAIOR PREJUÍZO)</h3>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'left' }}>
+                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700 }}>Ativo</th>
+                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'center' }}>Total Ops</th>
+                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'center' }}>WIN / LOSS</th>
+                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'center' }}>Assertividade</th>
+                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'center' }}>Gales Disparados</th>
+                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>Resultado Líquido</th>
+                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'center' }}>Ação Simulador</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.worstAssets.length > 0 ? (
+                  stats.worstAssets.map(a => {
+                    const isExcludedInSim = simExcludedAssets.includes(a.symbol);
+                    const displayName = a.symbol.startsWith('frx')
+                      ? a.symbol.replace('frx', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2')
+                      : a.symbol.replace('1HZ', '').replace('V', ' (1s)').replace('R_', 'V');
+
+                    return (
+                      <tr key={a.symbol} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.02)' }}>
+                        <td style={{ padding: '10px 6px', fontWeight: 700, color: '#e2e8f0' }}>{displayName}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', fontFamily: 'monospace', color: '#94a3b8' }}>{a.trades}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', fontFamily: 'monospace' }}>
+                          <span style={{ color: '#10b981' }}>{a.wins}W</span> / <span style={{ color: '#ef4444' }}>{a.losses}L</span>
+                        </td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 700, color: a.rate >= 60 ? '#10b981' : a.rate >= 45 ? '#fb923c' : '#ef4444', fontFamily: 'monospace' }}>
+                          {a.rate.toFixed(1)}%
+                        </td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center', fontFamily: 'monospace', color: '#a78bfa' }}>
+                          {a.totalGales}
+                        </td>
+                        <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 800, color: a.profit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace' }}>
+                          {a.profit >= 0 ? '+' : ''}${a.profit.toFixed(2)}
+                        </td>
+                        <td style={{ padding: '10px 6px', textAlign: 'center' }}>
+                          <button
+                            onClick={() => {
+                              if (isExcludedInSim) {
+                                setSimExcludedAssets(prev => prev.filter(s => s !== a.symbol));
+                              } else {
+                                setSimExcludedAssets(prev => [...prev, a.symbol]);
+                                setActiveSubTab('simulator');
+                                showToast(`Ativo ${displayName} adicionado ao Simulador!`);
+                              }
+                            }}
+                            style={{
+                              background: isExcludedInSim ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255,255,255,0.05)',
+                              border: `1px solid ${isExcludedInSim ? '#ef4444' : 'rgba(255,255,255,0.1)'}`,
+                              color: isExcludedInSim ? '#f87171' : 'white',
+                              borderRadius: '6px',
+                              padding: '3px 8px',
+                              fontSize: '0.62rem',
+                              fontWeight: 'bold',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {isExcludedInSim ? '✓ Excluído no Sim' : '🚫 Excluir no Sim'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr><td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Sem dados de ativos</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    );
+  };
+
+  // Render Simulator Sub-Tab
+  const renderSimulatorView = () => {
+    const realStats = stats;
+    const simStats = simResult.stats;
+
+    const deltaProfit = simStats.netProfit - realStats.netProfit;
+    const deltaWinRate = simStats.winRate - realStats.winRate;
+    const deltaDrawdown = realStats.maxDrawdown - simStats.maxDrawdown; // positive = drawdown reduced
+    const lossesAvoided = realStats.losses - simStats.losses;
+    const tradesRemoved = realStats.totalTrades - simStats.totalTrades;
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', width: '100%' }}>
+        
+        {/* Simulator Banner */}
+        <div className="glass-panel" style={{
+          padding: '1.5rem',
+          background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.08) 0%, rgba(14, 11, 24, 0.5) 100%)',
+          border: '1px solid rgba(6, 182, 212, 0.2)',
+          borderRadius: '16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(6, 182, 212, 0.15)', border: '1px solid rgba(6, 182, 212, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Sliders size={22} style={{ color: '#38bdf8' }} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'white', margin: 0, letterSpacing: '0.04em' }}>LABORATÓRIO DE SIMULAÇÃO ("E SE...")</h3>
+              <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '3px 0 0 0' }}>Filtre horários, ativos e limite níveis de gale para recalcular instantaneamente o resultado da sua banca.</p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              setSimExcludedHours([]);
+              setSimExcludedAssets([]);
+              setSimMaxGale(null);
+              showToast('Filtros de simulação resetados!');
+            }}
+            style={{
+              padding: '0.5rem 0.9rem',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '8px',
+              color: '#cbd5e1',
+              fontSize: '0.7rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            <RefreshCw size={13} /> Resetar Filtros
+          </button>
+        </div>
+
+        {/* Side-by-Side KPI Deltas */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+          
+          {/* Lucro Simulado */}
+          <div style={{ padding: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Lucro Líquido Simulado</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <strong style={{ fontSize: '1.3rem', color: simStats.netProfit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace' }}>
+                {simStats.netProfit >= 0 ? '+' : ''}${simStats.netProfit.toFixed(2)}
+              </strong>
+              <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>(Real: ${realStats.netProfit.toFixed(2)})</span>
+            </div>
+            <div style={{ fontSize: '0.65rem', fontWeight: 'bold', color: deltaProfit >= 0 ? '#10b981' : '#ef4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {deltaProfit >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+              <span>Variação: {deltaProfit >= 0 ? '+' : ''}${deltaProfit.toFixed(2)}</span>
+            </div>
+          </div>
+
+          {/* Winrate Simulado */}
+          <div style={{ padding: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Winrate Simulado</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <strong style={{ fontSize: '1.3rem', color: '#a78bfa', fontFamily: 'monospace' }}>
+                {simStats.winRate.toFixed(1)}%
+              </strong>
+              <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>(Real: {realStats.winRate.toFixed(1)}%)</span>
+            </div>
+            <div style={{ fontSize: '0.65rem', fontWeight: 'bold', color: deltaWinRate >= 0 ? '#10b981' : '#ef4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span>Delta Assertividade: {deltaWinRate >= 0 ? '+' : ''}{deltaWinRate.toFixed(1)}%</span>
+            </div>
+          </div>
+
+          {/* Drawdown Simulado */}
+          <div style={{ padding: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Max Drawdown Simulado</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <strong style={{ fontSize: '1.3rem', color: '#38bdf8', fontFamily: 'monospace' }}>
+                {simStats.maxDrawdown.toFixed(1)}%
+              </strong>
+              <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>(Real: {realStats.maxDrawdown.toFixed(1)}%)</span>
+            </div>
+            <div style={{ fontSize: '0.65rem', fontWeight: 'bold', color: deltaDrawdown >= 0 ? '#10b981' : '#ef4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span>Redução de Risco: {deltaDrawdown >= 0 ? '-' : '+'}{Math.abs(deltaDrawdown).toFixed(1)}%</span>
+            </div>
+          </div>
+
+          {/* Losses Evitados */}
+          <div style={{ padding: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Perdas Evitadas</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <strong style={{ fontSize: '1.3rem', color: '#34d399', fontFamily: 'monospace' }}>
+                {lossesAvoided} Losses
+              </strong>
+              <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>({tradesRemoved} ops filtradas)</span>
+            </div>
+            <div style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#34d399' }}>
+              Operações mantidas: {simStats.totalTrades}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Simulation Control Filters */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+          
+          {/* Horários Filter */}
+          <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Clock size={16} style={{ color: '#38bdf8' }} />
+                <h4 style={{ fontSize: '0.82rem', fontWeight: 800, margin: 0 }}>EXCLUIR HORÁRIOS DO DIA</h4>
+              </div>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button
+                  onClick={() => {
+                    const top3 = stats.worstHoursByLoss.slice(0, 3).map(h => h.hour);
+                    setSimExcludedHours(top3);
+                  }}
+                  style={{ padding: '2px 7px', fontSize: '0.58rem', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  3 Piores
+                </button>
+                <button
+                  onClick={() => setSimExcludedHours([])}
+                  style={{ padding: '2px 7px', fontSize: '0.58rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  Limpar
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '4px' }}>
+              {stats.hourlyDetailed.map(h => {
+                const isExcluded = simExcludedHours.includes(h.hour);
+                return (
+                  <button
+                    key={h.hour}
+                    onClick={() => {
+                      if (isExcluded) {
+                        setSimExcludedHours(prev => prev.filter(x => x !== h.hour));
+                      } else {
+                        setSimExcludedHours(prev => [...prev, h.hour]);
+                      }
+                    }}
+                    style={{
+                      padding: '4px 2px',
+                      borderRadius: '6px',
+                      background: isExcluded ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255,255,255,0.03)',
+                      border: isExcluded ? '1px solid #ef4444' : '1px solid rgba(255,255,255,0.05)',
+                      color: isExcluded ? '#f87171' : '#cbd5e1',
+                      fontSize: '0.62rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      textAlign: 'center'
+                    }}
+                    title={`${String(h.hour).padStart(2, '0')}:00h - WR: ${h.rate.toFixed(0)}%`}
+                  >
+                    {String(h.hour).padStart(2, '0')}h
+                    {isExcluded && <span style={{ display: 'block', fontSize: '0.5rem' }}>OFF</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Ativos & Martingale Filter */}
+          <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+            
+            {/* Martingale Capping */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Zap size={16} style={{ color: '#a78bfa' }} />
+                <h4 style={{ fontSize: '0.82rem', fontWeight: 800, margin: 0 }}>LIMITADOR DE NÍVEL DE MARTINGALE</h4>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                {[
+                  { value: null, label: 'Todas Ops' },
+                  { value: 0, label: 'Apenas G0' },
+                  { value: 1, label: 'Máx G1' },
+                  { value: 2, label: 'Máx G2' }
+                ].map(opt => (
+                  <button
+                    key={String(opt.value)}
+                    onClick={() => setSimMaxGale(opt.value)}
+                    style={{
+                      padding: '0.45rem',
+                      borderRadius: '8px',
+                      background: simMaxGale === opt.value ? 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)' : 'rgba(255,255,255,0.03)',
+                      border: simMaxGale === opt.value ? '1px solid #a78bfa' : '1px solid rgba(255,255,255,0.05)',
+                      color: simMaxGale === opt.value ? 'white' : '#94a3b8',
+                      fontSize: '0.65rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Assets Exclusion */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Activity size={16} style={{ color: '#db2777' }} />
+                  <h4 style={{ fontSize: '0.82rem', fontWeight: 800, margin: 0 }}>EXCLUIR ATIVOS</h4>
+                </div>
+                <button
+                  onClick={() => {
+                    const negAssets = stats.worstAssets.filter(a => a.profit < 0).map(a => a.symbol);
+                    setSimExcludedAssets(negAssets);
+                  }}
+                  style={{ padding: '2px 7px', fontSize: '0.58rem', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  Excluir Negativos
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {stats.assetDetailed.map(a => {
+                  const isExcluded = simExcludedAssets.includes(a.symbol);
+                  const displayName = a.symbol.startsWith('frx')
+                    ? a.symbol.replace('frx', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2')
+                    : a.symbol.replace('1HZ', '').replace('V', ' (1s)').replace('R_', 'V');
+
+                  return (
+                    <button
+                      key={a.symbol}
+                      onClick={() => {
+                        if (isExcluded) {
+                          setSimExcludedAssets(prev => prev.filter(x => x !== a.symbol));
+                        } else {
+                          setSimExcludedAssets(prev => [...prev, a.symbol]);
+                        }
+                      }}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        background: isExcluded ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255,255,255,0.03)',
+                        border: isExcluded ? '1px solid #ef4444' : '1px solid rgba(255,255,255,0.05)',
+                        color: isExcluded ? '#f87171' : '#cbd5e1',
+                        fontSize: '0.62rem',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {displayName} {isExcluded ? '🚫' : ''}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* Dual Equity Line Chart (Real vs Simulated) */}
+        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <TrendingUp size={18} style={{ color: '#10b981' }} />
+              <h3 style={{ fontSize: '0.9rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>📈 EVOLUÇÃO PATRIMONIAL DUPLA (REAL VS SIMULADA)</h3>
+            </div>
+            <span style={{ fontSize: '0.65rem', color: '#38bdf8' }}>Filtros Ativos: {simExcludedHours.length}h excluídas • {simExcludedAssets.length} ativos excluídos</span>
+          </div>
+
+          <div style={{ flex: 1, minHeight: '220px' }}>
+            {renderSimulatedEquityChart()}
+          </div>
+        </div>
+
+        {/* Dynamic Optimization Insights Card */}
+        <div style={{
+          padding: '1.25rem 1.5rem',
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(6, 182, 212, 0.04) 100%)',
+          border: '1px solid rgba(16, 185, 129, 0.25)',
+          borderRadius: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem'
+        }}>
+          <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Zap size={20} style={{ color: '#10b981' }} />
+          </div>
+          <div>
+            <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#34d399', margin: 0, letterSpacing: '0.04em' }}>💡 RECOMENDAÇÃO DE INTELIGÊNCIA OPERACIONAL</h4>
+            <p style={{ fontSize: '0.72rem', color: '#cbd5e1', marginTop: '4px', margin: 0, lineHeight: 1.4 }}>
+              {deltaProfit > 0 ? (
+                <>
+                  Com esta configuração simulada, você <strong>economizaria ${deltaProfit.toFixed(2)}</strong>, aumentaria sua assertividade em <strong>+{deltaWinRate.toFixed(1)}%</strong> e reduziria o drawdown máximo em <strong>{deltaDrawdown.toFixed(1)}%</strong>. 
+                  Recomendamos bloquear os ativos/horários filtrados na <strong>Blacklist</strong> do painel principal para as próximas operações reais.
+                </>
+              ) : (
+                <>
+                  Ajuste os filtros de horários e ativos acima para testar cenários hipotéticos e descobrir como otimizar a rentabilidade do seu histórico.
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+
+      </div>
+    );
+  };
 
   // Handler for Month View Selector
   const handleMonthSelectChange = (e) => {
@@ -1383,6 +2245,104 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
           </div>
         </div>
 
+        {/* Sub-Tab Navigation Bar */}
+        <div style={{
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          paddingTop: '0.85rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.75rem'
+        }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => { setActiveSubTab('overview'); setCompareMode(false); }}
+              style={{
+                background: activeSubTab === 'overview' && !compareMode ? 'linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%)' : 'rgba(255,255,255,0.03)',
+                color: activeSubTab === 'overview' && !compareMode ? 'white' : '#94a3b8',
+                border: activeSubTab === 'overview' && !compareMode ? '1px solid #a78bfa' : '1px solid rgba(255,255,255,0.06)',
+                borderRadius: '10px',
+                padding: '0.45rem 0.9rem',
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s'
+              }}
+            >
+              <BarChart2 size={14} /> 📊 Visão Geral
+            </button>
+
+            <button
+              onClick={() => { setActiveSubTab('risk'); setCompareMode(false); }}
+              style={{
+                background: activeSubTab === 'risk' && !compareMode ? 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)' : 'rgba(255,255,255,0.03)',
+                color: activeSubTab === 'risk' && !compareMode ? 'white' : '#94a3b8',
+                border: activeSubTab === 'risk' && !compareMode ? '1px solid #f87171' : '1px solid rgba(255,255,255,0.06)',
+                borderRadius: '10px',
+                padding: '0.45rem 0.9rem',
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s'
+              }}
+            >
+              <ShieldAlert size={14} /> 🔍 Análise Avançada de Risco
+            </button>
+
+            <button
+              onClick={() => { setActiveSubTab('simulator'); setCompareMode(false); }}
+              style={{
+                background: activeSubTab === 'simulator' && !compareMode ? 'linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)' : 'rgba(255,255,255,0.03)',
+                color: activeSubTab === 'simulator' && !compareMode ? 'white' : '#94a3b8',
+                border: activeSubTab === 'simulator' && !compareMode ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.06)',
+                borderRadius: '10px',
+                padding: '0.45rem 0.9rem',
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s'
+              }}
+            >
+              <Sliders size={14} /> 🧪 Simulador "E Se..."
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveSubTab('compare');
+                setCompareMonthA('all');
+                setCompareMonthB(monthlyReports[0] ? `archived_${monthlyReports[0].id}` : '');
+                setCompareMode(true);
+              }}
+              style={{
+                background: compareMode || activeSubTab === 'compare' ? 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)' : 'rgba(255,255,255,0.03)',
+                color: compareMode || activeSubTab === 'compare' ? 'white' : '#94a3b8',
+                border: compareMode || activeSubTab === 'compare' ? '1px solid #c084fc' : '1px solid rgba(255,255,255,0.06)',
+                borderRadius: '10px',
+                padding: '0.45rem 0.9rem',
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s'
+              }}
+            >
+              <Scale size={14} /> ⚔️ Comparar Meses
+            </button>
+          </div>
+        </div>
+
         {/* Saved Months Horizontal/Grid List */}
         {monthlyReports.length > 0 && (
           <div style={{
@@ -1532,506 +2492,513 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
         </div>
       )}
 
-      {/* Upper Widgets (Time period metrics) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-        
-        {/* Lucro Diário */}
-        <div style={{
-          padding: '1.25rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          background: 'linear-gradient(135deg, rgba(14, 11, 24, 0.45) 0%, rgba(255, 255, 255, 0.01) 100%)',
-          border: '1px solid rgba(255,255,255,0.04)',
-          borderRadius: '14px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-        }}>
-          <div>
-            <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Lucro Diário (24h)</span>
-            <strong style={{ fontSize: '1.2rem', color: stats.dailyProfit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace', marginTop: '0.25rem', display: 'block' }}>
-              {stats.dailyProfit >= 0 ? '+' : ''}{formatCurrency(stats.dailyProfit)}
-            </strong>
-          </div>
-          <div style={{ background: stats.dailyProfit >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', padding: '0.55rem', borderRadius: '10px', border: `1px solid ${stats.dailyProfit >= 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
-            <Calendar size={18} style={{ color: stats.dailyProfit >= 0 ? '#10b981' : '#ef4444' }} />
-          </div>
-        </div>
-
-        {/* Lucro Semanal */}
-        <div style={{
-          padding: '1.25rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          background: 'linear-gradient(135deg, rgba(14, 11, 24, 0.45) 0%, rgba(255, 255, 255, 0.01) 100%)',
-          border: '1px solid rgba(255,255,255,0.04)',
-          borderRadius: '14px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-        }}>
-          <div>
-            <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Lucro Semanal (7d)</span>
-            <strong style={{ fontSize: '1.2rem', color: stats.weeklyProfit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace', marginTop: '0.25rem', display: 'block' }}>
-              {stats.weeklyProfit >= 0 ? '+' : ''}{formatCurrency(stats.weeklyProfit)}
-            </strong>
-          </div>
-          <div style={{ background: stats.weeklyProfit >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', padding: '0.55rem', borderRadius: '10px', border: `1px solid ${stats.weeklyProfit >= 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
-            <Activity size={18} style={{ color: stats.weeklyProfit >= 0 ? '#10b981' : '#ef4444' }} />
-          </div>
-        </div>
-
-        {/* Lucro Mensal */}
-        <div style={{
-          padding: '1.25rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          background: 'linear-gradient(135deg, rgba(14, 11, 24, 0.45) 0%, rgba(255, 255, 255, 0.01) 100%)',
-          border: '1px solid rgba(255,255,255,0.04)',
-          borderRadius: '14px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-        }}>
-          <div>
-            <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Lucro Mensal (30d)</span>
-            <strong style={{ fontSize: '1.2rem', color: stats.monthlyProfit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace', marginTop: '0.25rem', display: 'block' }}>
-              {stats.monthlyProfit >= 0 ? '+' : ''}{formatCurrency(stats.monthlyProfit)}
-            </strong>
-          </div>
-          <div style={{ background: stats.monthlyProfit >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', padding: '0.55rem', borderRadius: '10px', border: `1px solid ${stats.monthlyProfit >= 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
-            <TrendingUp size={18} style={{ color: stats.monthlyProfit >= 0 ? '#10b981' : '#ef4444' }} />
-          </div>
-        </div>
-
-        {/* ROI & Drawdown */}
-        <div style={{
-          padding: '1.25rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          background: 'linear-gradient(135deg, rgba(14, 11, 24, 0.45) 0%, rgba(255, 255, 255, 0.01) 100%)',
-          border: '1px solid rgba(255,255,255,0.04)',
-          borderRadius: '14px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ flex: 1 }}>
-            <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.06em' }}>ROI Geral</span>
-            <strong style={{ fontSize: '1.2rem', color: stats.roi >= 0 ? '#a78bfa' : '#ef4444', fontFamily: 'monospace', marginTop: '0.25rem', display: 'block' }}>
-              {stats.roi.toFixed(1)}%
-            </strong>
-          </div>
-          <div style={{ borderLeft: '1px solid rgba(255,255,255,0.08)', paddingLeft: '1rem', flex: 1 }}>
-            <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Rebaixamento</span>
-            <strong style={{ fontSize: '1.2rem', color: '#e2e8f0', fontFamily: 'monospace', marginTop: '0.25rem', display: 'block' }}>
-              {stats.maxDrawdown.toFixed(1)}%
-            </strong>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Middle Block (Charts / Visualizations) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1.25rem' }}>
-        
-        {/* Equity Line Chart */}
-        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <TrendingUp size={16} style={{ color: '#a78bfa' }} />
-              <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>EVOLUÇÃO PATRIMONIAL (EQUITY CURVE)</h3>
-            </div>
-            <span style={{ fontSize: '0.65rem', color: '#475569' }}>Ordens no Período: {stats.totalTrades}</span>
-          </div>
-          <div style={{ flex: 1, minHeight: '180px' }}>
-            {renderEquityChart()}
-          </div>
-        </div>
-
-        {/* Circular Assertiveness & Streaks */}
-        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem', alignItems: 'center', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
-          {/* Gauge */}
-          <div style={{ position: 'relative', width: '110px', height: '110px', flexShrink: 0 }}>
-            <svg viewBox="0 0 36 36" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
-              <path
-                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                fill="none"
-                stroke="rgba(255,255,255,0.02)"
-                strokeWidth="3.2"
-              />
-              <path
-                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                fill="none"
-                stroke="url(#radialGlow)"
-                strokeWidth="3.2"
-                strokeDasharray={`${stats.winRate}, 100`}
-                strokeLinecap="round"
-              />
-              <defs>
-                <linearGradient id="radialGlow" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#7c3aed" />
-                  <stop offset="100%" stopColor="#db2777" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              textAlign: 'center',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center'
-            }}>
-              <span style={{ fontSize: '1.15rem', fontWeight: 800, fontFamily: 'monospace', lineHeight: '1', color: '#ffffff' }}>
-                {stats.winRate.toFixed(0)}%
-              </span>
-              <span style={{ fontSize: '0.45rem', color: '#a78bfa', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: '3px' }}>
-                Acertos
-              </span>
-            </div>
-          </div>
-
-          {/* Streak Details */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <div>
-              <h3 style={{ fontSize: '0.8rem', fontWeight: 800, color: 'white', marginBottom: '0.25rem', letterSpacing: '0.04em', margin: 0 }}>TAXA DE ASSERTIVIDADE</h3>
-              <p style={{ fontSize: '0.65rem', color: '#64748b', lineHeight: 1.3, margin: 0 }}>
-                <strong style={{ color: '#10b981' }}>{stats.wins}W</strong> e <strong style={{ color: '#ef4444' }}>{stats.losses}L</strong> de {stats.totalTrades} operações.
-              </p>
-            </div>
+      {/* Sub-Tab Content Rendering */}
+      {activeSubTab === 'risk' && renderRiskAnalysisView()}
+      {activeSubTab === 'simulator' && renderSimulatorView()}
+      {activeSubTab === 'overview' && (
+        <>
+          {/* Upper Widgets (Time period metrics) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.65rem' }}>
+            {/* Lucro Diário */}
+            <div style={{
+              padding: '1.25rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, rgba(14, 11, 24, 0.45) 0%, rgba(255, 255, 255, 0.01) 100%)',
+              border: '1px solid rgba(255,255,255,0.04)',
+              borderRadius: '14px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+            }}>
               <div>
-                <span style={{ fontSize: '0.52rem', color: '#64748b', display: 'block', fontWeight: 800, letterSpacing: '0.04em' }}>MAX WIN STREAK</span>
-                <strong style={{ fontSize: '0.85rem', color: '#10b981', fontFamily: 'monospace' }}>{stats.winStreak} consecutivas</strong>
+                <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Lucro Diário (24h)</span>
+                <strong style={{ fontSize: '1.2rem', color: stats.dailyProfit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace', marginTop: '0.25rem', display: 'block' }}>
+                  {stats.dailyProfit >= 0 ? '+' : ''}{formatCurrency(stats.dailyProfit)}
+                </strong>
               </div>
+              <div style={{ background: stats.dailyProfit >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', padding: '0.55rem', borderRadius: '10px', border: `1px solid ${stats.dailyProfit >= 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
+                <Calendar size={18} style={{ color: stats.dailyProfit >= 0 ? '#10b981' : '#ef4444' }} />
+              </div>
+            </div>
+
+            {/* Lucro Semanal */}
+            <div style={{
+              padding: '1.25rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, rgba(14, 11, 24, 0.45) 0%, rgba(255, 255, 255, 0.01) 100%)',
+              border: '1px solid rgba(255,255,255,0.04)',
+              borderRadius: '14px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+            }}>
               <div>
-                <span style={{ fontSize: '0.52rem', color: '#64748b', display: 'block', fontWeight: 800, letterSpacing: '0.04em' }}>MAX LOSS STREAK</span>
-                <strong style={{ fontSize: '0.85rem', color: '#ef4444', fontFamily: 'monospace' }}>{stats.lossStreak} consecutivas</strong>
+                <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Lucro Semanal (7d)</span>
+                <strong style={{ fontSize: '1.2rem', color: stats.weeklyProfit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace', marginTop: '0.25rem', display: 'block' }}>
+                  {stats.weeklyProfit >= 0 ? '+' : ''}{formatCurrency(stats.weeklyProfit)}
+                </strong>
+              </div>
+              <div style={{ background: stats.weeklyProfit >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', padding: '0.55rem', borderRadius: '10px', border: `1px solid ${stats.weeklyProfit >= 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
+                <Activity size={18} style={{ color: stats.weeklyProfit >= 0 ? '#10b981' : '#ef4444' }} />
               </div>
             </div>
-          </div>
 
-        </div>
-
-      </div>
-
-      {/* Heatmaps & Martingale Distribution */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.25rem' }}>
-        
-        {/* Heatmaps Block (Hours & Days) */}
-        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Clock size={16} style={{ color: '#a78bfa' }} />
-            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>MAPA DE OPERAÇÕES LUCRATIVAS</h3>
-          </div>
-
-          {/* Hourly Heatmap Row */}
-          <div>
-            <span style={{ fontSize: '0.6rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>ASSERTIVIDADE POR HORA DO DIA (00h - 23h)</span>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(24, 1fr)', gap: '3px' }}>
-              {stats.hourlyWinrates.map((item, idx) => {
-                const color = getHeatmapColor(item.rate, item.total);
-                const txtColor = getHeatmapTextColor(item.rate, item.total);
-                return (
-                  <div
-                    key={idx}
-                    style={{
-                      height: '24px',
-                      borderRadius: '4px',
-                      background: color,
-                      border: item.total > 0 ? `1px solid ${txtColor}33` : '1px solid transparent',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.55rem',
-                      fontWeight: 'bold',
-                      color: txtColor,
-                      cursor: 'default'
-                    }}
-                    title={`Hora: ${String(idx).padStart(2, '0')}:00h | Assertividade: ${item.rate.toFixed(1)}% (${item.wins}/${item.total})`}
-                  >
-                    {idx}
-                  </div>
-                );
-              })}
+            {/* Lucro Mensal */}
+            <div style={{
+              padding: '1.25rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, rgba(14, 11, 24, 0.45) 0%, rgba(255, 255, 255, 0.01) 100%)',
+              border: '1px solid rgba(255,255,255,0.04)',
+              borderRadius: '14px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+            }}>
+              <div>
+                <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Lucro Mensal (30d)</span>
+                <strong style={{ fontSize: '1.2rem', color: stats.monthlyProfit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace', marginTop: '0.25rem', display: 'block' }}>
+                  {stats.monthlyProfit >= 0 ? '+' : ''}{formatCurrency(stats.monthlyProfit)}
+                </strong>
+              </div>
+              <div style={{ background: stats.monthlyProfit >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', padding: '0.55rem', borderRadius: '10px', border: `1px solid ${stats.monthlyProfit >= 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
+                <TrendingUp size={18} style={{ color: stats.monthlyProfit >= 0 ? '#10b981' : '#ef4444' }} />
+              </div>
             </div>
-          </div>
 
-          {/* Daily Heatmap Row */}
-          <div>
-            <span style={{ fontSize: '0.6rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>ASSERTIVIDADE POR DIA DA SEMANA</span>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' }}>
-              {stats.dailyWinrates.map((item, idx) => {
-                const color = getHeatmapColor(item.rate, item.total);
-                const txtColor = getHeatmapTextColor(item.rate, item.total);
-                return (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: '0.45rem',
-                      borderRadius: '8px',
-                      background: color,
-                      border: item.total > 0 ? `1px solid ${txtColor}33` : '1px solid rgba(255,255,255,0.02)',
-                      textAlign: 'center',
-                      fontSize: '0.7rem',
-                      fontWeight: 'bold',
-                      color: item.total > 0 ? '#e2e8f0' : '#475569',
-                      cursor: 'default'
-                    }}
-                    title={`Dia: ${weekdays[idx]} | Assertividade: ${item.rate.toFixed(1)}% (${item.wins}/${item.total})`}
-                  >
-                    <span style={{ color: item.total > 0 ? '#ffffff' : '#475569', display: 'block' }}>{weekdays[idx]}</span>
-                    <span style={{ fontSize: '0.58rem', display: 'block', color: txtColor, marginTop: 2, fontFamily: 'monospace' }}>
-                      {item.total > 0 ? `${item.rate.toFixed(0)}%` : '-'}
-                    </span>
-                  </div>
-                );
-              })}
+            {/* ROI & Drawdown */}
+            <div style={{
+              padding: '1.25rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, rgba(14, 11, 24, 0.45) 0%, rgba(255, 255, 255, 0.01) 100%)',
+              border: '1px solid rgba(255,255,255,0.04)',
+              borderRadius: '14px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.06em' }}>ROI Geral</span>
+                <strong style={{ fontSize: '1.2rem', color: stats.roi >= 0 ? '#a78bfa' : '#ef4444', fontFamily: 'monospace', marginTop: '0.25rem', display: 'block' }}>
+                  {stats.roi.toFixed(1)}%
+                </strong>
+              </div>
+              <div style={{ borderLeft: '1px solid rgba(255,255,255,0.08)', paddingLeft: '1rem', flex: 1 }}>
+                <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Rebaixamento</span>
+                <strong style={{ fontSize: '1.2rem', color: '#e2e8f0', fontFamily: 'monospace', marginTop: '0.25rem', display: 'block' }}>
+                  {stats.maxDrawdown.toFixed(1)}%
+                </strong>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Martingale Distribution Bar Chart */}
-        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <BarChart2 size={16} style={{ color: '#a78bfa' }} />
-              <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>DISTRIBUIÇÃO DE RECUPERAÇÃO (MARTINGALE)</h3>
+          </div>
+
+          {/* Middle Block (Charts / Visualizations) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1.25rem' }}>
+            
+            {/* Equity Line Chart */}
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <TrendingUp size={16} style={{ color: '#a78bfa' }} />
+                  <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>EVOLUÇÃO PATRIMONIAL (EQUITY CURVE)</h3>
+                </div>
+                <span style={{ fontSize: '0.65rem', color: '#475569' }}>Ordens no Período: {stats.totalTrades}</span>
+              </div>
+              <div style={{ flex: 1, minHeight: '180px' }}>
+                {renderEquityChart()}
+              </div>
             </div>
-            {(() => {
-              const totalGaleWins = stats.wins - (stats.martingaleDist?.G0 || 0);
-              const galeWinPct = stats.wins > 0 ? ((totalGaleWins / stats.wins) * 100).toFixed(0) : 0;
-              return (
-                <span style={{ fontSize: '0.62rem', fontWeight: 'bold', color: '#a78bfa', background: 'rgba(167, 139, 250, 0.1)', padding: '3px 8px', borderRadius: '12px', border: '1px solid rgba(167, 139, 250, 0.2)' }}>
-                  Recuperação Gale: {totalGaleWins} WINs ({galeWinPct}%)
-                </span>
-              );
-            })()}
-          </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', flex: 1, justifyContent: 'center', maxHeight: '280px', overflowY: 'auto', paddingRight: '4px' }} className="modules-scrollbar">
-            {getMartingaleLevelsList(stats.martingaleDist).map((lvlItem) => {
-              const pct = stats.wins > 0 ? (lvlItem.count / stats.wins) * 100 : 0;
-              const textColor = getGaleTextColor(lvlItem.level);
-              const gradient = getGaleGradient(lvlItem.level);
+            {/* Circular Assertiveness & Streaks */}
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem', alignItems: 'center', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+              {/* Gauge */}
+              <div style={{ position: 'relative', width: '110px', height: '110px', flexShrink: 0 }}>
+                <svg viewBox="0 0 36 36" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                  <path
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    fill="none"
+                    stroke="rgba(255,255,255,0.02)"
+                    strokeWidth="3.2"
+                  />
+                  <path
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    fill="none"
+                    stroke="url(#radialGlow)"
+                    strokeWidth="3.2"
+                    strokeDasharray={`${stats.winRate}, 100`}
+                    strokeLinecap="round"
+                  />
+                  <defs>
+                    <linearGradient id="radialGlow" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#7c3aed" />
+                      <stop offset="100%" stopColor="#db2777" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center'
+                }}>
+                  <span style={{ fontSize: '1.15rem', fontWeight: 800, fontFamily: 'monospace', lineHeight: '1', color: '#ffffff' }}>
+                    {stats.winRate.toFixed(0)}%
+                  </span>
+                  <span style={{ fontSize: '0.45rem', color: '#a78bfa', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: '3px' }}>
+                    Acertos
+                  </span>
+                </div>
+              </div>
 
-              return (
-                <div key={lvlItem.level}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', marginBottom: '4px' }}>
-                    <span style={{ fontWeight: '600', color: '#cbd5e1' }}>{lvlItem.label}</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '0.62rem', color: '#64748b' }}>({pct.toFixed(1)}%)</span>
-                      <strong style={{ fontFamily: 'monospace', color: textColor, fontSize: '0.75rem' }}>{lvlItem.count} WINs</strong>
-                    </div>
+              {/* Streak Details */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div>
+                  <h3 style={{ fontSize: '0.8rem', fontWeight: 800, color: 'white', marginBottom: '0.25rem', letterSpacing: '0.04em', margin: 0 }}>TAXA DE ASSERTIVIDADE</h3>
+                  <p style={{ fontSize: '0.65rem', color: '#64748b', lineHeight: 1.3, margin: 0 }}>
+                    <strong style={{ color: '#10b981' }}>{stats.wins}W</strong> e <strong style={{ color: '#ef4444' }}>{stats.losses}L</strong> de {stats.totalTrades} operações.
+                  </p>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.65rem' }}>
+                  <div>
+                    <span style={{ fontSize: '0.52rem', color: '#64748b', display: 'block', fontWeight: 800, letterSpacing: '0.04em' }}>MAX WIN STREAK</span>
+                    <strong style={{ fontSize: '0.85rem', color: '#10b981', fontFamily: 'monospace' }}>{stats.winStreak} consecutivas</strong>
                   </div>
-                  <div style={{ height: '7px', background: 'rgba(255,255,255,0.04)', borderRadius: '99px', overflow: 'hidden' }}>
-                    <div 
-                      style={{ 
-                        width: `${pct}%`, 
-                        height: '100%', 
-                        background: gradient, 
-                        borderRadius: '99px', 
-                        transition: 'width 0.4s ease' 
-                      }} 
-                    />
+                  <div>
+                    <span style={{ fontSize: '0.52rem', color: '#64748b', display: 'block', fontWeight: 800, letterSpacing: '0.04em' }}>MAX LOSS STREAK</span>
+                    <strong style={{ fontSize: '0.85rem', color: '#ef4444', fontFamily: 'monospace' }}>{stats.lossStreak} consecutivas</strong>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
+              </div>
 
-      </div>
+            </div>
 
-      {/* Strategy & Asset Breakdowns */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-        
-        {/* Strategy Table */}
-        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Award size={16} style={{ color: '#db2777' }} />
-            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>ESTRATÉGIAS MAIS LUCRATIVAS</h3>
           </div>
-          <div style={{ overflowX: 'auto', flex: 1 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)', textAlign: 'left' }}>
-                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700 }}>Estratégia</th>
-                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'center' }}>Total</th>
-                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>Winrate</th>
-                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>Resultado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.keys(stats.strategyStats).length > 0 ? (
-                  Object.entries(stats.strategyStats)
-                    .sort((a, b) => b[1].profit - a[1].profit)
-                    .map(([name, data]) => {
-                      const wr = data.trades > 0 ? (data.wins / data.trades) * 100 : 0;
-                      return (
-                        <tr key={name} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.02)' }}>
-                          <td style={{ padding: '10px 6px', fontWeight: 700, color: '#e2e8f0' }}>{name}</td>
-                          <td style={{ padding: '10px 6px', textAlign: 'center', fontFamily: 'monospace', color: '#94a3b8' }}>{data.trades}</td>
-                          <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 700, color: wr >= 65 ? '#10b981' : wr >= 50 ? '#fb923c' : '#ef4444', fontFamily: 'monospace' }}>
-                            {wr.toFixed(1)}%
-                          </td>
-                          <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 800, color: data.profit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace' }}>
-                            {data.profit >= 0 ? '+' : ''}${data.profit.toFixed(2)}
-                          </td>
-                        </tr>
-                      );
-                    })
-                ) : (
-                  <tr>
-                    <td colSpan="4" style={{ textAlign: 'center', color: '#475569', padding: '2rem' }}>Sem dados de análise cadastrados</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
 
-        {/* Asset Table */}
-        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Activity size={16} style={{ color: '#a78bfa' }} />
-            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>ATIVOS MAIS LUCRATIVOS</h3>
-          </div>
-          <div style={{ overflowX: 'auto', flex: 1 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)', textAlign: 'left' }}>
-                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700 }}>Ativo</th>
-                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'center' }}>Total</th>
-                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>Winrate</th>
-                  <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>Resultado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.keys(stats.assetStats).length > 0 ? (
-                  Object.entries(stats.assetStats)
-                    .sort((a, b) => b[1].profit - a[1].profit)
-                    .map(([symbol, data]) => {
-                      const wr = data.trades > 0 ? (data.wins / data.trades) * 100 : 0;
-                      const displayName = symbol.startsWith('frx')
-                        ? symbol.replace('frx', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2')
-                        : symbol.replace('1HZ', '').replace('V', ' (1s)').replace('R_', 'V');
-                      return (
-                        <tr key={symbol} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.02)' }}>
-                          <td style={{ padding: '10px 6px', fontWeight: 700, color: '#e2e8f0' }}>{displayName}</td>
-                          <td style={{ padding: '10px 6px', textAlign: 'center', fontFamily: 'monospace', color: '#94a3b8' }}>{data.trades}</td>
-                          <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 700, color: wr >= 65 ? '#10b981' : wr >= 50 ? '#fb923c' : '#ef4444', fontFamily: 'monospace' }}>
-                            {wr.toFixed(1)}%
-                          </td>
-                          <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 800, color: data.profit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace' }}>
-                            {data.profit >= 0 ? '+' : ''}${data.profit.toFixed(2)}
-                          </td>
-                        </tr>
-                      );
-                    })
-                ) : (
-                  <tr>
-                    <td colSpan="4" style={{ textAlign: 'center', color: '#475569', padding: '2rem' }}>Sem dados de análise cadastrados</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          {/* Heatmaps & Martingale Distribution */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.25rem' }}>
+            
+            {/* Heatmaps Block (Hours & Days) */}
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Clock size={16} style={{ color: '#a78bfa' }} />
+                <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>MAPA DE OPERAÇÕES LUCRATIVAS</h3>
+              </div>
 
-      </div>
+              {/* Hourly Heatmap Row */}
+              <div>
+                <span style={{ fontSize: '0.6rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>ASSERTIVIDADE POR HORA DO DIA (00h - 23h)</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(24, 1fr)', gap: '3px' }}>
+                  {stats.hourlyWinrates.map((item, idx) => {
+                    const color = getHeatmapColor(item.rate, item.total);
+                    const txtColor = getHeatmapTextColor(item.rate, item.total);
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          height: '24px',
+                          borderRadius: '4px',
+                          background: color,
+                          border: item.total > 0 ? `1px solid ${txtColor}33` : '1px solid transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.55rem',
+                          fontWeight: 'bold',
+                          color: txtColor,
+                          cursor: 'default'
+                        }}
+                        title={`Hora: ${String(idx).padStart(2, '0')}:00h | Assertividade: ${item.rate.toFixed(1)}% (${item.wins}/${item.total})`}
+                      >
+                        {idx}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
 
-      {/* Export & Actions Footer Panel */}
-      <div className="glass-panel" style={{
-        padding: '1.25rem 1.5rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        background: 'linear-gradient(135deg, rgba(14, 11, 24, 0.5) 0%, rgba(139, 92, 246, 0.03) 100%)',
-        borderRadius: '16px',
-        border: '1px solid rgba(139, 92, 246, 0.15)',
-        flexWrap: 'wrap',
-        gap: '1.25rem'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(167,139,250,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Download size={18} style={{ color: '#a78bfa' }} />
+              {/* Daily Heatmap Row */}
+              <div>
+                <span style={{ fontSize: '0.6rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>ASSERTIVIDADE POR DIA DA SEMANA</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' }}>
+                  {stats.dailyWinrates.map((item, idx) => {
+                    const color = getHeatmapColor(item.rate, item.total);
+                    const txtColor = getHeatmapTextColor(item.rate, item.total);
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: '0.45rem',
+                          borderRadius: '8px',
+                          background: color,
+                          border: item.total > 0 ? `1px solid ${txtColor}33` : '1px solid rgba(255,255,255,0.02)',
+                          textAlign: 'center',
+                          fontSize: '0.7rem',
+                          fontWeight: 'bold',
+                          color: item.total > 0 ? '#e2e8f0' : '#475569',
+                          cursor: 'default'
+                        }}
+                        title={`Dia: ${weekdays[idx]} | Assertividade: ${item.rate.toFixed(1)}% (${item.wins}/${item.total})`}
+                      >
+                        <span style={{ color: item.total > 0 ? '#ffffff' : '#475569', display: 'block' }}>{weekdays[idx]}</span>
+                        <span style={{ fontSize: '0.58rem', display: 'block', color: txtColor, marginTop: 2, fontFamily: 'monospace' }}>
+                          {item.total > 0 ? `${item.rate.toFixed(0)}%` : '-'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Martingale Distribution Bar Chart */}
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <BarChart2 size={16} style={{ color: '#a78bfa' }} />
+                  <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>DISTRIBUIÇÃO DE RECUPERAÇÃO (MARTINGALE)</h3>
+                </div>
+                {(() => {
+                  const totalGaleWins = stats.wins - (stats.martingaleDist?.G0 || 0);
+                  const galeWinPct = stats.wins > 0 ? ((totalGaleWins / stats.wins) * 100).toFixed(0) : 0;
+                  return (
+                    <span style={{ fontSize: '0.62rem', fontWeight: 'bold', color: '#a78bfa', background: 'rgba(167, 139, 250, 0.1)', padding: '3px 8px', borderRadius: '12px', border: '1px solid rgba(167, 139, 250, 0.2)' }}>
+                      Recuperação Gale: {totalGaleWins} WINs ({galeWinPct}%)
+                    </span>
+                  );
+                })()}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', flex: 1, justifyContent: 'center', maxHeight: '280px', overflowY: 'auto', paddingRight: '4px' }} className="modules-scrollbar">
+                {getMartingaleLevelsList(stats.martingaleDist).map((lvlItem) => {
+                  const pct = stats.wins > 0 ? (lvlItem.count / stats.wins) * 100 : 0;
+                  const textColor = getGaleTextColor(lvlItem.level);
+                  const gradient = getGaleGradient(lvlItem.level);
+
+                  return (
+                    <div key={lvlItem.level}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', marginBottom: '4px' }}>
+                        <span style={{ fontWeight: '600', color: '#cbd5e1' }}>{lvlItem.label}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '0.62rem', color: '#64748b' }}>({pct.toFixed(1)}%)</span>
+                          <strong style={{ fontFamily: 'monospace', color: textColor, fontSize: '0.75rem' }}>{lvlItem.count} WINs</strong>
+                        </div>
+                      </div>
+                      <div style={{ height: '7px', background: 'rgba(255,255,255,0.04)', borderRadius: '99px', overflow: 'hidden' }}>
+                        <div 
+                          style={{ 
+                            width: `${pct}%`, 
+                            height: '100%', 
+                            background: gradient, 
+                            borderRadius: '99px', 
+                            transition: 'width 0.4s ease' 
+                          }} 
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
           </div>
-          <div>
-            <h4 style={{ fontSize: '0.8rem', fontWeight: 800, letterSpacing: '0.04em', margin: 0 }}>EXPORTAR HISTÓRICO ANALÍTICO</h4>
-            <p style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 2, margin: 0 }}>Baixe os dados operacionais estruturados do seu período selecionado para planilhas ou sistemas externos.</p>
+
+          {/* Strategy & Asset Breakdowns */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+            
+            {/* Strategy Table */}
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Award size={16} style={{ color: '#db2777' }} />
+                <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>ESTRATÉGIAS MAIS LUCRATIVAS</h3>
+              </div>
+              <div style={{ overflowX: 'auto', flex: 1 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700 }}>Estratégia</th>
+                      <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'center' }}>Total</th>
+                      <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>Winrate</th>
+                      <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>Resultado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.keys(stats.strategyStats).length > 0 ? (
+                      Object.entries(stats.strategyStats)
+                        .sort((a, b) => b[1].profit - a[1].profit)
+                        .map(([name, data]) => {
+                          const wr = data.trades > 0 ? (data.wins / data.trades) * 100 : 0;
+                          return (
+                            <tr key={name} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.02)' }}>
+                              <td style={{ padding: '10px 6px', fontWeight: 700, color: '#e2e8f0' }}>{name}</td>
+                              <td style={{ padding: '10px 6px', textAlign: 'center', fontFamily: 'monospace', color: '#94a3b8' }}>{data.trades}</td>
+                              <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 700, color: wr >= 65 ? '#10b981' : wr >= 50 ? '#fb923c' : '#ef4444', fontFamily: 'monospace' }}>
+                                {wr.toFixed(1)}%
+                              </td>
+                              <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 800, color: data.profit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace' }}>
+                                {data.profit >= 0 ? '+' : ''}${data.profit.toFixed(2)}
+                              </td>
+                            </tr>
+                          );
+                        })
+                    ) : (
+                      <tr>
+                        <td colSpan="4" style={{ textAlign: 'center', color: '#475569', padding: '2rem' }}>Sem dados de análise cadastrados</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Asset Table */}
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Activity size={16} style={{ color: '#a78bfa' }} />
+                <h3 style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em', margin: 0 }}>ATIVOS MAIS LUCRATIVOS</h3>
+              </div>
+              <div style={{ overflowX: 'auto', flex: 1 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700 }}>Ativo</th>
+                      <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'center' }}>Total</th>
+                      <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>Winrate</th>
+                      <th style={{ padding: '8px 6px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>Resultado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.keys(stats.assetStats).length > 0 ? (
+                      Object.entries(stats.assetStats)
+                        .sort((a, b) => b[1].profit - a[1].profit)
+                        .map(([symbol, data]) => {
+                          const wr = data.trades > 0 ? (data.wins / data.trades) * 100 : 0;
+                          const displayName = symbol.startsWith('frx')
+                            ? symbol.replace('frx', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2')
+                            : symbol.replace('1HZ', '').replace('V', ' (1s)').replace('R_', 'V');
+                          return (
+                            <tr key={symbol} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.02)' }}>
+                              <td style={{ padding: '10px 6px', fontWeight: 700, color: '#e2e8f0' }}>{displayName}</td>
+                              <td style={{ padding: '10px 6px', textAlign: 'center', fontFamily: 'monospace', color: '#94a3b8' }}>{data.trades}</td>
+                              <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 700, color: wr >= 65 ? '#10b981' : wr >= 50 ? '#fb923c' : '#ef4444', fontFamily: 'monospace' }}>
+                                {wr.toFixed(1)}%
+                              </td>
+                              <td style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 800, color: data.profit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'monospace' }}>
+                                {data.profit >= 0 ? '+' : ''}${data.profit.toFixed(2)}
+                              </td>
+                            </tr>
+                          );
+                        })
+                    ) : (
+                      <tr>
+                        <td colSpan="4" style={{ textAlign: 'center', color: '#475569', padding: '2rem' }}>Sem dados de análise cadastrados</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
           </div>
-        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <button
-            onClick={handleExportCSV}
-            disabled={displayedTrades.length === 0}
-            onMouseEnter={() => setExportHover('csv')}
-            onMouseLeave={() => setExportHover(null)}
-            style={{
-              padding: '0.55rem 1.25rem',
-              fontSize: '0.7rem',
-              fontWeight: 700,
-              background: exportHover === 'csv' ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.02)',
-              border: exportHover === 'csv' ? '1px solid #a78bfa' : '1px solid rgba(255,255,255,0.08)',
-              borderRadius: '8px',
-              color: 'white',
-              cursor: displayedTrades.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: displayedTrades.length === 0 ? 0.5 : 1,
-              transition: 'all 0.2s'
-            }}
-          >
-            EXPORTAR CSV
-          </button>
-          
-          <button
-            onClick={handleExportJSON}
-            disabled={displayedTrades.length === 0}
-            onMouseEnter={() => setExportHover('json')}
-            onMouseLeave={() => setExportHover(null)}
-            style={{
-              padding: '0.55rem 1.25rem',
-              fontSize: '0.7rem',
-              fontWeight: 700,
-              background: exportHover === 'json' ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.02)',
-              border: exportHover === 'json' ? '1px solid #a78bfa' : '1px solid rgba(255,255,255,0.08)',
-              borderRadius: '8px',
-              color: 'white',
-              cursor: displayedTrades.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: displayedTrades.length === 0 ? 0.5 : 1,
-              transition: 'all 0.2s'
-            }}
-          >
-            EXPORTAR JSON
-          </button>
+          {/* Export & Actions Footer Panel */}
+          <div className="glass-panel" style={{
+            padding: '1.25rem 1.5rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'linear-gradient(135deg, rgba(14, 11, 24, 0.5) 0%, rgba(139, 92, 246, 0.03) 100%)',
+            borderRadius: '16px',
+            border: '1px solid rgba(139, 92, 246, 0.15)',
+            flexWrap: 'wrap',
+            gap: '1.25rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(167,139,250,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Download size={18} style={{ color: '#a78bfa' }} />
+              </div>
+              <div>
+                <h4 style={{ fontSize: '0.8rem', fontWeight: 800, letterSpacing: '0.04em', margin: 0 }}>EXPORTAR HISTÓRICO ANALÍTICO</h4>
+                <p style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 2, margin: 0 }}>Baixe os dados operacionais estruturados do seu período selecionado para planilhas ou sistemas externos.</p>
+              </div>
+            </div>
 
-          {!viewingArchivedReport && (
-            <button
-              onClick={() => {
-                if (confirm('Tem certeza de que deseja apagar permanentemente todo o histórico de operações do banco de dados? Esta ação não poderá ser desfeita.')) {
-                  onClearDb();
-                }
-              }}
-              disabled={dbTrades.length === 0}
-              style={{
-                padding: '0.55rem 1.25rem',
-                fontSize: '0.7rem',
-                fontWeight: 700,
-                background: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
-                borderRadius: '8px',
-                color: '#f87171',
-                cursor: dbTrades.length === 0 ? 'not-allowed' : 'pointer',
-                opacity: dbTrades.length === 0 ? 0.5 : 1,
-                transition: 'all 0.2s'
-              }}
-            >
-              APAGAR DADOS ATIVOS
-            </button>
-          )}
-        </div>
-      </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <button
+                onClick={handleExportCSV}
+                disabled={displayedTrades.length === 0}
+                onMouseEnter={() => setExportHover('csv')}
+                onMouseLeave={() => setExportHover(null)}
+                style={{
+                  padding: '0.55rem 1.25rem',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  background: exportHover === 'csv' ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.02)',
+                  border: exportHover === 'csv' ? '1px solid #a78bfa' : '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '8px',
+                  color: 'white',
+                  cursor: displayedTrades.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: displayedTrades.length === 0 ? 0.5 : 1,
+                  transition: 'all 0.2s'
+                }}
+              >
+                EXPORTAR CSV
+              </button>
+              
+              <button
+                onClick={handleExportJSON}
+                disabled={displayedTrades.length === 0}
+                onMouseEnter={() => setExportHover('json')}
+                onMouseLeave={() => setExportHover(null)}
+                style={{
+                  padding: '0.55rem 1.25rem',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  background: exportHover === 'json' ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.02)',
+                  border: exportHover === 'json' ? '1px solid #a78bfa' : '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '8px',
+                  color: 'white',
+                  cursor: displayedTrades.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: displayedTrades.length === 0 ? 0.5 : 1,
+                  transition: 'all 0.2s'
+                }}
+              >
+                EXPORTAR JSON
+              </button>
+
+              {!viewingArchivedReport && (
+                <button
+                  onClick={() => {
+                    if (confirm('Tem certeza de que deseja apagar permanentemente todo o histórico de operações do banco de dados? Esta ação não poderá ser desfeita.')) {
+                      onClearDb();
+                    }
+                  }}
+                  disabled={dbTrades.length === 0}
+                  style={{
+                    padding: '0.55rem 1.25rem',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    borderRadius: '8px',
+                    color: '#f87171',
+                    cursor: dbTrades.length === 0 ? 'not-allowed' : 'pointer',
+                    opacity: dbTrades.length === 0 ? 0.5 : 1,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  APAGAR DADOS ATIVOS
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
     </div>
   );

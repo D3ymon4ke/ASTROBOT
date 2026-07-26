@@ -50,6 +50,9 @@ export default function Scheduler({
     stopLoss: 20.0,
     martingaleLevels: 2,
     martingaleMultiplier: 2.0,
+    enableStreakShield: true,
+    maxStreakCandles: 4,
+    streakShieldAction: 'block',
     enableMasterCandleSecondary: false,
     disableSlowStrategies: false,
     disableMaCrossover: false,
@@ -76,6 +79,9 @@ export default function Scheduler({
     moneyManagement: c.moneyManagement || (parseInt(c.martingaleLevels) > 0 ? 'martingale' : 'fixed'),
     martingaleLevels: c.martingaleLevels ?? defaultCycle.martingaleLevels,
     martingaleMultiplier: c.martingaleMultiplier ?? defaultCycle.martingaleMultiplier,
+    enableStreakShield: c.enableStreakShield ?? defaultCycle.enableStreakShield,
+    maxStreakCandles: c.maxStreakCandles ?? defaultCycle.maxStreakCandles,
+    streakShieldAction: c.streakShieldAction || defaultCycle.streakShieldAction,
     timezone: c.timezone || defaultCycle.timezone
   }));
 
@@ -1149,6 +1155,12 @@ export default function Scheduler({
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Multiplicador Gale:</span>
                       <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>{selectedCycle.martingaleMultiplier || 2.0}x</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Trava Streak Shield:</span>
+                      <strong style={{ color: selectedCycle.enableStreakShield ? '#10b981' : 'var(--text-muted)' }}>
+                        {selectedCycle.enableStreakShield ? `ATIVO (${selectedCycle.maxStreakCandles || 4}V)` : 'DESATIVADO'}
+                      </strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Vela Mestra Secundária:</span>
@@ -2323,6 +2335,21 @@ export default function Scheduler({
                     {/* Exclude/Flags checklist */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255,255,255,0.01)', padding: '0.75rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.03)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <strong style={{ fontSize: '0.75rem', color: '#34d399', display: 'block' }}>🛡️ Trava de Sequência (Streak Shield)</strong>
+                          <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Bloqueia ordens contra tendências de 4+ velas seguidas</span>
+                        </div>
+                        <label className="switch" style={{ width: '34px', height: '18px' }}>
+                          <input
+                            type="checkbox"
+                            checked={wizardData.enableStreakShield ?? true}
+                            onChange={(e) => setWizardData({ ...wizardData, enableStreakShield: e.target.checked })}
+                          />
+                          <span className="slider" style={{ borderRadius: '18px' }}></span>
+                        </label>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
                         <div>
                           <strong style={{ fontSize: '0.75rem', color: 'white', display: 'block' }}>Vela Mestra Secundária</strong>
                           <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Filtra/opera rompimentos baseados em máximas/mínimas</span>

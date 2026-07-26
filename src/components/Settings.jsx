@@ -632,14 +632,57 @@ export default function Settings({
             </div>
             {activeModule !== 'seguranca' && (
               <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold', background: 'rgba(139, 92, 246, 0.1)', padding: '2px 8px', borderRadius: '12px' }}>
-                {settings.enableMasterCandleSecondary ? 'Vela Mestra' : 'Normal'}
+                {settings.enableStreakShield ? `Streak Shield (${settings.maxStreakCandles || 4}V)` : (settings.enableMasterCandleSecondary ? 'Vela Mestra' : 'Normal')}
               </span>
             )}
           </div>
           
           {activeModule === 'seguranca' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              {/* Streak Shield Toggle */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>TRAVA DE SEQUÊNCIA (STREAK SHIELD)</label>
+                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Bloqueia ordens contra tendências de 4+ velas da mesma cor</span>
+                </div>
+                <label className="switch" style={{ flexShrink: 0 }}>
+                  <input type="checkbox" name="enableStreakShield" checked={settings.enableStreakShield ?? true} onChange={handleInputChange} disabled={isRunning} />
+                  <span className="slider"></span>
+                </label>
+              </div>
+
+              {(settings.enableStreakShield ?? true) && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', paddingLeft: '0.5rem', borderLeft: '2px solid #ef4444' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '0.5rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>MÁX. VELAS SEGUIDAS</label>
+                      <input
+                        type="number"
+                        name="maxStreakCandles"
+                        value={settings.maxStreakCandles || 4}
+                        onChange={handleInputChange}
+                        min="3"
+                        max="10"
+                        step="1"
+                        disabled={isRunning}
+                        style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>AÇÃO AO DETECTAR</label>
+                      <select name="streakShieldAction" value={settings.streakShieldAction || 'block'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
+                        <option value="block">Bloquear Entrada</option>
+                        <option value="pause">Pausar Robô (5 min)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '0.62rem', color: '#cbd5e1', background: 'rgba(239, 68, 68, 0.08)', padding: '6px 8px', borderRadius: '6px', border: '1px dashed rgba(239, 68, 68, 0.3)' }}>
+                    🛡️ <strong>Proteção Anti-Quebra:</strong> Previne quebrar a banca no Gale 5 quando ocorrem 7 velas da mesma cor.
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '0.65rem' }}>
                 <div>
                   <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>VELA MESTRA SECUNDÁRIA</label>
                   <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Opera rompimentos de vela mestra de forma secundária</span>

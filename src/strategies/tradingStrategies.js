@@ -1307,11 +1307,68 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
 }
 
 /**
- * Checks for live signal for a given strategy and last candle set
- * @returns {object|null} - { direction: 'CALL'|'PUT', name: string }
+/**
+ * Calculates the current consecutive streak of candles with the exact same color at the end of the array.
+ * @param {Array} candles - Array of candle objects { open, close, high, low, epoch }
+ * @returns {object} { count: number, color: 'CALL'|'PUT'|'NEUTRAL' }
  */
-export function getLiveSignal(strategyId, candles, maxMartingale = 0) {
-  if (candles.length < 5) return null;
+export function getConsecutiveCandlesStreak(candles) {
+  if (!candles || candles.length === 0) return { count: 0, color: 'NEUTRAL' };
+  
+  let count = 0;
+  let streakColor = null;
+
+  for (let i = candles.length - 1; i >= 0; i--) {
+    const c = candles[i];
+    const color = getCandleColor(c);
+    if (color === 'NEUTRAL') break;
+    
+    if (streakColor === null) {
+      streakColor = color;
+      count = 1;
+    } else if (color === streakColor) {
+      count++;
+    } else {
+      break;
+    }
+  }
+
+  return { count, color: streakColor || 'NEUTRAL' };
+}
+
+/**
+ * Checks for live signal for a given strategy and last candle set
+ * @returns {object|null} - { direction: 'CALL'|'PUT', name: string, blockedBy?: string, streakCount?: number, streakColor?: string }
+ */
+export function getLiveSignal(strategyId, candles, maxMartingale = 0, streakShieldOptions = null) {
+  if (!candles || candles.length < 5) return null;
+
+  const rawSignal = computeRawLiveSignal(strategyId, candles);
+  if (!rawSignal) return null;
+
+  // Apply Streak Shield filter if enabled
+  if (streakShieldOptions && streakShieldOptions.enabled) {
+    const maxCandles = streakShieldOptions.maxStreakCandles || streakShieldOptions.maxCandles || 4;
+    const streak = getConsecutiveCandlesStreak(candles);
+
+    if (streak.count >= maxCandles && streak.color !== 'NEUTRAL') {
+      const isCounterTrend = (streak.color === 'CALL' && rawSignal.direction === 'PUT') || 
+                             (streak.color === 'PUT' && rawSignal.direction === 'CALL');
+      if (isCounterTrend) {
+        return {
+          ...rawSignal,
+          blockedBy: 'STREAK_SHIELD',
+          streakCount: streak.count,
+          streakColor: streak.color
+        };
+      }
+    }
+  }
+
+  return rawSignal;
+}
+
+function computeRawLiveSignal(strategyId, candles) {
   const lastIndex = candles.length - 1;
   const lastCandle = candles[lastIndex];
   const date = new Date(lastCandle.epoch * 1000);

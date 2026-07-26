@@ -1356,10 +1356,16 @@ export class UserSession {
       }
     }
 
+    const streakShieldOpts = {
+      enabled: this.settings.enableStreakShield ?? true,
+      maxStreakCandles: parseInt(this.settings.maxStreakCandles) || 4,
+      action: this.settings.streakShieldAction || 'block'
+    };
+
     // Compute live signals
     const signals = {};
     this.strategiesStats.forEach(s => {
-      const sig = getLiveSignal(s.id, closedCandles, maxGale);
+      const sig = getLiveSignal(s.id, closedCandles, maxGale, streakShieldOpts);
       if (sig) {
         signals[s.id] = sig;
       }
@@ -1451,6 +1457,20 @@ export class UserSession {
     }
 
     if (signal) {
+      if (signal.blockedBy === 'STREAK_SHIELD') {
+        const colorText = signal.streakColor === 'CALL' ? 'Verdes (Alta)' : 'Vermelhas (Baixa)';
+        this.addLog({
+          message: `🛡️ [Streak Shield] Ordem ${signal.direction} na estratégia [${strategyUsed}] bloqueada! Detectada sequência de ${signal.streakCount} velas ${colorText} consecutivas.`,
+          type: 'warning'
+        });
+
+        if (streakShieldOpts.action === 'pause') {
+          this.addLog({ message: `🛡️ [Streak Shield] Pausando operações por 5 minutos devido a super-tendência.`, type: 'warning' });
+          this.stopBot();
+        }
+        return;
+      }
+
       const stake = this.calculateCurrentStake(false);
       this.addLog({ message: `Sinal identificado na estratégia [${strategyUsed}] para operar ${signal.direction}.`, type: 'info' });
       

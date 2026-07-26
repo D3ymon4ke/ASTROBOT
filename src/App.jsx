@@ -560,6 +560,9 @@ export default function App() {
     autoPilotInterval: '5',
     disableSlowStrategies: false,
     enableMasterCandleSecondary: false,
+    enableStreakShield: true,
+    maxStreakCandles: 4,
+    streakShieldAction: 'block',
     soundEnabled: true
   };
 
