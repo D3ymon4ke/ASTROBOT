@@ -108,6 +108,9 @@ export default function Scheduler({
       afternoon: true,
       night: true
     },
+    enableStreakShield: true,
+    maxStreakCandles: 4,
+    streakShieldAction: 'block',
     enableMasterCandleSecondary: false,
     disableSlowStrategies: true,
     disableMaCrossover: false
@@ -174,6 +177,9 @@ export default function Scheduler({
             moneyManagement: moneyMgmt,
             martingaleLevels: galeLevels,
             martingaleMultiplier: galeMult,
+            enableStreakShield: generatorData.enableStreakShield ?? true,
+            maxStreakCandles: parseInt(generatorData.maxStreakCandles) || 4,
+            streakShieldAction: generatorData.streakShieldAction || 'block',
             enableMasterCandleSecondary: !!generatorData.enableMasterCandleSecondary,
             disableSlowStrategies: !!generatorData.disableSlowStrategies,
             disableMaCrossover: !!generatorData.disableMaCrossover,
@@ -1809,6 +1815,21 @@ export default function Scheduler({
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '2px', letterSpacing: '0.5px' }}>CONFIGURAÇÕES ADICIONAIS</label>
                 
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                  <div>
+                    <strong style={{ color: '#34d399', display: 'block' }}>🛡️ Trava de Sequência (Streak Shield)</strong>
+                    <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Bloqueia ordens contra tendências de 4+ velas seguidas</span>
+                  </div>
+                  <label className="switch">
+                    <input 
+                      type="checkbox" 
+                      checked={generatorData.enableStreakShield ?? true} 
+                      onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStreakShield: e.target.checked }))} 
+                    />
+                    <span className="slider"></span>
+                  </label>
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
                   <span style={{ color: '#cbd5e1' }}>Vela Master como secundária</span>
                   <label className="switch">
