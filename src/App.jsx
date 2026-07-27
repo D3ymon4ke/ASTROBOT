@@ -5782,6 +5782,7 @@ export default function App() {
                     activeTrade={stateRef.current.lastContractDetails}
                     granularity={settings.granularity}
                     strategy={settings.selectedStrategy}
+                    toggles={{}}
                   />
 
                   {/* Absolute HUD overlays on top of the Chart */}
@@ -6060,10 +6061,16 @@ export default function App() {
                       boxShadow: isRunning 
                         ? '0 0 20px rgba(239, 68, 68, 0.4)' 
                         : '0 0 20px rgba(139, 92, 246, 0.3)',
-                      transition: 'all 0.3s ease'
+                      transition: 'all 0.3s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
                     }}
                   >
-                    {isRunning ? 'PARAR OPERAÇÕES' : 'INICIAR BOT'}
+                    {isRunning 
+                      ? 'PARAR OPERAÇÕES' 
+                      : 'INICIAR BOT'}
                   </button>
 
                   {/* Speed Connection Status Badges */}
@@ -6346,6 +6353,7 @@ export default function App() {
               {showStrategyBuilderModal ? (
                 <StrategyBuilder
                   initialStrategy={editingStrategy}
+                  candles={effectiveCandles}
                   onClose={() => {
                     setShowStrategyBuilderModal(false);
                     setEditingStrategy(null);

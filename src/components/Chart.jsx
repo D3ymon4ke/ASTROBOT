@@ -38,11 +38,12 @@ function drawChart({ canvas, candles, trades, activeTrade, dims, strategy, granu
   const cH = H - M.top  - M.bottom;
 
   // Defaults for toggles
-  const showEMAs   = toggles.showEMAs   !== false;
-  const showSR     = toggles.showSR     !== false;
-  const showVolume = toggles.showVolume !== false;
-  const showTimer  = toggles.showTimer  !== false;
-  const showStreak = toggles.showStreak !== false;
+  const showEMAs          = toggles.showEMAs          !== false;
+  const showSR            = toggles.showSR            !== false;
+  const showVolume        = toggles.showVolume        !== false;
+  const showTimer         = toggles.showTimer         !== false;
+  const showStreak        = toggles.showStreak        !== false;
+
 
   // Background
   ctx.fillStyle = '#090e1a';
@@ -190,89 +191,89 @@ function drawChart({ canvas, candles, trades, activeTrade, dims, strategy, granu
     drawLine(ve21, '#fb923c');
   }
 
-  // ── 5. GRADIENT CANDLESTICKS ─────────────────────────────────────────────────
+  // ── 5. CANDLESTICKS RENDERING ───────────────────────────────────────────────
   let streakCounts = new Array(vis.length).fill(0);
   let streakColors = new Array(vis.length).fill(null);
 
-  if (showStreak) {
-    vis.forEach((c, vi) => {
-      const fullIdx = si + vi;
-      let count = 0;
-      let col = c.close >= c.open ? 'CALL' : 'PUT';
+    if (showStreak) {
+      vis.forEach((c, vi) => {
+        const fullIdx = si + vi;
+        let count = 0;
+        let col = c.close >= c.open ? 'CALL' : 'PUT';
 
-      for (let k = fullIdx; k >= 0; k--) {
-        const prevC = candles[k];
-        const prevCol = prevC.close >= prevC.open ? 'CALL' : 'PUT';
-        if (prevCol === col) {
-          count++;
-        } else {
-          break;
+        for (let k = fullIdx; k >= 0; k--) {
+          const prevC = candles[k];
+          const prevCol = prevC.close >= prevC.open ? 'CALL' : 'PUT';
+          if (prevCol === col) {
+            count++;
+          } else {
+            break;
+          }
         }
+        streakCounts[vi] = count;
+        streakColors[vi] = col;
+      });
+    }
+
+    vis.forEach((c, i) => {
+      const x  = gX(i);
+      const yO = gY(c.open), yC = gY(c.close);
+      const yH = gY(c.high), yL = gY(c.low);
+      const bull = c.close >= c.open;
+      const isLast = i === vis.length - 1;
+
+      // Pulsing glow on live candle
+      if (isLast) {
+        const p = (Math.sin(timestamp / 400) + 1) / 2;
+        const r = 12 + p * 8;
+        const cy = (yO + yC) / 2;
+        const g = ctx.createRadialGradient(x, cy, 0, x, cy, r);
+        g.addColorStop(0, bull ? `rgba(16,185,129,${0.18 * p})` : `rgba(239,68,68,${0.18 * p})`);
+        g.addColorStop(1, 'transparent');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI * 2); ctx.fill();
       }
-      streakCounts[vi] = count;
-      streakColors[vi] = col;
-    });
-  }
 
-  vis.forEach((c, i) => {
-    const x  = gX(i);
-    const yO = gY(c.open), yC = gY(c.close);
-    const yH = gY(c.high), yL = gY(c.low);
-    const bull = c.close >= c.open;
-    const isLast = i === vis.length - 1;
-
-    // Pulsing glow on live candle
-    if (isLast) {
-      const p = (Math.sin(timestamp / 400) + 1) / 2;
-      const r = 12 + p * 8;
-      const cy = (yO + yC) / 2;
-      const g = ctx.createRadialGradient(x, cy, 0, x, cy, r);
-      g.addColorStop(0, bull ? `rgba(16,185,129,${0.18 * p})` : `rgba(239,68,68,${0.18 * p})`);
-      g.addColorStop(1, 'transparent');
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI * 2); ctx.fill();
-    }
-
-    // Wick
-    ctx.strokeStyle = bull ? '#10b981' : '#ef4444';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x, yH); ctx.lineTo(x, yL); ctx.stroke();
-
-    // Body gradient
-    const bH = Math.abs(yC - yO) || 1;
-    const bT = Math.min(yO, yC);
-    const bg = ctx.createLinearGradient(0, bT, 0, bT + bH);
-    if (bull) { bg.addColorStop(0, '#34d399'); bg.addColorStop(1, '#047857'); }
-    else       { bg.addColorStop(0, '#f87171'); bg.addColorStop(1, '#991b1b'); }
-    ctx.fillStyle = bg;
-    ctx.fillRect(x - cw / 2, bT, cw, bH);
-
-    // Top highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
-    ctx.fillRect(x - cw / 2, bT, cw, 1);
-
-    // ── STREAK TAG ─────────────────────────────────────────────────────────────
-    if (showStreak && streakCounts[i] >= 3) {
-      const streakCnt = streakCounts[i];
-      const isShield  = streakCnt >= 4;
-      const label     = isShield ? `🛡️ ${streakCnt}V` : `🔥 ${streakCnt}V`;
-      const tagColor  = isShield ? '#34d399' : '#f59e0b';
-      const tagBg     = isShield ? 'rgba(6, 78, 59, 0.85)' : 'rgba(120, 53, 15, 0.85)';
-
-      const tagY = bull ? yL + 12 : yH - 12;
-      ctx.font = 'bold 8px Outfit, sans-serif';
-      const tw = ctx.measureText(label).width + 8;
-
-      ctx.fillStyle = tagBg;
-      ctx.strokeStyle = tagColor;
+      // Wick
+      ctx.strokeStyle = bull ? '#10b981' : '#ef4444';
       ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.roundRect(x - tw / 2, tagY - 6, tw, 13, 3); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, yH); ctx.lineTo(x, yL); ctx.stroke();
 
-      ctx.fillStyle = tagColor;
-      ctx.textAlign = 'center';
-      ctx.fillText(label, x, tagY + 3);
-    }
-  });
+      // Body gradient
+      const bH = Math.abs(yC - yO) || 1;
+      const bT = Math.min(yO, yC);
+      const bg = ctx.createLinearGradient(0, bT, 0, bT + bH);
+      if (bull) { bg.addColorStop(0, '#34d399'); bg.addColorStop(1, '#047857'); }
+      else       { bg.addColorStop(0, '#f87171'); bg.addColorStop(1, '#991b1b'); }
+      ctx.fillStyle = bg;
+      ctx.fillRect(x - cw / 2, bT, cw, bH);
+
+      // Top highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(x - cw / 2, bT, cw, 1);
+
+      // ── STREAK TAG ─────────────────────────────────────────────────────────────
+      if (showStreak && streakCounts[i] >= 3) {
+        const streakCnt = streakCounts[i];
+        const isShield  = streakCnt >= 4;
+        const label     = isShield ? `🛡️ ${streakCnt}V` : `🔥 ${streakCnt}V`;
+        const tagColor  = isShield ? '#34d399' : '#f59e0b';
+        const tagBg     = isShield ? 'rgba(6, 78, 59, 0.85)' : 'rgba(120, 53, 15, 0.85)';
+
+        const tagY = bull ? yL + 12 : yH - 12;
+        ctx.font = 'bold 8px Outfit, sans-serif';
+        const tw = ctx.measureText(label).width + 8;
+
+        ctx.fillStyle = tagBg;
+        ctx.strokeStyle = tagColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(x - tw / 2, tagY - 6, tw, 13, 3); ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = tagColor;
+        ctx.textAlign = 'center';
+        ctx.fillText(label, x, tagY + 3);
+      }
+    });
 
   // ── 6. ACTIVE TRADE LINES ────────────────────────────────────────────────────
   if (activeTrade) {
@@ -441,7 +442,7 @@ function drawChart({ canvas, candles, trades, activeTrade, dims, strategy, granu
 }
 
 // ─── React Component ─────────────────────────────────────────────────────────
-export default function Chart({ candles = [], trades = [], dbTrades = [], symbol = '', activeTrade, granularity, strategy }) {
+export default function Chart({ candles = [], trades = [], dbTrades = [], symbol = '', activeTrade, granularity, strategy, toggles: togglesProp }) {
   const canvasRef    = useRef(null);
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 600, height: 350 });
@@ -453,7 +454,7 @@ export default function Chart({ candles = [], trades = [], dbTrades = [], symbol
     showSR: true,
     showVolume: true,
     showTimer: true,
-    showStreak: true
+    showStreak: true,
   });
 
   // Gerar velas de fallback sintéticas para que o gráfico NUNCA fique em branco
@@ -901,6 +902,8 @@ export default function Chart({ candles = [], trades = [], dbTrades = [], symbol
             >
               <Shield size={10} /> Streak
             </button>
+
+
           </div>
         </div>
 

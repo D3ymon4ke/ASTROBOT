@@ -371,24 +371,28 @@ export default function Settings({
 
               {!settings.autoPilot && (
                 <div>
-                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>ESTRATÉGIA ATIVA MANUAL</label>
+                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>
+                    ESTRATÉGIA ATIVA MANUAL
+                  </label>
                   <select name="selectedStrategy" value={settings.selectedStrategy} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                    <option value="ma_crossover">Cruzamento de Médias (9/21)</option>
-                    <option value="mhi_minority">MHI Padrão (Minoria)</option>
-                    <option value="mhi_majority">MHI Maioria</option>
-                    <option value="twin_towers">Torres Gêmeas</option>
-                    <option value="three_musketeers">Três Mosqueteiros</option>
-                    <option value="padrao_23">Padrão 23</option>
-                    <option value="padrao_3x1">Padrão 3x1</option>
-                    <option value="padrao_impar">Padrão Ímpar</option>
-                    <option value="r7">Padrão R7</option>
-                    <option value="pullback">Pullback na Média (EMA 20)</option>
-                    <option value="reversal">Reversão (Hammer / Shooting)</option>
-                    <option value="pivot_123">Pivô de 1-2-3</option>
-                    <option value="ross_hook">123 de Ross</option>
-                    <option value="r10">Padrão R10</option>
-                    <option value="marubozu">Marubozu</option>
-                    <option value="bos_choch">BOS + ChoCH</option>
+                    <optgroup label="🕯️ ESTRATÉGIAS TRADICIONAIS (VELAS)">
+                      <option value="ma_crossover">Cruzamento de Médias (9/21)</option>
+                      <option value="mhi_minority">MHI Padrão (Minoria)</option>
+                      <option value="mhi_majority">MHI Maioria</option>
+                      <option value="twin_towers">Torres Gêmeas</option>
+                      <option value="three_musketeers">Três Mosqueteiros</option>
+                      <option value="padrao_23">Padrão 23</option>
+                      <option value="padrao_3x1">Padrão 3x1</option>
+                      <option value="padrao_impar">Padrão Ímpar</option>
+                      <option value="r7">Padrão R7</option>
+                      <option value="pullback">Pullback na Média (EMA 20)</option>
+                      <option value="reversal">Reversão (Hammer / Shooting)</option>
+                      <option value="pivot_123">Pivô de 1-2-3</option>
+                      <option value="ross_hook">123 de Ross</option>
+                      <option value="r10">Padrão R10</option>
+                      <option value="marubozu">Marubozu</option>
+                      <option value="bos_choch">BOS + ChoCH</option>
+                    </optgroup>
                   </select>
                 </div>
               )}
@@ -426,6 +430,8 @@ export default function Settings({
           
           {activeModule === 'gestao' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+
+
               <div>
                 <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>TIPO DE ENTRADA</label>
                 <select name="stakeType" value={settings.stakeType} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
@@ -896,7 +902,17 @@ export default function Settings({
             className="success"
             onClick={onStart}
             disabled={!connected || !authorized}
-            style={{ width: '100%', padding: '0.65rem', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 0 10px rgba(34, 197, 94, 0.15)' }}
+            style={{ 
+              width: '100%', 
+              padding: '0.65rem', 
+              fontWeight: 'bold', 
+              fontSize: '0.85rem', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: '6px', 
+              boxShadow: '0 0 10px rgba(34, 197, 94, 0.15)' 
+            }}
           >
             <Play size={15} fill="currentColor" /> INICIAR BOT
           </button>

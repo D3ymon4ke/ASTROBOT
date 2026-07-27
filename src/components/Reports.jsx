@@ -2111,6 +2111,8 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
     );
   }
 
+
+
   // STANDARD VIEW RENDER
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', width: '100%', color: 'white', position: 'relative' }}>
@@ -2316,6 +2318,8 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
               <Sliders size={14} /> 🧪 Simulador "E Se..."
             </button>
 
+
+
             <button
               onClick={() => {
                 setActiveSubTab('compare');
@@ -2361,41 +2365,29 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
               gap: '0.65rem'
             }}>
               {monthlyReports.map(r => {
-                const profit = r.stats.netProfit || 0;
+                const isSelected = viewingArchivedReport && viewingArchivedReport.id === r.id;
+
                 return (
-                  <div
-                    key={r.id}
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.02)',
-                      border: viewingArchivedReport && viewingArchivedReport.id === r.id 
-                        ? '1px solid rgba(167, 139, 250, 0.4)' 
-                        : '1px solid rgba(255, 255, 255, 0.05)',
-                      borderRadius: '10px',
-                      padding: '0.65rem 0.75rem',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    <div>
-                      <strong style={{ fontSize: '0.72rem', color: '#f1f5f9', display: 'block' }}>📁 {r.monthLabel}</strong>
-                      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '3px', fontSize: '0.62rem' }}>
-                        <span style={{ color: profit >= 0 ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
-                          {profit >= 0 ? '+' : ''}${profit.toFixed(2)}
-                        </span>
-                        <span style={{ color: '#475569' }}>•</span>
-                        <span style={{ color: '#a78bfa', fontWeight: 'bold' }}>
-                          {r.stats.winRate.toFixed(0)}% WR
-                        </span>
-                        <span style={{ color: '#475569' }}>•</span>
-                        <span style={{ color: '#cbd5e1' }}>
-                          {r.stats.totalTrades} ops
-                        </span>
-                      </div>
+                  <div key={r.id} style={{
+                    padding: '0.65rem 0.85rem',
+                    background: isSelected ? 'rgba(167, 139, 250, 0.15)' : 'rgba(9, 9, 15, 0.4)',
+                    border: isSelected ? '1px solid #a78bfa' : '1px solid rgba(255,255,255,0.05)',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <strong style={{ fontSize: '0.72rem', color: isSelected ? '#a78bfa' : 'white' }}>
+                        📁 {r.monthLabel}
+                      </strong>
+                      <span style={{ fontSize: '0.6rem', color: '#64748b' }}>
+                        {r.stats?.totalTrades || 0} ops • {r.stats?.winRate?.toFixed(1)}% WR • ${(r.stats?.netProfit || 0).toFixed(2)}
+                      </span>
                     </div>
-                    
-                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+
+                    <div style={{ display: 'flex', gap: '4px' }}>
                       <button
                         onClick={() => handleLoadArchivedReport(r)}
                         style={{
@@ -2495,6 +2487,7 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
       {/* Sub-Tab Content Rendering */}
       {activeSubTab === 'risk' && renderRiskAnalysisView()}
       {activeSubTab === 'simulator' && renderSimulatorView()}
+
       {activeSubTab === 'overview' && (
         <>
           {/* Upper Widgets (Time period metrics) */}

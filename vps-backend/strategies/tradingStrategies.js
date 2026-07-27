@@ -986,6 +986,7 @@ export function getConsecutiveCandlesStreak(candles) {
   return { count, color: streakColor || 'NEUTRAL' };
 }
 
+
 export function getLiveSignal(strategyId, candles, maxMartingale = 0, streakShieldOptions = null) {
   if (!candles || candles.length < 5) return null;
 

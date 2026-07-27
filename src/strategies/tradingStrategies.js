@@ -1340,6 +1340,7 @@ export function getConsecutiveCandlesStreak(candles) {
  * Checks for live signal for a given strategy and last candle set
  * @returns {object|null} - { direction: 'CALL'|'PUT', name: string, blockedBy?: string, streakCount?: number, streakColor?: string }
  */
+
 export function getLiveSignal(strategyId, candles, maxMartingale = 0, streakShieldOptions = null) {
   if (!candles || candles.length < 5) return null;
 
@@ -1780,3 +1781,218 @@ function computeRawLiveSignal(strategyId, candles) {
 
   return null;
 }
+
+// ─── RSI CALCULATOR ──────────────────────────────────────────────────────────
+export function calculateRSI(candles, period = 14) {
+  if (!candles || candles.length <= period) return Array(candles ? candles.length : 0).fill(null);
+  const rsi = Array(candles.length).fill(null);
+  let gains = 0;
+  let losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const diff = candles[i].close - candles[i - 1].close;
+    if (diff >= 0) gains += diff;
+    else losses -= diff;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  rsi[period] = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+
+  for (let i = period + 1; i < candles.length; i++) {
+    const diff = candles[i].close - candles[i - 1].close;
+    const gain = diff >= 0 ? diff : 0;
+    const loss = diff < 0 ? -diff : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+    rsi[i] = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+  }
+  return rsi;
+}
+
+// ─── CUSTOM STRATEGY DETERMINISTIC BACKTEST ENGINE ──────────────────────────
+export function runCustomStrategyBacktest(candles, config = {}) {
+  if (!candles || candles.length < 15) {
+    return { winRate: 0, totalTrades: 0, wins: 0, losses: 0, maxStreak: 0, profitFactor: '0.00', signals: [] };
+  }
+
+  const maxGale = parseInt(config.maxGaleLevels) || 0;
+  const candlePattern = config.candlePattern || 'sequence';
+  const seqCount = Math.max(1, parseInt(config.candleSequenceCount) || 4);
+  const seqColorMode = config.sequenceColorMode || 'green';
+  const entryDirMode = config.entryDirectionMode || 'reverse';
+
+  const useEma = !!config.useEmaCrossover;
+  const emaFastPeriod = parseInt(config.emaFastPeriod) || 9;
+  const emaSlowPeriod = parseInt(config.emaSlowPeriod) || 21;
+  const emaFast = useEma ? calculateEMA(candles, emaFastPeriod) : null;
+  const emaSlow = useEma ? calculateEMA(candles, emaSlowPeriod) : null;
+
+  const useRsi = !!config.useRsiFilter;
+  const rsiPeriod = parseInt(config.rsiPeriod) || 14;
+  const rsiOverbought = parseFloat(config.rsiOverbought) || 70;
+  const rsiOversold = parseFloat(config.rsiOversold) || 30;
+  const rsiValues = useRsi ? calculateRSI(candles, rsiPeriod) : null;
+
+  let wins = 0;
+  let losses = 0;
+  let currentStreak = 0;
+  let maxStreak = 0;
+  const signals = [];
+
+  const startIdx = Math.max(15, useEma ? emaSlowPeriod : 5);
+
+  for (let i = startIdx; i < candles.length - 1; i++) {
+    let direction = null;
+
+    if (candlePattern === 'sequence') {
+      let isMatch = true;
+      let matchedColor = null;
+
+      for (let k = 0; k < seqCount; k++) {
+        const c = candles[i - k];
+        if (!c) { isMatch = false; break; }
+        const color = getCandleColor(c);
+        if (color === 'NEUTRAL') { isMatch = false; break; }
+
+        if (seqColorMode === 'green' && color !== 'CALL') { isMatch = false; break; }
+        if (seqColorMode === 'red' && color !== 'PUT') { isMatch = false; break; }
+
+        if (matchedColor === null) {
+          matchedColor = color;
+        } else if (seqColorMode === 'any' && color !== matchedColor) {
+          isMatch = false; break;
+        }
+      }
+
+      if (isMatch) {
+        const lastSeqColor = matchedColor || (seqColorMode === 'red' ? 'PUT' : 'CALL');
+        if (entryDirMode === 'reverse') {
+          direction = lastSeqColor === 'CALL' ? 'PUT' : 'CALL';
+        } else if (entryDirMode === 'follow') {
+          direction = lastSeqColor;
+        } else if (entryDirMode === 'always_call') {
+          direction = 'CALL';
+        } else if (entryDirMode === 'always_put') {
+          direction = 'PUT';
+        }
+      }
+    } else if (candlePattern === 'marubozu') {
+      const c = candles[i];
+      const body = Math.abs(c.close - c.open);
+      const range = c.high - c.low;
+      if (range > 0 && body > 0 && (body / range >= 0.85)) {
+        direction = c.close > c.open ? 'CALL' : 'PUT';
+      }
+    } else if (candlePattern === 'doji') {
+      const c = candles[i];
+      const body = Math.abs(c.close - c.open);
+      const range = c.high - c.low;
+      if (range > 0 && (body / range <= 0.15)) {
+        const prevC = candles[i - 1];
+        if (prevC) {
+          direction = prevC.close > prevC.open ? 'PUT' : 'CALL';
+        }
+      }
+    } else if (candlePattern === 'pullback') {
+      const ema20 = calculateEMA(candles, 20);
+      const emaVal = ema20[i];
+      if (emaVal) {
+        const c = candles[i];
+        if (c.close > emaVal && c.low <= emaVal && c.close < c.open) direction = 'CALL';
+        else if (c.close < emaVal && c.high >= emaVal && c.close > c.open) direction = 'PUT';
+      }
+    } else if (candlePattern === 'breakout') {
+      let maxHigh = -1, minLow = 999999;
+      for (let j = i - 6; j < i; j++) {
+        if (candles[j]) {
+          if (candles[j].high > maxHigh) maxHigh = candles[j].high;
+          if (candles[j].low < minLow) minLow = candles[j].low;
+        }
+      }
+      if (candles[i - 1].close <= maxHigh && candles[i].close > maxHigh) direction = 'CALL';
+      else if (candles[i - 1].close >= minLow && candles[i].close < minLow) direction = 'PUT';
+    } else if (candlePattern === 'hammer') {
+      const c = candles[i];
+      const body = Math.abs(c.close - c.open);
+      const upperShadow = c.high - Math.max(c.open, c.close);
+      const lowerShadow = Math.min(c.open, c.close) - c.low;
+      if (body >= 0.0001) {
+        if (lowerShadow >= 2 * body && upperShadow <= 0.3 * body) direction = 'CALL';
+        else if (upperShadow >= 2 * body && lowerShadow <= 0.3 * body) direction = 'PUT';
+      }
+    } else if (candlePattern === 'mhi_minority' || candlePattern === 'mhi_majority') {
+      const date = new Date(candles[i].epoch * 1000);
+      if (date.getMinutes() % 5 === 4) {
+        const c3 = getCandleColor(candles[i - 2]);
+        const c4 = getCandleColor(candles[i - 1]);
+        const c5 = getCandleColor(candles[i]);
+        if (c3 !== 'NEUTRAL' && c4 !== 'NEUTRAL' && c5 !== 'NEUTRAL') {
+          let g = 0, r = 0;
+          [c3, c4, c5].forEach(col => { if (col === 'CALL') g++; if (col === 'PUT') r++; });
+          const isMinority = candlePattern === 'mhi_minority';
+          direction = isMinority ? (g < r ? 'CALL' : 'PUT') : (g > r ? 'CALL' : 'PUT');
+        }
+      }
+    }
+
+    if (!direction) continue;
+
+    // Apply EMA Crossover Filter
+    if (useEma && emaFast && emaSlow) {
+      const f = emaFast[i];
+      const s = emaSlow[i];
+      if (f && s) {
+        if (direction === 'CALL' && f <= s) continue;
+        if (direction === 'PUT' && f >= s) continue;
+      }
+    }
+
+    // Apply RSI Filter
+    if (useRsi && rsiValues) {
+      const rsiVal = rsiValues[i];
+      if (rsiVal !== null) {
+        if (direction === 'CALL' && rsiVal > rsiOverbought) continue;
+        if (direction === 'PUT' && rsiVal < rsiOversold) continue;
+      }
+    }
+
+    // Evaluate trade outcome
+    const evaluation = evaluateTrade(candles, i + 1, direction, maxGale);
+    if (evaluation.result !== 'PENDING') {
+      const isWin = evaluation.result === 'WIN';
+      if (isWin) {
+        wins++;
+        currentStreak++;
+        if (currentStreak > maxStreak) maxStreak = currentStreak;
+      } else {
+        losses++;
+        currentStreak = 0;
+      }
+
+      signals.push({
+        epoch: candles[i + 1].epoch,
+        time: new Date(candles[i + 1].epoch * 1000).toLocaleTimeString(),
+        direction,
+        result: evaluation.result,
+        steps: evaluation.steps,
+        candleIndex: i + 1
+      });
+
+      i += evaluation.steps;
+    }
+  }
+
+  const totalTrades = wins + losses;
+  const winRate = totalTrades > 0 ? parseFloat(((wins / totalTrades) * 100).toFixed(1)) : 0;
+  const profitFactor = (wins * 0.95 / Math.max(1, losses)).toFixed(2);
+
+  return {
+    winRate,
+    totalTrades,
+    wins,
+    losses,
+    maxStreak,
+    profitFactor,
+    signals
+  };
+}
+

@@ -47,6 +47,9 @@ const DEFAULT_SETTINGS = {
   disableMaCrossover: false,
   enableMasterCandleSecondary: false,
   soundEnabled: true,
+  enableStreakShield: true,
+  maxStreakCandles: 4,
+  streakShieldAction: 'block',
   telegramToken: '',
   telegramChatId: '',
   telegramEnabled: false,
@@ -1565,10 +1568,11 @@ export class UserSession {
 
     if (this.activeContractId === 'PENDING_REGISTRATION') {
       this.activeContractId = poc.contract_id;
+
       this.lastContractDetails = {
         epoch: poc.date_start,
         symbol: poc.underlying_symbol,
-        contractType: poc.contract_type,
+        contractType: poc.contract_type || 'CALL',
         stake: parseFloat(poc.buy_price),
         galeLevel: this.galeLevel,
         entryPrice: parseFloat(poc.entry_tick)
@@ -1585,7 +1589,7 @@ export class UserSession {
       this.activeTradeCountdown = {
         contractId: poc.contract_id,
         symbol: poc.underlying_symbol,
-        contractType: poc.contract_type,
+        contractType: poc.contract_type || 'CALL',
         stake: parseFloat(poc.buy_price),
         dateStart: poc.date_start || Math.floor(Date.now() / 1000),
         dateExpiry: poc.date_expiry || (Math.floor(Date.now() / 1000) + fallbackDuration),

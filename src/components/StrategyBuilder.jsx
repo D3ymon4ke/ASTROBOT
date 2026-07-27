@@ -4,12 +4,14 @@ import {
   Share2, Copy, CheckCircle, HelpCircle, AlertCircle, ArrowLeft, 
   Layers, Shield, Target, Flame, RotateCcw, X, Plus
 } from 'lucide-react';
+import { runCustomStrategyBacktest } from '../strategies/tradingStrategies';
 
 export default function StrategyBuilder({ 
   onSaveStrategy, 
   onShareToFeed, 
   onClose,
-  initialStrategy = null
+  initialStrategy = null,
+  candles = []
 }) {
   // Strategy Metadata State
   const [name, setName] = useState(initialStrategy?.name || '');
@@ -53,38 +55,6 @@ export default function StrategyBuilder({
   const [simulationResult, setSimulationResult] = useState(null);
   const [isSimulating, setIsSimulating] = useState(false);
 
-  // Run Backtest Simulator
-  const handleRunSimulation = () => {
-    setIsSimulating(true);
-    setSimulationResult(null);
-
-    setTimeout(() => {
-      // Realistic simulation mathematical modeling based on configured complexity
-      let baseWinRate = 65;
-      if (candlePattern === 'marubozu' || candlePattern === 'breakout') baseWinRate += 6;
-      if (useEmaCrossover) baseWinRate += 5;
-      if (useRsiFilter) baseWinRate += 4;
-      if (useBollingerFilter) baseWinRate += 3;
-
-      const randomVariation = (Math.random() * 8 - 4);
-      const winRate = Math.min(94, Math.max(52, baseWinRate + randomVariation));
-      const totalTrades = Math.floor(Math.random() * 40) + 60; // 60 to 100 sample trades
-      const wins = Math.round(totalTrades * (winRate / 100));
-      const losses = totalTrades - wins;
-      const maxStreak = Math.floor(Math.random() * 5) + 3;
-
-      setSimulationResult({
-        winRate: parseFloat(winRate.toFixed(1)),
-        totalTrades,
-        wins,
-        losses,
-        maxStreak,
-        profitFactor: (wins * 0.95 / Math.max(1, losses)).toFixed(2)
-      });
-      setIsSimulating(false);
-    }, 1000);
-  };
-
   // Build Final Strategy Object
   const getBuiltStrategyObj = () => {
     const stratId = initialStrategy?.id || `custom_strat_${Date.now()}`;
@@ -122,6 +92,39 @@ export default function StrategyBuilder({
       totalTrades: simulationResult ? simulationResult.totalTrades : (initialStrategy?.totalTrades || 0)
     };
   };
+
+  // Run Backtest Simulator
+  const handleRunSimulation = () => {
+    setIsSimulating(true);
+    setSimulationResult(null);
+
+    setTimeout(() => {
+      const config = getBuiltStrategyObj();
+
+      let candlesToUse = candles && candles.length >= 15 ? candles : null;
+      if (!candlesToUse) {
+        // Fallback deterministic candle series for backtesting
+        const now = 1700000000;
+        candlesToUse = [];
+        let price = 100.0;
+        for (let k = 0; k < 120; k++) {
+          const delta = (Math.sin(k * 0.35) * 0.75) + (Math.cos(k * 0.18) * 0.45);
+          const open = price;
+          const close = open + delta;
+          const high = Math.max(open, close) + Math.abs(Math.sin(k)) * 0.35;
+          const low = Math.min(open, close) - Math.abs(Math.cos(k)) * 0.35;
+          price = close;
+          candlesToUse.push({ epoch: now + k * 60, open, high, low, close });
+        }
+      }
+
+      const res = runCustomStrategyBacktest(candlesToUse, config);
+      setSimulationResult(res);
+      setIsSimulating(false);
+    }, 400);
+  };
+
+
 
   const handleSave = () => {
     if (!name.trim()) {
