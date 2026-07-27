@@ -6353,7 +6353,7 @@ export default function App() {
               {showStrategyBuilderModal ? (
                 <StrategyBuilder
                   initialStrategy={editingStrategy}
-                  candles={effectiveCandles}
+                  candles={candles}
                   onClose={() => {
                     setShowStrategyBuilderModal(false);
                     setEditingStrategy(null);
