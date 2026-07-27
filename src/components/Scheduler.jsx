@@ -210,24 +210,24 @@ export default function Scheduler({
     
     const defaultPeriodConfigs = {
       dawn: [
-        { time: '01:25', name: 'Madrugada - Reversão', icon: '🌙', color: '#8b5cf6', strategy: 'reversal' },
-        { time: '03:40', name: 'Madrugada - Baixo Ruído', icon: '🌌', color: '#06b6d4', strategy: 'mhi_minority' },
-        { time: '05:15', name: 'Madrugada - Transição', icon: '🌅', color: '#10b981', strategy: 'twin_towers' }
+        { time: '01:25', name: 'Madrugada', icon: '🌙', color: '#8b5cf6' },
+        { time: '03:40', name: 'Madrugada', icon: '🌌', color: '#06b6d4' },
+        { time: '05:15', name: 'Madrugada', icon: '🌅', color: '#10b981' }
       ],
       morning: [
-        { time: '07:30', name: 'Manhã - Tendência', icon: '⚡', color: '#f59e0b', strategy: 'ma_crossover' },
-        { time: '09:45', name: 'Manhã - Alta Liquidez', icon: '🚀', color: '#8b5cf6', strategy: 'autopilot' },
-        { time: '11:15', name: 'Manhã - Consolidação', icon: '🎯', color: '#10b981', strategy: 'three_musketeers' }
+        { time: '07:30', name: 'Manhã', icon: '⚡', color: '#f59e0b' },
+        { time: '09:45', name: 'Manhã', icon: '🚀', color: '#8b5cf6' },
+        { time: '11:15', name: 'Manhã', icon: '🎯', color: '#10b981' }
       ],
       afternoon: [
-        { time: '13:30', name: 'Tarde - Pullback EMA20', icon: '📈', color: '#06b6d4', strategy: 'pullback' },
-        { time: '15:45', name: 'Tarde - Consistência', icon: '🤖', color: '#ec4899', strategy: 'autopilot' },
-        { time: '17:15', name: 'Tarde - Fim de Turno', icon: '🌇', color: '#ef4444', strategy: 'padrao_23' }
+        { time: '13:30', name: 'Tarde', icon: '📈', color: '#06b6d4' },
+        { time: '15:45', name: 'Tarde', icon: '🤖', color: '#ec4899' },
+        { time: '17:15', name: 'Tarde', icon: '🌇', color: '#ef4444' }
       ],
       night: [
-        { time: '19:30', name: 'Noite - Padrão MHI', icon: '🛡️', color: '#8b5cf6', strategy: 'mhi_majority' },
-        { time: '21:15', name: 'Noite - Volatilidade', icon: '⚡', color: '#f59e0b', strategy: 'padrao_3x1' },
-        { time: '23:30', name: 'Noite - Encerramento', icon: '🌙', color: '#ec4899', strategy: 'autopilot' }
+        { time: '19:30', name: 'Noite', icon: '🛡️', color: '#8b5cf6' },
+        { time: '21:15', name: 'Noite', icon: '⚡', color: '#f59e0b' },
+        { time: '23:30', name: 'Noite', icon: '🌙', color: '#ec4899' }
       ]
     };
 
@@ -248,13 +248,12 @@ export default function Scheduler({
         const periodName = periodNames[periodKey];
         const icon = getPeriodIcon(h.hour);
         const color = getPeriodColor(h.hour);
-        const strategy = smartStrategies[idx % smartStrategies.length];
+        // Always autopilot — scan will pick the best strategy at runtime
         smartConfigs[periodKey].push({
           time: timeStr,
           name: `${periodName} - ${h.winRate}% (${h.total} ops)`,
           icon,
-          color,
-          strategy
+          color
         });
       });
 
@@ -274,8 +273,9 @@ export default function Scheduler({
           const assetIndex = generatedCount % targetAssets.length;
           const symbol = targetAssets[assetIndex];
           
-          const strategy = cfg.strategy || 'autopilot';
-          const name = `${cfg.name} (Auto)`;
+          // Always use autopilot — the bot will scan and pick the best strategy
+          // a few minutes before the cycle starts
+          const name = `${cfg.name} ${cfg.time}`;
           
           newCycles.push({
             id: 'cycle_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
@@ -285,7 +285,7 @@ export default function Scheduler({
             timezone: 'GMT-3',
             symbol: symbol,
             granularity: '60',
-            selectedStrategy: strategy,
+            selectedStrategy: 'autopilot',
             stakeValue: stake,
             takeProfit: tp,
             stopLoss: sl,
