@@ -17,7 +17,8 @@ export default function Scheduler({
   onStopBot,
   autoResetConfig,
   onSaveAutoResetConfig,
-  onTriggerAutoResetManual
+  onTriggerAutoResetManual,
+  historicalTrades = []
 }) {
   const defaultAutoReset = {
     enabled: true,
@@ -113,8 +114,88 @@ export default function Scheduler({
     streakShieldAction: 'block',
     enableMasterCandleSecondary: false,
     disableSlowStrategies: true,
-    disableMaCrossover: false
+    disableMaCrossover: false,
+    useSmartHours: false
   });
+
+  // ─── Smart Hours Engine ───────────────────────────────────────────────────
+  // Analyses historicalTrades and returns the top performing hours
+  // "Best hours" = hours with highest win rate where wins resolved in G0-G3
+  const computeBestHoursFromHistory = (trades, minTrades = 3, topN = 8) => {
+    if (!trades || trades.length === 0) return [];
+
+    const hourStats = {}; // hour (0-23) => { wins, losses, totalG3Wins, total }
+
+    trades.forEach(trade => {
+      let hour = null;
+      // Try to get hour from trade timestamp
+      if (trade.timestamp) {
+        const d = new Date(typeof trade.timestamp === 'number' && trade.timestamp < 1e12
+          ? trade.timestamp * 1000 : trade.timestamp);
+        hour = d.getHours();
+      } else if (trade.date) {
+        const d = new Date(trade.date);
+        hour = d.getHours();
+      }
+      if (hour === null || hour === undefined || isNaN(hour)) return;
+
+      if (!hourStats[hour]) {
+        hourStats[hour] = { wins: 0, losses: 0, g0Wins: 0, g1Wins: 0, g2Wins: 0, g3Wins: 0, total: 0 };
+      }
+
+      const isWin = trade.profit > 0 || trade.result === 'win' || trade.outcome === 'win';
+      const galeLevel = trade.galeLevel ?? trade.currentGale ?? 0;
+
+      hourStats[hour].total++;
+      if (isWin) {
+        hourStats[hour].wins++;
+        if (galeLevel === 0) hourStats[hour].g0Wins++;
+        else if (galeLevel === 1) hourStats[hour].g1Wins++;
+        else if (galeLevel === 2) hourStats[hour].g2Wins++;
+        else if (galeLevel === 3) hourStats[hour].g3Wins++;
+      } else {
+        hourStats[hour].losses++;
+      }
+    });
+
+    // Score: prioritize hours with many wins at G0-G3 and high win rate
+    const scored = Object.entries(hourStats)
+      .filter(([, s]) => s.total >= minTrades)
+      .map(([hour, s]) => {
+        const g3Wins = s.g0Wins + s.g1Wins + s.g2Wins + s.g3Wins;
+        const winRate = s.total > 0 ? (s.wins / s.total) * 100 : 0;
+        // Score: weight heavily towards wins resolved early (G0-G3)
+        const score = (g3Wins * 3) + (winRate * 0.5) - (s.losses * 2);
+        return { hour: parseInt(hour), ...s, g3Wins, winRate: winRate.toFixed(1), score };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, topN);
+
+    return scored;
+  };
+
+  const smartHours = computeBestHoursFromHistory(historicalTrades);
+
+  const getPeriodForHour = (hour) => {
+    if (hour >= 0 && hour < 6) return 'dawn';
+    if (hour >= 6 && hour < 12) return 'morning';
+    if (hour >= 12 && hour < 18) return 'afternoon';
+    return 'night';
+  };
+
+  const getPeriodIcon = (hour) => {
+    if (hour >= 0 && hour < 6) return '🌙';
+    if (hour >= 6 && hour < 12) return '🌅';
+    if (hour >= 12 && hour < 18) return '🌇';
+    return '🌌';
+  };
+
+  const getPeriodColor = (hour) => {
+    if (hour >= 0 && hour < 6) return '#8b5cf6';
+    if (hour >= 6 && hour < 12) return '#f59e0b';
+    if (hour >= 12 && hour < 18) return '#06b6d4';
+    return '#10b981';
+  };
 
   const handleGenerateTimeline = () => {
     const newCycles = [];
@@ -127,7 +208,7 @@ export default function Scheduler({
     const galeLevels = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' ? 0 : (parseInt(generatorData.martingaleLevels) ?? 2);
     const galeMult = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' || galeLevels === 0 ? 1.0 : (parseFloat(generatorData.martingaleMultiplier) || 2.0);
     
-    const periodConfigs = {
+    const defaultPeriodConfigs = {
       dawn: [
         { time: '01:25', name: 'Madrugada - Reversão', icon: '🌙', color: '#8b5cf6', strategy: 'reversal' },
         { time: '03:40', name: 'Madrugada - Baixo Ruído', icon: '🌌', color: '#06b6d4', strategy: 'mhi_minority' },
@@ -149,6 +230,40 @@ export default function Scheduler({
         { time: '23:30', name: 'Noite - Encerramento', icon: '🌙', color: '#ec4899', strategy: 'autopilot' }
       ]
     };
+
+    let periodConfigs = defaultPeriodConfigs;
+
+    // SMART HOURS MODE: use real historical best hours instead of presets
+    if (generatorData.useSmartHours && smartHours.length > 0) {
+      const smartConfigs = { dawn: [], morning: [], afternoon: [], night: [] };
+      const periodNames = { dawn: 'Madrugada', morning: 'Manhã', afternoon: 'Tarde', night: 'Noite' };
+      const smartStrategies = ['autopilot', 'mhi_minority', 'mhi_majority', 'reversal', 'pullback', 'three_musketeers'];
+
+      smartHours.forEach((h, idx) => {
+        const periodKey = getPeriodForHour(h.hour);
+        // Check period filter
+        if (!periodsSelected[periodKey]) return;
+        const mm = '00';
+        const timeStr = `${String(h.hour).padStart(2, '0')}:${mm}`;
+        const periodName = periodNames[periodKey];
+        const icon = getPeriodIcon(h.hour);
+        const color = getPeriodColor(h.hour);
+        const strategy = smartStrategies[idx % smartStrategies.length];
+        smartConfigs[periodKey].push({
+          time: timeStr,
+          name: `${periodName} - ${h.winRate}% (${h.total} ops)`,
+          icon,
+          color,
+          strategy
+        });
+      });
+
+      // Only use periods that have smart entries
+      const hasSmartEntries = Object.values(smartConfigs).some(arr => arr.length > 0);
+      if (hasSmartEntries) {
+        periodConfigs = smartConfigs;
+      }
+    }
     
     const targetAssets = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_50', '1HZ50V'];
     let generatedCount = 0;
@@ -1809,6 +1924,131 @@ export default function Scheduler({
                     );
                   })}
                 </div>
+              </div>
+
+              {/* ─── SMART HOURS FEATURE ─── */}
+              <div style={{
+                borderRadius: '14px',
+                border: generatorData.useSmartHours
+                  ? '1px solid rgba(16, 185, 129, 0.5)'
+                  : '1px solid rgba(255,255,255,0.06)',
+                background: generatorData.useSmartHours
+                  ? 'rgba(16, 185, 129, 0.05)'
+                  : 'rgba(255,255,255,0.01)',
+                overflow: 'hidden',
+                transition: 'all 0.3s ease'
+              }}>
+                {/* Toggle Header */}
+                <div style={{
+                  padding: '0.9rem 1rem',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '34px', height: '34px', borderRadius: '10px',
+                      background: generatorData.useSmartHours ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.04)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '1.1rem', transition: 'all 0.3s ease'
+                    }}>🧠</div>
+                    <div>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: generatorData.useSmartHours ? '#34d399' : 'white' }}>
+                        Melhores Horários Reais (G3+)
+                      </div>
+                      <div style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', marginTop: '1px' }}>
+                        Gera missões apenas nos horários com mais acertos até G3 do seu histórico
+                      </div>
+                    </div>
+                  </div>
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={generatorData.useSmartHours}
+                      onChange={(e) => setGeneratorData(prev => ({ ...prev, useSmartHours: e.target.checked }))}
+                    />
+                    <span className="slider"></span>
+                  </label>
+                </div>
+
+                {/* Smart Hours Preview - shown when toggle is ON */}
+                {generatorData.useSmartHours && (
+                  <div style={{ borderTop: '1px solid rgba(16, 185, 129, 0.15)', padding: '0.85rem 1rem' }}>
+                    {smartHours.length === 0 ? (
+                      <div style={{
+                        textAlign: 'center', padding: '1rem',
+                        color: '#94a3b8', fontSize: '0.72rem',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px'
+                      }}>
+                        <span style={{ fontSize: '1.5rem' }}>📊</span>
+                        <span>Nenhum histórico disponível ainda.</span>
+                        <span style={{ fontSize: '0.62rem', color: '#64748b' }}>
+                          Opere mais para acumular dados e o sistema detectará os melhores horários automaticamente.
+                        </span>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ fontSize: '0.6rem', fontWeight: '800', color: '#10b981', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '4px' }}>
+                          🏆 Top {smartHours.length} Horários Detectados
+                        </div>
+                        {smartHours.map((h, idx) => {
+                          const periodColor = getPeriodColor(h.hour);
+                          return (
+                            <div key={h.hour} style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '6px 8px',
+                              background: 'rgba(255,255,255,0.02)',
+                              borderRadius: '8px',
+                              border: `1px solid ${periodColor}22`
+                            }}>
+                              <div style={{
+                                width: '22px', height: '22px',
+                                borderRadius: '6px',
+                                background: `${periodColor}22`,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '0.6rem', fontWeight: 'bold', color: periodColor
+                              }}>
+                                #{idx + 1}
+                              </div>
+                              <div style={{ fontSize: '0.85rem' }}>{getPeriodIcon(h.hour)}</div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span style={{ fontSize: '0.78rem', fontWeight: 'bold', fontFamily: 'var(--font-mono)', color: 'white' }}>
+                                    {String(h.hour).padStart(2, '0')}:00h
+                                  </span>
+                                  <span style={{
+                                    fontSize: '0.6rem', fontWeight: 'bold',
+                                    color: parseFloat(h.winRate) >= 70 ? '#34d399' : parseFloat(h.winRate) >= 55 ? '#f59e0b' : '#f87171',
+                                    background: parseFloat(h.winRate) >= 70 ? 'rgba(52,211,153,0.1)' : parseFloat(h.winRate) >= 55 ? 'rgba(245,158,11,0.1)' : 'rgba(248,113,113,0.1)',
+                                    padding: '1px 5px', borderRadius: '4px'
+                                  }}>
+                                    {h.winRate}%
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '1px' }}>
+                                  {h.total} ops · G0:{h.g0Wins} G1:{h.g1Wins} G2:{h.g2Wins} G3:{h.g3Wins} · {h.losses} loss
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.62rem', fontWeight: 'bold', color: '#34d399' }}>
+                                  {h.wins}W
+                                </div>
+                                <div style={{ fontSize: '0.58rem', color: '#f87171' }}>
+                                  {h.losses}L
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div style={{ fontSize: '0.58rem', color: '#475569', marginTop: '4px', textAlign: 'center' }}>
+                          ⚡ Os períodos selecionados acima ainda filtram quais horários serão usados
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Additional Options */}

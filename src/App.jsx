@@ -6502,6 +6502,7 @@ export default function App() {
                   derivAPI.triggerAutoReset();
                   addSchedulerLog('Solicitando Reset Manual de Ciclos e Relatório Telegram...', 'warning');
                 }}
+                historicalTrades={dbTrades}
               />
             </main>
           );
