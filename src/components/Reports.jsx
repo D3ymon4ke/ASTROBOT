@@ -10,6 +10,7 @@ import {
   BarChart2, 
   Download, 
   AlertCircle, 
+  AlertTriangle,
   Trash2, 
   Clock, 
   DollarSign, 
@@ -108,7 +109,17 @@ const calculateStats = (tradesList) => {
   let maxGaleFound = 0;
 
   // Heatmaps & Hourly Analysis
-  const hourlyData = Array.from({ length: 24 }, (_, i) => ({ hour: i, total: 0, wins: 0, losses: 0, profit: 0, lossAmount: 0, gales: { G0: 0, G1: 0, G2: 0, G3Plus: 0 } }));
+  // Heatmaps & Hourly Analysis
+  const hourlyData = Array.from({ length: 24 }, (_, i) => ({ 
+    hour: i, 
+    total: 0, 
+    wins: 0, 
+    losses: 0, 
+    profit: 0, 
+    lossAmount: 0, 
+    gales: { G0: 0, G1: 0, G2: 0, G3: 0, G4: 0, G5: 0, G6Plus: 0, G3Plus: 0 },
+    galeLosses: { G0: 0, G1: 0, G2: 0, G3: 0, G4: 0, G5: 0, G6Plus: 0 }
+  }));
   const dailyData = Array.from({ length: 7 }, (_, i) => ({ day: i, total: 0, wins: 0 }));
 
   // Strategy & Asset tables
@@ -191,14 +202,17 @@ const calculateStats = (tradesList) => {
     // Hourly Breakdown
     hourlyData[hour].total++;
     hourlyData[hour].profit += profitVal;
-    const galeKey = gale === 0 ? 'G0' : gale === 1 ? 'G1' : gale === 2 ? 'G2' : 'G3Plus';
-    hourlyData[hour].gales[galeKey] = (hourlyData[hour].gales[galeKey] || 0) + 1;
+    const galeKey = gale === 0 ? 'G0' : gale === 1 ? 'G1' : gale === 2 ? 'G2' : gale === 3 ? 'G3' : gale === 4 ? 'G4' : gale === 5 ? 'G5' : 'G6Plus';
+    const compactGaleKey = gale === 0 ? 'G0' : gale === 1 ? 'G1' : gale === 2 ? 'G2' : 'G3Plus';
 
     if (isWin) {
       hourlyData[hour].wins++;
+      hourlyData[hour].gales[galeKey] = (hourlyData[hour].gales[galeKey] || 0) + 1;
+      hourlyData[hour].gales[compactGaleKey] = (hourlyData[hour].gales[compactGaleKey] || 0) + 1;
     } else {
       hourlyData[hour].losses++;
       hourlyData[hour].lossAmount += Math.abs(profitVal);
+      hourlyData[hour].galeLosses[galeKey] = (hourlyData[hour].galeLosses[galeKey] || 0) + 1;
     }
 
     // Daily Heatmap
@@ -549,6 +563,8 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
   const [simExcludedHours, setSimExcludedHours] = useState([]);
   const [simExcludedAssets, setSimExcludedAssets] = useState([]);
   const [simMaxGale, setSimMaxGale] = useState(null); // null (unlimited), 0 (G0), 1 (G1), 2 (G2)
+  const [simCompareHourA, setSimCompareHourA] = useState(14);
+  const [simCompareHourB, setSimCompareHourB] = useState(9);
 
   // Simulation computation result
   const simResult = useMemo(() => {
@@ -1250,6 +1266,262 @@ export default function Reports({ dbTrades = [], onClearDb, isDemo = true }) {
             </p>
           </div>
         </div>
+
+        {/* FEATURE: ANÁLISE DETALHADA DE LOSS POR GALE (G0 a G5) & COMPARADOR DE HORÁRIOS */}
+        {(() => {
+          const hourlyList = stats.hourlyDetailed || [];
+          const dataA = hourlyList.find(h => h.hour === Number(simCompareHourA)) || { hour: simCompareHourA, total: 0, wins: 0, losses: 0, profit: 0, lossAmount: 0, rate: 0, gales: {}, galeLosses: {} };
+          const dataB = hourlyList.find(h => h.hour === Number(simCompareHourB)) || { hour: simCompareHourB, total: 0, wins: 0, losses: 0, profit: 0, lossAmount: 0, rate: 0, gales: {}, galeLosses: {} };
+
+          // Find cleanest hour (0 losses, max wins)
+          const cleanHours = hourlyList.filter(h => h.total > 0 && h.losses === 0).sort((a, b) => b.wins - a.wins);
+          // Find worst loss hour
+          const worstHours = [...hourlyList].filter(h => h.total > 0 && h.losses > 0).sort((a, b) => b.losses - a.losses);
+
+          const galeLevels = ['G0', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6Plus'];
+
+          return (
+            <div className="glass-panel" style={{
+              padding: '1.75rem',
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, rgba(15, 11, 28, 0.85) 0%, rgba(9, 9, 15, 0.95) 100%)',
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.4)'
+            }}>
+              {/* Module Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                  <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(139, 92, 246, 0.2)', border: '1px solid #8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Target size={22} style={{ color: '#a78bfa' }} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 900, color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      🔬 ANÁLISE DE LOSS POR GALE (G0-G5) & COMPARADOR DE HORÁRIOS
+                    </h3>
+                    <p style={{ fontSize: '0.72rem', color: '#94a3b8', margin: '3px 0 0 0' }}>
+                      Inspecione o nível exato de Gale em que ocorreram os Losses (G0 a G5) e compare dois horários lado a lado.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Presets */}
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {cleanHours.length > 0 && (
+                    <button
+                      onClick={() => setSimCompareHourA(cleanHours[0].hour)}
+                      style={{ padding: '0.45rem 0.85rem', fontSize: '0.68rem', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#34d399', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <Award size={12} /> Horário 100% Limpo ({String(cleanHours[0].hour).padStart(2, '0')}h)
+                    </button>
+                  )}
+
+                  {worstHours.length > 0 && (
+                    <button
+                      onClick={() => setSimCompareHourA(worstHours[0].hour)}
+                      style={{ padding: '0.45rem 0.85rem', fontSize: '0.68rem', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#f87171', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <AlertTriangle size={12} /> Pior Horário ({String(worstHours[0].hour).padStart(2, '0')}h)
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      const temp = simCompareHourA;
+                      setSimCompareHourA(simCompareHourB);
+                      setSimCompareHourB(temp);
+                    }}
+                    style={{ padding: '0.45rem 0.85rem', fontSize: '0.68rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    🔄 Inverter A ↔ B
+                  </button>
+                </div>
+              </div>
+
+              {/* Hour Selectors Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                
+                {/* Selector A */}
+                <div style={{ background: 'rgba(9, 9, 15, 0.6)', padding: '1rem', borderRadius: '14px', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+                  <label style={{ fontSize: '0.7rem', color: '#a78bfa', fontWeight: 'bold', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    📍 Horário Principal (Horário A)
+                  </label>
+                  <select
+                    value={simCompareHourA}
+                    onChange={(e) => setSimCompareHourA(Number(e.target.value))}
+                    style={{ width: '100%', padding: '0.65rem', background: '#0f0b1c', border: '1px solid rgba(139, 92, 246, 0.4)', borderRadius: '8px', color: 'white', fontSize: '0.85rem', fontWeight: 'bold' }}
+                  >
+                    {Array.from({ length: 24 }, (_, i) => {
+                      const hInfo = hourlyList.find(h => h.hour === i) || { total: 0, wins: 0, losses: 0 };
+                      const zeroLoss = hInfo.total > 0 && hInfo.losses === 0;
+                      return (
+                        <option key={i} value={i}>
+                          {String(i).padStart(2, '0')}:00h - {hInfo.total} ops ({hInfo.wins}W / {hInfo.losses}L) {zeroLoss ? '🏆 0 LOSSES' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* Selector B */}
+                <div style={{ background: 'rgba(9, 9, 15, 0.6)', padding: '1rem', borderRadius: '14px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                  <label style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 'bold', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    📊 Horário Comparativo (Horário B)
+                  </label>
+                  <select
+                    value={simCompareHourB}
+                    onChange={(e) => setSimCompareHourB(Number(e.target.value))}
+                    style={{ width: '100%', padding: '0.65rem', background: '#0f0b1c', border: '1px solid rgba(56, 189, 248, 0.4)', borderRadius: '8px', color: 'white', fontSize: '0.85rem', fontWeight: 'bold' }}
+                  >
+                    {Array.from({ length: 24 }, (_, i) => {
+                      const hInfo = hourlyList.find(h => h.hour === i) || { total: 0, wins: 0, losses: 0 };
+                      const zeroLoss = hInfo.total > 0 && hInfo.losses === 0;
+                      return (
+                        <option key={i} value={i}>
+                          {String(i).padStart(2, '0')}:00h - {hInfo.total} ops ({hInfo.wins}W / {hInfo.losses}L) {zeroLoss ? '🏆 0 LOSSES' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+              </div>
+
+              {/* DETAILED HORÁRIO A GALE BREAKDOWN */}
+              <div style={{ background: 'rgba(9, 9, 15, 0.4)', padding: '1.25rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div>
+                    <h4 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'white', margin: 0 }}>
+                      🔍 DETALHAMENTO DE LOSSES POR GALE NO HORÁRIO {String(simCompareHourA).padStart(2, '0')}:00h
+                    </h4>
+                    <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
+                      Total: {dataA.total} operações • Winrate: {dataA.rate.toFixed(1)}% • Lucro: ${dataA.profit.toFixed(2)}
+                    </span>
+                  </div>
+
+                  {/* Zero Loss Badge */}
+                  {dataA.total > 0 && dataA.losses === 0 ? (
+                    <div style={{ padding: '0.4rem 0.9rem', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', color: '#34d399', borderRadius: '20px', fontSize: '0.72rem', fontWeight: '900', boxShadow: '0 0 15px rgba(16, 185, 129, 0.3)' }}>
+                      🏆 HORÁRIO 100% LIMPO (0 LOSSES)
+                    </div>
+                  ) : dataA.losses > 0 ? (
+                    <div style={{ padding: '0.4rem 0.9rem', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', color: '#f87171', borderRadius: '20px', fontSize: '0.72rem', fontWeight: '900' }}>
+                      ⚠️ {dataA.losses} LOSS(ES) REGISTRADOS (-${dataA.lossAmount.toFixed(2)})
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Sem operações gravadas neste horário</div>
+                  )}
+                </div>
+
+                {/* Gale Levels Breakdown Grid (G0 to G5) */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
+                  {galeLevels.map((lvlKey, idx) => {
+                    const winsCount = dataA.gales?.[lvlKey] || 0;
+                    const lossesCount = dataA.galeLosses?.[lvlKey] || 0;
+                    const label = idx === 0 ? 'G0 (Entrada Direta)' : idx <= 5 ? `Gale ${idx} (G${idx})` : 'Gale 6+';
+
+                    return (
+                      <div key={lvlKey} style={{
+                        background: lossesCount > 0 ? 'rgba(239, 68, 68, 0.08)' : winsCount > 0 ? 'rgba(16, 185, 129, 0.06)' : 'rgba(255,255,255,0.02)',
+                        border: lossesCount > 0 ? '1px solid rgba(239, 68, 68, 0.3)' : winsCount > 0 ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(255,255,255,0.05)',
+                        borderRadius: '12px',
+                        padding: '0.85rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px'
+                      }}>
+                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#cbd5e1' }}>{label}</span>
+                        
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', fontWeight: 900 }}>
+                          <span style={{ color: '#10b981' }}>{winsCount} W</span>
+                          <span style={{ color: lossesCount > 0 ? '#ef4444' : '#64748b' }}>{lossesCount} L</span>
+                        </div>
+
+                        {lossesCount > 0 && (
+                          <span style={{ fontSize: '0.58rem', color: '#f87171', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                            🚨 Loss no G{idx}
+                          </span>
+                        )}
+                        {winsCount > 0 && lossesCount === 0 && (
+                          <span style={{ fontSize: '0.58rem', color: '#34d399', fontWeight: 'bold' }}>
+                            ✓ 100% Acertos
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+              </div>
+
+              {/* COMPARATIVE SIDE-BY-SIDE CARD (HORÁRIO A VS HORÁRIO B) */}
+              <div style={{ background: 'rgba(9, 9, 15, 0.6)', padding: '1.25rem', borderRadius: '16px', border: '1px solid rgba(139, 92, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <h4 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  📊 COMPARADOR DIRETO: HORÁRIO {String(simCompareHourA).padStart(2, '0')}:00h VERSUS HORÁRIO {String(simCompareHourB).padStart(2, '0')}:00h
+                </h4>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                  
+                  {/* Horário A Summary Card */}
+                  <div style={{ padding: '1rem', background: 'rgba(139, 92, 246, 0.08)', borderRadius: '12px', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <strong style={{ fontSize: '0.95rem', color: '#a78bfa' }}>Horário {String(simCompareHourA).padStart(2, '0')}:00h</strong>
+                      <span style={{ fontSize: '0.7rem', color: '#cbd5e1', fontWeight: 'bold' }}>{dataA.total} Ops</span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.75rem', marginBottom: '8px' }}>
+                      <div>Assertividade: <strong style={{ color: '#10b981' }}>{dataA.rate.toFixed(1)}%</strong></div>
+                      <div>Lucro: <strong style={{ color: dataA.profit >= 0 ? '#10b981' : '#ef4444' }}>${dataA.profit.toFixed(2)}</strong></div>
+                      <div>Wins: <strong style={{ color: '#10b981' }}>{dataA.wins}</strong></div>
+                      <div>Losses: <strong style={{ color: '#ef4444' }}>{dataA.losses}</strong></div>
+                    </div>
+
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '6px' }}>
+                      Losses por Gale: G0: {dataA.galeLosses?.G0 || 0} | G1: {dataA.galeLosses?.G1 || 0} | G2: {dataA.galeLosses?.G2 || 0} | G3+: {dataA.galeLosses?.G3Plus || 0}
+                    </div>
+                  </div>
+
+                  {/* Horário B Summary Card */}
+                  <div style={{ padding: '1rem', background: 'rgba(56, 189, 248, 0.08)', borderRadius: '12px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <strong style={{ fontSize: '0.95rem', color: '#38bdf8' }}>Horário {String(simCompareHourB).padStart(2, '0')}:00h</strong>
+                      <span style={{ fontSize: '0.7rem', color: '#cbd5e1', fontWeight: 'bold' }}>{dataB.total} Ops</span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.75rem', marginBottom: '8px' }}>
+                      <div>Assertividade: <strong style={{ color: '#10b981' }}>{dataB.rate.toFixed(1)}%</strong></div>
+                      <div>Lucro: <strong style={{ color: dataB.profit >= 0 ? '#10b981' : '#ef4444' }}>${dataB.profit.toFixed(2)}</strong></div>
+                      <div>Wins: <strong style={{ color: '#10b981' }}>{dataB.wins}</strong></div>
+                      <div>Losses: <strong style={{ color: '#ef4444' }}>{dataB.losses}</strong></div>
+                    </div>
+
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '6px' }}>
+                      Losses por Gale: G0: {dataB.galeLosses?.G0 || 0} | G1: {dataB.galeLosses?.G1 || 0} | G2: {dataB.galeLosses?.G2 || 0} | G3+: {dataB.galeLosses?.G3Plus || 0}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Comparison Verdict */}
+                <div style={{ padding: '0.85rem 1rem', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)', fontSize: '0.75rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                  <strong>💡 Veredito do Comparador:</strong>{' '}
+                  {dataA.profit > dataB.profit ? (
+                    <>O <strong>Horário {String(simCompareHourA).padStart(2, '0')}:00h</strong> apresentou um lucro de <strong>+${(dataA.profit - dataB.profit).toFixed(2)}</strong> a mais que o Horário {String(simCompareHourB).padStart(2, '0')}:00h com <strong>{dataB.losses - dataA.losses} a menos em losses</strong>.</>
+                  ) : dataB.profit > dataA.profit ? (
+                    <>O <strong>Horário {String(simCompareHourB).padStart(2, '0')}:00h</strong> foi mais rentável por <strong>+${(dataB.profit - dataA.profit).toFixed(2)}</strong> comparado ao Horário {String(simCompareHourA).padStart(2, '0')}:00h.</>
+                  ) : (
+                    <>Ambos os horários apresentaram desempenho equivalente no período analisado.</>
+                  )}
+                </div>
+
+              </div>
+
+            </div>
+          );
+        })()}
 
       </div>
     );
