@@ -14,6 +14,10 @@ import {
   formatStatusReport,
   formatDailySummary,
   formatAutoResetMessage,
+  formatRecallTriggeredMessage,
+  formatRecallWinMessage,
+  formatRecallLossMessage,
+  formatRecallStatusReport,
   deleteTelegramMessages
 } from './utils/telegram.js';
 import { supabase, addCommunityPost, getUserProfile, saveUserBackup, loadUserBackup } from './supabase.js';
@@ -57,6 +61,19 @@ const DEFAULT_SETTINGS = {
   telegramNotifLoss: true,
   telegramNotifDailySummary: true,
   blacklistedAssets: [],
+  // Shadow Account & Recall Engine
+  recallEnabled: false,
+  recallAccount: 'demo', // 'demo' | 'real2'
+  recallTrigger: 'last_gale', // 'last_gale' | '3_losses' | '4_losses' | 'stop_loss'
+  recallMode: 'neural_recovery', // 'burst' | 'recall_signal' | 'neural_recovery'
+  recallAttemptRule: 'single', // 'single' | 'until_recovered' | 'full_session'
+  recallStakeMode: 'same', // 'same' | 'custom'
+  recallCustomStake: '2.00',
+  recallStrategyMode: 'same', // 'same' | 'custom' | 'neural'
+  recallCustomStrategy: 'mhi_minority',
+  recallCooldown: '5min', // 'none' | '5min' | '15min' | 'next_cycle'
+  recallMartingaleLevels: '2',
+  recallMartingaleMultiplier: '2.0',
   autoReset: {
     enabled: true,
     time: '00:10',
@@ -227,6 +244,14 @@ export class UserSession {
 
   get activeTradeCountdown() { return this.modeStates[this.activeMode].activeTradeCountdown; }
   set activeTradeCountdown(val) { this.modeStates[this.activeMode].activeTradeCountdown = val; }
+
+  get recallState() { 
+    if (!this.modeStates[this.activeMode].recallState) {
+      this.modeStates[this.activeMode].recallState = { active: false, status: 'idle', mode: null, targetAccount: 'demo', lossAmount: 0, recoveredProfit: 0, attemptCount: 0 };
+    }
+    return this.modeStates[this.activeMode].recallState; 
+  }
+  set recallState(val) { this.modeStates[this.activeMode].recallState = val; }
 
   get lastResetDay() { return this.modeStates[this.activeMode].lastResetDay; }
   set lastResetDay(val) { this.modeStates[this.activeMode].lastResetDay = val; }
@@ -731,7 +756,25 @@ export class UserSession {
     const prevGranularity = this.settings.granularity;
 
     if (newSettings.isDemo !== undefined) {
-      this._activeMode = newSettings.isDemo ? 'demo' : 'real';
+      const targetMode = newSettings.isDemo ? 'demo' : 'real';
+      if (targetMode !== this._activeMode) {
+        if (this.isRunning) {
+          this.addLog({
+            message: '[Aviso] Não é possível alternar o tipo de conta (Demo/Real) enquanto o robô estiver em execução. Pare o robô primeiro.',
+            type: 'warning'
+          });
+          return;
+        }
+        this._activeMode = targetMode;
+        // Sanitize active runtime variables on account mode switch
+        this.activeContractId = null;
+        this.activeTradeCountdown = null;
+        this.candles = [];
+        this.addLog({
+          message: `[Conexão] Modo de conta alternado com sucesso para ${targetMode.toUpperCase()}.`,
+          type: 'info'
+        });
+      }
     }
 
     const symbolChanged = newSettings.symbol !== this.settings.symbol;
@@ -1433,6 +1476,39 @@ export class UserSession {
       return;
     }
 
+    // Active Recall Engine Evaluation (Shadow Account)
+    if (this.recallState && this.recallState.active) {
+      const recallMode = this.recallState.mode || this.settings.recallMode;
+      const stake = this.settings.recallStakeMode === 'custom' 
+        ? parseFloat(this.settings.recallCustomStake || '2.0') 
+        : (this.recallState.initialLoss || parseFloat(this.settings.stakeValue));
+
+      if (recallMode === 'neural_recovery') {
+        const opp = evaluateNeuralOpportunity(activeCandles, this.strategiesStats, 85);
+        if (opp) {
+          this.addLog({
+            message: `🧠 [Neural Recovery] Oportunidade IA de Alta Confiança encontrada: [${opp.strategyName}] (${opp.confidence}% WR)! Disparando entrada em ${opp.direction} na Shadow Account...`,
+            type: 'success'
+          });
+          this.executeRecallTrade(stake, opp.direction);
+          return;
+        }
+      } else if (recallMode === 'recall_signal') {
+        const targetStrat = this.settings.recallStrategyMode === 'custom' 
+          ? this.settings.recallCustomStrategy 
+          : this.settings.selectedStrategy;
+        const sig = this.liveSignals[targetStrat];
+        if (sig && sig.direction && sig.blockedBy !== 'STREAK_SHIELD') {
+          this.addLog({
+            message: `🎯 [Recall Engine] Sinal confirmado na estratégia [${targetStrat}]. Executando ordem ${sig.direction} na Shadow Account...`,
+            type: 'info'
+          });
+          this.executeRecallTrade(stake, sig.direction);
+          return;
+        }
+      }
+    }
+
     // Check Martingale next candle
     if (this.waitingForGaleNextCandle && this.lastGaleDirection) {
       const nextStake = this.calculateCurrentStake(true);
@@ -1566,7 +1642,7 @@ export class UserSession {
   handleContractUpdate(poc) {
     if (!this.isRunning) return;
 
-    if (this.activeContractId === 'PENDING_REGISTRATION') {
+    if (this.activeContractId === 'PENDING_REGISTRATION' || this.activeContractId === 'PENDING_REGISTRATION_RECALL') {
       this.activeContractId = poc.contract_id;
 
       this.lastContractDetails = {
@@ -1626,6 +1702,32 @@ export class UserSession {
 
       const newBal = this.balance + profit;
       this.balance = newBal; // Update local balance
+
+      // Check if this trade belonged to an active Recall Engine session
+      if (this.recallState && this.recallState.active) {
+        if (isWin) {
+          this.recallState.recoveredProfit = (this.recallState.recoveredProfit || 0) + profit;
+          this.recallState.status = 'recovered';
+          this.recallState.active = false;
+          this.addLog({
+            message: `✔ [RECALL ENGINE] Operação na Shadow Account concluída com SUCESSO! Lucro recuperado: +$${profit.toFixed(2)}.`,
+            type: 'success'
+          });
+          this.sendTelegramNotif('win', formatRecallWinMessage(profit, this.recallState.targetAccount || 'demo', this.recallState.attemptCount || 1));
+        } else {
+          this.sendTelegramNotif('loss', formatRecallLossMessage(Math.abs(profit), this.recallState.targetAccount || 'demo', this.recallState.attemptCount || 1, this.recallState.maxAttempts || 1));
+          if (this.recallState.attemptCount >= this.recallState.maxAttempts) {
+            this.recallState.status = 'exhausted';
+            this.recallState.active = false;
+            this.addLog({
+              message: `✖ [RECALL ENGINE] Tentativas esgotadas na Shadow Account. Encerrando ciclo de recuperação.`,
+              type: 'error'
+            });
+          } else {
+            this.recallState.status = 'triggered';
+          }
+        }
+      }
 
       // Telegram win/loss notifications
       if (isWin) {
@@ -1777,6 +1879,10 @@ export class UserSession {
               message: `[Gale] Limite de Martingale atingido (G${maxLevels}). Resetando para a entrada inicial.`,
               type: 'error'
             });
+
+            if (this.settings.recallEnabled) {
+              this.triggerRecallEngine('Último Gale', Math.abs(profit), this.lastGaleDirection);
+            }
           }
         }
       }
@@ -1797,6 +1903,64 @@ export class UserSession {
         this.syncToClients();
       }
     }, 1000);
+  }
+
+  triggerRecallEngine(triggerReason, lossAmount, lastDirection) {
+    const mode = this.settings.recallMode || 'neural_recovery';
+    const targetAccount = this.settings.recallAccount || 'demo';
+    
+    this.recallState = {
+      active: true,
+      status: mode === 'burst' ? 'burst_pending' : mode === 'neural_recovery' ? 'neural_analyzing' : 'waiting_signal',
+      triggerReason,
+      mode,
+      targetAccount,
+      initialLoss: lossAmount,
+      recoveredProfit: 0,
+      attemptCount: 0,
+      maxAttempts: this.settings.recallAttemptRule === 'single' ? 1 : 5,
+      galeLevel: 0,
+      maxGale: parseInt(this.settings.recallMartingaleLevels || '2'),
+      lastDirection,
+      startTime: Date.now()
+    };
+
+    const modeLabels = {
+      burst: '⚡ Burst Mode (Entrada Imediata)',
+      recall_signal: '🎯 Sinal Confirmado',
+      neural_recovery: '🧠 Neural Recovery (IA > 90% WR)'
+    };
+
+    this.addLog({
+      message: `──────── RECALL ENGINE ACIONADO ────────\n[Shadow Account] Motivo: ${triggerReason}. Modo: ${modeLabels[mode] || mode}. Conta Alvo: ${targetAccount.toUpperCase()}`,
+      type: 'warning'
+    });
+
+    this.sendTelegramNotif('recall_triggered', formatRecallTriggeredMessage(triggerReason, mode, lossAmount, targetAccount));
+
+    if (mode === 'burst') {
+      const stake = this.settings.recallStakeMode === 'custom' ? parseFloat(this.settings.recallCustomStake || '2.0') : lossAmount;
+      this.addLog({ message: `⚡ [Burst Mode] Executando entrada imediata na próxima vela (${lastDirection})...`, type: 'warning' });
+      this.executeRecallTrade(stake, lastDirection);
+    }
+
+    this.saveToFile();
+    this.syncToClients();
+  }
+
+  executeRecallTrade(stake, direction) {
+    if (!this.recallState || !this.recallState.active) return;
+
+    this.recallState.status = 'executing';
+    this.recallState.attemptCount = (this.recallState.attemptCount || 0) + 1;
+
+    const contractType = direction === 'CALL' ? 'CALL' : 'PUT';
+    let durationMin = Math.max(1, Math.round(parseInt(this.settings.granularity) / 60));
+
+    this.derivAPI.buyContract(this.settings.symbol, stake, contractType, durationMin, 'm');
+    this.activeContractId = 'PENDING_REGISTRATION_RECALL';
+    this.saveToFile();
+    this.syncToClients();
   }
 
   stopCountdownTimer() {
@@ -1884,14 +2048,21 @@ export class UserSession {
     } else if (cmd === '/status') {
       const profit = this.balance - this.initialBalance;
       const sign = profit >= 0 ? '+' : '';
+      const recallText = this.settings.recallEnabled 
+        ? (this.recallState?.active ? '🟢 OPERANDO' : '🛡️ ATIVADO') 
+        : '🔴 DESATIVADO';
+
       reply(
         `🤖 <b>ASTROBOT • STATUS DO SISTEMA</b>\n` +
         `━━━━━━━━━━━━━━━━━━━━━━\n` +
         `⚡ <b>Estado do Motor:</b> <code>${this.isRunning ? 'ONLINE & OPERANDO 🟩' : 'OFFLINE & PAUSADO 🟥'}</code>\n` +
+        `👥 <b>Shadow Account:</b> <code>${recallText}</code>\n` +
         `💵 <b>Resultado Sessão:</b> <code>${sign}$${profit.toFixed(2)}</code>\n` +
         `💰 <b>Saldo Atual:</b> <code>$${this.balance?.toFixed(2) || '0.00'}</code>\n` +
         `🌐 <b>Servidor VPS:</b> <code>Conectado à Deriv</code>`
       );
+    } else if (cmd === '/recall' || cmd === '🛡️ shadow account' || cmd === '👥 recall engine') {
+      reply(formatRecallStatusReport(this.settings, this.recallState));
     } else if (cmd === '/scanner' || cmd === '📊 scanner') {
       const activeSigList = Object.entries(this.liveSignals || {}).map(([id, sig]) => {
         const name = this.strategiesStats.find(st => st.id === id)?.name || id;

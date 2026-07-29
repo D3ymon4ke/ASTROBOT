@@ -375,10 +375,16 @@ export default function Settings({
                     ESTRATÉGIA ATIVA MANUAL
                   </label>
                   <select name="selectedStrategy" value={settings.selectedStrategy} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
+                    <optgroup label="📊 FAMÍLIA MHI (MINORIA & MAIORIA)">
+                      <option value="mhi_minority">MHI 1 (Minoria - Vela 1)</option>
+                      <option value="mhi_majority">MHI 1 (Maioria - Vela 1)</option>
+                      <option value="mhi_2_minority">MHI 2 (Minoria - Vela 2)</option>
+                      <option value="mhi_2_majority">MHI 2 (Maioria - Vela 2)</option>
+                      <option value="mhi_3_minority">MHI 3 (Minoria - Vela 3)</option>
+                      <option value="mhi_3_majority">MHI 3 (Maioria - Vela 3)</option>
+                    </optgroup>
                     <optgroup label="🕯️ ESTRATÉGIAS TRADICIONAIS (VELAS)">
                       <option value="ma_crossover">Cruzamento de Médias (9/21)</option>
-                      <option value="mhi_minority">MHI Padrão (Minoria)</option>
-                      <option value="mhi_majority">MHI Maioria</option>
                       <option value="twin_towers">Torres Gêmeas</option>
                       <option value="three_musketeers">Três Mosqueteiros</option>
                       <option value="padrao_23">Padrão 23</option>
@@ -706,7 +712,132 @@ export default function Settings({
           )}
         </div>
 
-        {/* MODULE 7: SONS */}
+        {/* MODULE 7: SHADOW ACCOUNT & RECALL ENGINE */}
+        <div style={{
+          background: activeModule === 'recall' ? 'rgba(139, 92, 246, 0.06)' : 'rgba(255, 255, 255, 0.01)',
+          border: activeModule === 'recall' ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.03)',
+          borderRadius: '12px',
+          padding: '0.75rem',
+          transition: 'all 0.25s ease',
+          boxShadow: activeModule === 'recall' ? '0 4px 15px rgba(139, 92, 246, 0.1)' : 'none'
+        }}>
+          <div onClick={() => toggleModule('recall')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Users size={15} style={{ color: activeModule === 'recall' ? 'var(--primary-light)' : '#94A3B8' }} />
+              <strong style={{ fontSize: '0.78rem', color: activeModule === 'recall' ? 'white' : '#94A3B8', fontWeight: 'bold' }}>👥 SHADOW ACCOUNT & RECALL</strong>
+            </div>
+            {activeModule !== 'recall' && (
+              <span style={{ fontSize: '0.7rem', color: settings.recallEnabled ? 'var(--success)' : '#94A3B8', fontWeight: 'bold', background: settings.recallEnabled ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '12px' }}>
+                {settings.recallEnabled ? 'RECALL ON' : 'DESATIVADO'}
+              </span>
+            )}
+          </div>
+          
+          {activeModule === 'recall' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              
+              {/* Toggle Recall */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>ACTIVAR RECALL ENGINE</label>
+                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Aciona a Shadow Account em momentos de perda</span>
+                </div>
+                <label className="switch">
+                  <input type="checkbox" name="recallEnabled" checked={settings.recallEnabled || false} onChange={handleInputChange} disabled={isRunning} />
+                  <span className="slider"></span>
+                </label>
+              </div>
+
+              {settings.recallEnabled && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '0.5rem', borderLeft: '2px solid var(--primary-light)' }}>
+                  
+                  {/* Target Account */}
+                  <div>
+                    <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>CONTA DE RECUPERAÇÃO</label>
+                    <select name="recallAccount" value={settings.recallAccount || 'real'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
+                      <option value="real">Conta Real 1 (Dispara no Saldo Real)</option>
+                      <option value="real2">Conta Real 2 (Shadow Account Secundária)</option>
+                      <option value="demo">Conta Demo (Treinamento / Simulação)</option>
+                    </select>
+                  </div>
+
+                  {/* Trigger Condition */}
+                  <div>
+                    <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>ACIONAR APÓS</label>
+                    <select name="recallTrigger" value={settings.recallTrigger || 'last_gale'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
+                      <option value="last_gale">Perda do Último Gale (Gale Máximo)</option>
+                      <option value="3_losses">3 Losses Seguidos</option>
+                      <option value="4_losses">4 Losses Seguidos</option>
+                      <option value="stop_loss">Ao Atingir Stop Loss Diário</option>
+                    </select>
+                  </div>
+
+                  {/* Recovery Mode */}
+                  <div>
+                    <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>MODO DE RECUPERAÇÃO</label>
+                    <select name="recallMode" value={settings.recallMode || 'neural_recovery'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
+                      <option value="neural_recovery">🧠 Neural Recovery (IA &gt; 90% Winrate)</option>
+                      <option value="burst">⚡ Burst Mode (Entrada Imediata Próx. Vela)</option>
+                      <option value="recall_signal">🎯 Sinal Confirmado (Aguardar Sinal)</option>
+                    </select>
+                  </div>
+
+                  {/* Attempt Rule & Cooldown */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>TENTATIVAS</label>
+                      <select name="recallAttemptRule" value={settings.recallAttemptRule || 'single'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
+                        <option value="single">Apenas 1 tentativa</option>
+                        <option value="until_recovered">Até recuperar</option>
+                        <option value="full_session">Sessão completa</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>COOLDOWN</label>
+                      <select name="recallCooldown" value={settings.recallCooldown || '5min'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
+                        <option value="none">Sem Cooldown</option>
+                        <option value="5min">5 Minutos</option>
+                        <option value="15min">15 Minutos</option>
+                        <option value="next_cycle">Próximo Ciclo</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Entry Stake Mode */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>TIPO DE ENTRADA</label>
+                      <select name="recallStakeMode" value={settings.recallStakeMode || 'same'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
+                        <option value="same">Mesmo Valor do Loss</option>
+                        <option value="custom">Valor Personalizado</option>
+                      </select>
+                    </div>
+
+                    {settings.recallStakeMode === 'custom' && (
+                      <div>
+                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>VALOR ($)</label>
+                        <input
+                          type="number"
+                          name="recallCustomStake"
+                          value={settings.recallCustomStake || '2.00'}
+                          onChange={handleInputChange}
+                          min="0.35"
+                          step="0.1"
+                          disabled={isRunning}
+                          style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* MODULE 8: SONS */}
         <div style={{
           background: activeModule === 'sons' ? 'rgba(139, 92, 246, 0.06)' : 'rgba(255, 255, 255, 0.01)',
           border: activeModule === 'sons' ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.03)',

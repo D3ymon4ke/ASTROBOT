@@ -80,8 +80,12 @@ export default function Overlay() {
   const getCleanStrategy = (strat) => {
     const names = {
       ma_crossover: 'Média Móvel',
-      mhi_minority: 'MHI Minoria',
-      mhi_majority: 'MHI Maioria',
+      mhi_minority: 'MHI 1 Minoria',
+      mhi_majority: 'MHI 1 Maioria',
+      mhi_2_minority: 'MHI 2 Minoria',
+      mhi_2_majority: 'MHI 2 Maioria',
+      mhi_3_minority: 'MHI 3 Minoria',
+      mhi_3_majority: 'MHI 3 Maioria',
       twin_towers: 'Torres Gêmeas',
       three_musketeers: 'Três Mosqueteiros',
       padrao_23: 'Padrão 23',
@@ -256,15 +260,42 @@ export default function Overlay() {
           </div>
           <div>
             <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Estratégia:</span>{' '}
-            <strong style={{ color: 'var(--primary-light)' }}>{getCleanStrategy(state.settings.selectedStrategy)}</strong>
+            <strong style={{ color: '#c084fc' }}>{getCleanStrategy(state.settings.selectedStrategy)}</strong>
           </div>
-          {total > 0 && (
+        </div>
+
+        {/* RECALL ENGINE STATUS BADGE IN OVERLAY */}
+        {state.settings?.recallEnabled && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '0.62rem',
+            background: state.recallState?.active ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+            padding: '4px 8px',
+            borderRadius: '6px',
+            border: state.recallState?.active ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid rgba(255, 255, 255, 0.04)'
+          }}>
+            <span style={{ color: '#a78bfa', fontWeight: 'bold' }}>RECALL ENGINE:</span>
+            <span style={{ color: state.recallState?.active ? '#10b981' : '#94a3b8', fontWeight: 'bold' }}>
+              {state.recallState?.active ? '🟢 OPERANDO' : '⚪ STANDBY'}
+            </span>
+          </div>
+        )}
+
+        {total > 0 && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            fontSize: '0.68rem',
+            padding: '0 4px'
+          }}>
             <div>
               <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Assert:</span>{' '}
               <strong style={{ color: '#ffffff' }}>{winRate.toFixed(0)}%</strong>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Active Trade Countdown Progress */}
         {state.activeTradeCountdown && state.activeTradeCountdown.remaining > 0 ? (

@@ -233,6 +233,14 @@ export class DerivAPI {
       this.reconnectTimeoutId = null;
     }
     this.stopPingLoop();
+
+    // Reject and clean up all pending requests
+    for (const [reqId, req] of this.pendingRequests.entries()) {
+      if (req.timer) clearTimeout(req.timer);
+      req.reject(new Error('Conexão WebSocket encerrada.'));
+    }
+    this.pendingRequests.clear();
+
     if (this.ws) {
       this.ws.removeAllListeners('close');
       this.ws.close();
@@ -337,7 +345,7 @@ export class DerivAPI {
     }));
   }
 
-  sendRequest(requestBody) {
+  sendRequest(requestBody, timeoutMs = 15000) {
     return new Promise((resolve, reject) => {
       if (!this.ws || !this.connected) {
         reject(new Error('WebSocket não conectado.'));
@@ -345,7 +353,15 @@ export class DerivAPI {
       }
       const reqId = Math.floor(100000 + Math.random() * 900000);
       const payload = { ...requestBody, req_id: reqId };
-      this.pendingRequests.set(reqId.toString(), { resolve, reject });
+      
+      const timer = setTimeout(() => {
+        if (this.pendingRequests.has(reqId.toString())) {
+          this.pendingRequests.delete(reqId.toString());
+          reject(new Error(`Timeout (${timeoutMs}ms) aguardando resposta da API Deriv.`));
+        }
+      }, timeoutMs);
+
+      this.pendingRequests.set(reqId.toString(), { resolve, reject, timer });
       this.ws.send(JSON.stringify(payload));
     });
   }
@@ -374,12 +390,14 @@ export class DerivAPI {
     this.lastReceivedTime = Date.now();
     const reqId = data.req_id || (data.echo_req && data.echo_req.req_id);
     if (reqId && this.pendingRequests.has(reqId.toString())) {
-      const { resolve, reject } = this.pendingRequests.get(reqId.toString());
+      const entry = this.pendingRequests.get(reqId.toString());
+      if (entry.timer) clearTimeout(entry.timer);
       this.pendingRequests.delete(reqId.toString());
+
       if (data.error) {
-        reject(new Error(data.error.message));
+        entry.reject(new Error(data.error.message));
       } else {
-        resolve(data);
+        entry.resolve(data);
       }
       return;
     }

@@ -36,6 +36,9 @@ export default function TelegramConfig({
       monthly_summary: true,
       system_alerts: true,
       critical_errors: true,
+      recall_triggered: true,
+      recall_win: true,
+      recall_loss: true
     }
   };
 
@@ -580,8 +583,9 @@ export default function TelegramConfig({
                   { key: 'cycle_finished', label: 'Ciclo finalizado (Scheduler)' },
                   { key: 'bot_started', label: 'Bot iniciado' },
                   { key: 'bot_stopped', label: 'Bot desligado' },
-                  { key: 'ia_started', label: 'Scanner/IA iniciada' },
-                  { key: 'ia_stopped', label: 'Scanner/IA parada' }
+                  { key: 'recall_triggered', label: 'Acionamento Recall Engine' },
+                  { key: 'recall_win', label: 'Recuperação WIN no Recall' },
+                  { key: 'recall_loss', label: 'Loss na Shadow Account' }
                 ].map(item => (
                   <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
                     <span style={{ color: '#cbd5e1' }}>{item.label}</span>

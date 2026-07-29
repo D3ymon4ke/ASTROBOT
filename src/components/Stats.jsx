@@ -1,12 +1,15 @@
 import React from 'react';
-import { DollarSign, Percent, TrendingUp, TrendingDown, Target, Shield } from 'lucide-react';
+import { DollarSign, Percent, TrendingUp, TrendingDown, Target, Shield, Users, Brain, Zap } from 'lucide-react';
 
 export default function Stats({
   balance,
   initialBalance,
   trades,
   stopLoss,
-  takeProfit
+  takeProfit,
+  recallEnabled = false,
+  recallState = null,
+  recallAccount = 'demo'
 }) {
   const netProfit = balance - initialBalance;
   
@@ -73,6 +76,54 @@ export default function Stats({
           </strong>
         </div>
       </div>
+
+      {/* RECALL ENGINE HUD CARD */}
+      {recallEnabled && (
+        <div className="glass-panel" style={{
+          padding: '0.75rem 1rem',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          gap: '0.4rem',
+          background: recallState?.active ? 'rgba(139, 92, 246, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+          border: recallState?.active ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
+          borderRadius: '12px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '4px' }}>
+            <span style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--primary-light)', letterSpacing: '0.5px' }}>
+              ──────── RECALL ENGINE ────────
+            </span>
+            <span style={{ fontSize: '0.62rem', fontWeight: 'bold', color: recallState?.active ? '#10b981' : '#94A3B8' }}>
+              {recallState?.active ? '🟢 OPERANDO' : '⚪ AGUARDANDO'}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
+            <span style={{ color: '#cbd5e1', fontWeight: 'bold' }}>Conta Alvo:</span>
+            <strong style={{ color: 'white', textTransform: 'uppercase' }}>
+              {recallState?.targetAccount || recallAccount || 'Demo'}
+            </strong>
+          </div>
+
+          <div style={{ fontSize: '0.68rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {recallState?.active ? (
+              recallState?.mode === 'neural_recovery' ? (
+                <span style={{ color: '#a78bfa', fontWeight: 'bold' }}>🧠 Neural Recovery: Aguardando sinal &gt; 90% WR...</span>
+              ) : recallState?.mode === 'burst' ? (
+                <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>⚡ Burst Mode: Executando ordem imediata...</span>
+              ) : (
+                <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>🎯 Sinal Confirmado: Aguardando sinal...</span>
+              )
+            ) : recallState?.status === 'recovered' ? (
+              <span style={{ color: '#10b981', fontWeight: 'bold' }}>✔ Recuperação Concluída com Sucesso!</span>
+            ) : recallState?.status === 'exhausted' ? (
+              <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✖ Recall Encerrado (Limite Atingido)</span>
+            ) : (
+              <span>● Conta Principal (Acionamento automático após Loss)</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Safety Targets (Stop Loss / Take Profit trackers) */}
       <div className="glass-panel" style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.35rem' }}>

@@ -20,7 +20,7 @@ export const sendTelegramMessage = async (token, chatId, htmlText, useKeyboard =
     keyboard: [
       [{ text: "▶ Iniciar Bot" }, { text: "⏸ Pausar" }, { text: "⛔ Parar" }],
       [{ text: "📈 Relatório" }, { text: "📊 Scanner" }, { text: "💰 Saldo" }],
-      [{ text: "📅 Ciclos" }, { text: "⚙ Configurações" }]
+      [{ text: "🛡️ Recall Engine" }, { text: "📅 Ciclos" }, { text: "⚙ Configurações" }]
     ],
     resize_keyboard: true,
     one_time_keyboard: false
@@ -216,6 +216,81 @@ export const formatAutoResetMessage = (stats, autoRenew = true) => {
          `━━━━━━━━━━━━━━━━━━━━━━\n` +
          `🔄 <b>Status de Renovação:</b> <code>${renewStatusText}</code>\n\n` +
          renewNotice;
+};
+
+// Format Recall Engine Triggered Message
+export const formatRecallTriggeredMessage = (triggerReason, mode, lossAmount, targetAccount) => {
+  const modeText = mode === 'neural_recovery' ? '🧠 Neural Recovery (IA > 90% Winrate)'
+    : mode === 'burst' ? '⚡ Burst Mode (Próxima Vela)'
+    : '🎯 Sinal Confirmado';
+
+  const accountText = targetAccount === 'demo' ? 'DEMO (Simulação)'
+    : targetAccount === 'real2' ? 'REAL 2 (Shadow Account)'
+    : 'REAL 1 (Saldo Real)';
+
+  return `🛡️ <b>ASTROBOT • RECALL ENGINE ACIONADO</b>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `⚠️ <b>Gatilho:</b> <code>${escapeHtml(triggerReason)}</code>\n` +
+         `💵 <b>Prejuízo Absorvido:</b> <code>-$${parseFloat(lossAmount).toFixed(2)}</code>\n` +
+         `🎯 <b>Conta Alvo:</b> <code>${accountText}</code>\n` +
+         `🧠 <b>Modo de Operação:</b> <code>${modeText}</code>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `🤖 <i>A Shadow Account assumiu o controle para buscar a recuperação dos valores.</i>`;
+};
+
+// Format Recall Engine Win Message
+export const formatRecallWinMessage = (recoveredProfit, targetAccount, attemptCount = 1) => {
+  const accountText = targetAccount === 'demo' ? 'DEMO' : 'REAL';
+  return `✔ <b>ASTROBOT • RECALL ENGINE (VITÓRIA / RECUPERAÇÃO)</b>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `🟢 <b>Lucro Recuperado:</b> <code>+$${parseFloat(recoveredProfit).toFixed(2)}</code>\n` +
+         `🎯 <b>Conta Utilizada:</b> <code>${accountText}</code>\n` +
+         `🔄 <b>Tentativas:</b> <code>${attemptCount}</code>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `✨ <i>Sessão de recuperação concluída com sucesso! Retomando operações normais.</i>`;
+};
+
+// Format Recall Engine Loss Message
+export const formatRecallLossMessage = (lossAmount, targetAccount, attemptCount = 1, maxAttempts = 1) => {
+  const accountText = targetAccount === 'demo' ? 'DEMO' : 'REAL';
+  return `✖ <b>ASTROBOT • RECALL ENGINE (PERDA)</b>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `🔴 <b>Prejuízo na Ordem:</b> <code>-$${Math.abs(parseFloat(lossAmount)).toFixed(2)}</code>\n` +
+         `🎯 <b>Conta Utilizada:</b> <code>${accountText}</code>\n` +
+         `🔄 <b>Tentativa:</b> <code>${attemptCount} de ${maxAttempts}</code>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `⚠️ <i>Respeitando regras de proteção da Shadow Account.</i>`;
+};
+
+// Format Recall Status Report
+export const formatRecallStatusReport = (settings, recallState) => {
+  const isEnabled = settings.recallEnabled;
+  const isExecuting = recallState && recallState.active;
+  const statusEmoji = isExecuting ? '🟢 OPERANDO' : isEnabled ? '🛡️ STANDBY (ATIVO)' : '🔴 DESATIVADO';
+
+  const modeText = settings.recallMode === 'neural_recovery' ? '🧠 Neural Recovery (IA > 90%)'
+    : settings.recallMode === 'burst' ? '⚡ Burst Mode (Próxima Vela)'
+    : '🎯 Sinal Confirmado';
+
+  const accountText = settings.recallAccount === 'demo' ? 'DEMO (Simulação)'
+    : settings.recallAccount === 'real2' ? 'REAL 2 (Shadow Account)'
+    : 'REAL 1 (Saldo Real)';
+
+  const triggerText = settings.recallTrigger === 'last_gale' ? 'Perda do Último Gale'
+    : settings.recallTrigger === '3_losses' ? '3 Losses Seguidos'
+    : settings.recallTrigger === '4_losses' ? '4 Losses Seguidos'
+    : 'Stop Loss Diário';
+
+  return `👥 <b>ASTROBOT • PAINEL SHADOW ACCOUNT & RECALL</b>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `⚡ <b>Status do Engine:</b> <code>${statusEmoji}</code>\n` +
+         `🎯 <b>Conta de Destino:</b> <code>${accountText}</code>\n` +
+         `🧠 <b>Modo Selecionado:</b> <code>${modeText}</code>\n` +
+         `⚠️ <b>Gatilho de Disparo:</b> <code>${triggerText}</code>\n` +
+         `🔄 <b>Tentativas Permitidas:</b> <code>${settings.recallAttemptRule === 'single' ? 'Apenas 1 tentativa' : 'Até recuperar'}</code>\n` +
+         `⏱️ <b>Cooldown:</b> <code>${settings.recallCooldown || '5min'}</code>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `🤖 <i>Proteção automatizada anti-quebra ativa via Telegram.</i>`;
 };
 
 // Delete a batch of messages

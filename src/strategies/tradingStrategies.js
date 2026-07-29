@@ -120,13 +120,23 @@ export function runMACrossoverBacktest(candles, maxMartingale = 0) {
  * 5-candle cycle. Checks colors of candles 3, 4, 5. Enter on candle 1 of next cycle.
  * Minority is the standard MHI, Majority is the MHI Majority.
  */
-export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority') {
+/**
+ * 2. MHI (Majority High Index)
+ * 5-candle cycle. Checks colors of candles 3, 4, 5.
+ * Variant 1: Entry on Candle 1 of NEXT cycle.
+ * Variant 2: Entry on Candle 2 of NEXT cycle.
+ * Variant 3: Entry on Candle 3 of NEXT cycle.
+ * Minority bets on minority color, Majority bets on majority color.
+ */
+export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority', variant = 1, useTrendFilter = false) {
   if (candles.length < 10) return { winRate: 0, totalTrades: 0, wins: 0, losses: 0, signals: [] };
   
   let wins = 0;
   let losses = 0;
   const signals = [];
   
+  const ema20 = useTrendFilter ? calculateEMA(candles, 20) : null;
+
   // Group candles into 5-minute blocks
   // A cycle starts when epoch minute % 5 === 0
   const cycles = {};
@@ -142,20 +152,18 @@ export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority') {
     if (!cycles[cycleId]) {
       cycles[cycleId] = [];
     }
-    // We store the candle and its index in the main array
+    // Store candle, index and relative minute position in the 5-min block (0 to 4)
     cycles[cycleId].push({ candle: c, index: i, minutePos: minute % 5 });
   }
   
   const cycleIds = Object.keys(cycles).sort();
   
   for (let cIdx = 0; cIdx < cycleIds.length - 1; cIdx++) {
-    const currentCycleId = cycleIds[cIdx];
-    const nextCycleId = cycleIds[cIdx + 1];
+    const currentCycle = cycles[cycleIds[cIdx]];
+    const nextCycle = cycles[cycleIds[cycleIds.indexOf(cycleIds[cIdx]) + 1]];
+    if (!nextCycle) continue;
     
-    const currentCycle = cycles[currentCycleId];
-    const nextCycle = cycles[nextCycleId];
-    
-    // We need candles 3, 4, 5 (positions 2, 3, 4) in the current cycle
+    // Analysis is always based on Candles 3, 4, 5 (minutePos 2, 3, 4) of currentCycle
     const c3 = currentCycle.find(item => item.minutePos === 2);
     const c4 = currentCycle.find(item => item.minutePos === 3);
     const c5 = currentCycle.find(item => item.minutePos === 4);
@@ -178,19 +186,31 @@ export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority') {
     
     let direction = null;
     if (mode === 'minority') {
-      // Bet on minority color
       direction = greenCount < redCount ? 'CALL' : 'PUT';
     } else {
-      // Bet on majority color
       direction = greenCount > redCount ? 'CALL' : 'PUT';
     }
     
-    // Entry is on Candle 1 of the NEXT cycle (minutePos === 0)
-    const nextC1 = nextCycle.find(item => item.minutePos === 0);
-    if (!nextC1) continue;
+    // Determine entry minute position based on variant:
+    // Variant 1 -> Candle 1 (minutePos === 0)
+    // Variant 2 -> Candle 2 (minutePos === 1)
+    // Variant 3 -> Candle 3 (minutePos === 2)
+    const targetMinutePos = variant === 2 ? 1 : variant === 3 ? 2 : 0;
+    const targetEntry = nextCycle.find(item => item.minutePos === targetMinutePos);
+    if (!targetEntry) continue;
     
-    // We evaluate the trade starting at nextC1's index
-    const evaluation = evaluateTrade(candles, nextC1.index, direction, maxMartingale);
+    // Apply Trend Filter if enabled
+    if (useTrendFilter && ema20) {
+      const emaVal = ema20[targetEntry.index - 1];
+      if (emaVal) {
+        const prevClose = candles[targetEntry.index - 1].close;
+        if (direction === 'CALL' && prevClose < emaVal) continue; // Skip call in downtrend
+        if (direction === 'PUT' && prevClose > emaVal) continue;  // Skip put in uptrend
+      }
+    }
+    
+    // Evaluate trade starting at targetEntry's index
+    const evaluation = evaluateTrade(candles, targetEntry.index, direction, maxMartingale);
     
     if (evaluation.result !== 'PENDING') {
       const isWin = evaluation.result === 'WIN';
@@ -198,12 +218,12 @@ export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority') {
       else losses++;
       
       signals.push({
-        epoch: nextC1.candle.epoch,
-        time: new Date(nextC1.candle.epoch * 1000).toLocaleTimeString(),
+        epoch: targetEntry.candle.epoch,
+        time: new Date(targetEntry.candle.epoch * 1000).toLocaleTimeString(),
         direction,
         result: evaluation.result,
         steps: evaluation.steps,
-        candleIndex: nextC1.index
+        candleIndex: targetEntry.index
       });
     }
   }
@@ -213,6 +233,7 @@ export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority') {
   
   return { winRate, totalTrades: total, wins, losses, signals };
 }
+
 
 /**
  * 3. Torres Gêmeas (Twin Towers)
@@ -1131,8 +1152,12 @@ export function runMasterCandleBacktest(candles, maxMartingale = 0) {
  */
 export function analyzeStrategies(candles, maxMartingale = 0) {
   const maResult = runMACrossoverBacktest(candles, maxMartingale);
-  const mhiMinorityResult = runMHIBacktest(candles, maxMartingale, 'minority');
-  const mhiMajorityResult = runMHIBacktest(candles, maxMartingale, 'majority');
+  const mhiMinorityResult = runMHIBacktest(candles, maxMartingale, 'minority', 1);
+  const mhiMajorityResult = runMHIBacktest(candles, maxMartingale, 'majority', 1);
+  const mhi2MinorityResult = runMHIBacktest(candles, maxMartingale, 'minority', 2);
+  const mhi2MajorityResult = runMHIBacktest(candles, maxMartingale, 'majority', 2);
+  const mhi3MinorityResult = runMHIBacktest(candles, maxMartingale, 'minority', 3);
+  const mhi3MajorityResult = runMHIBacktest(candles, maxMartingale, 'majority', 3);
   const twinTowersResult = runTwinTowersBacktest(candles, maxMartingale);
   const threeMusketeersResult = runThreeMusketeersBacktest(candles, maxMartingale);
   const padrao23Result = runPadrao23Backtest(candles, maxMartingale);
@@ -1161,21 +1186,57 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
     },
     {
       id: 'mhi_minority',
-      name: 'MHI Padrão (Minoria)',
+      name: 'MHI 1 (Minoria)',
       winRate: mhiMinorityResult.winRate,
       totalTrades: mhiMinorityResult.totalTrades,
       wins: mhiMinorityResult.wins,
       losses: mhiMinorityResult.losses,
-      description: 'Analisa as últimas 3 velas do ciclo de 5 minutos. Entra a favor da cor de menor ocorrência.'
+      description: 'Analisa velas 3, 4 e 5 do ciclo de 5 min. Entra a favor da minoria na Vela 1 do próximo ciclo.'
     },
     {
       id: 'mhi_majority',
-      name: 'MHI Maioria',
+      name: 'MHI 1 (Maioria)',
       winRate: mhiMajorityResult.winRate,
       totalTrades: mhiMajorityResult.totalTrades,
       wins: mhiMajorityResult.wins,
       losses: mhiMajorityResult.losses,
-      description: 'Analisa as últimas 3 velas do ciclo de 5 minutos. Entra a favor da cor de maior ocorrência.'
+      description: 'Analisa velas 3, 4 e 5 do ciclo de 5 min. Entra a favor da maioria na Vela 1 do próximo ciclo.'
+    },
+    {
+      id: 'mhi_2_minority',
+      name: 'MHI 2 (Minoria)',
+      winRate: mhi2MinorityResult.winRate,
+      totalTrades: mhi2MinorityResult.totalTrades,
+      wins: mhi2MinorityResult.wins,
+      losses: mhi2MinorityResult.losses,
+      description: 'Analisa velas 3, 4 e 5 do ciclo de 5 min. Entra a favor da minoria na Vela 2 do próximo ciclo.'
+    },
+    {
+      id: 'mhi_2_majority',
+      name: 'MHI 2 (Maioria)',
+      winRate: mhi2MajorityResult.winRate,
+      totalTrades: mhi2MajorityResult.totalTrades,
+      wins: mhi2MajorityResult.wins,
+      losses: mhi2MajorityResult.losses,
+      description: 'Analisa velas 3, 4 e 5 do ciclo de 5 min. Entra a favor da maioria na Vela 2 do próximo ciclo.'
+    },
+    {
+      id: 'mhi_3_minority',
+      name: 'MHI 3 (Minoria)',
+      winRate: mhi3MinorityResult.winRate,
+      totalTrades: mhi3MinorityResult.totalTrades,
+      wins: mhi3MinorityResult.wins,
+      losses: mhi3MinorityResult.losses,
+      description: 'Analisa velas 3, 4 e 5 do ciclo de 5 min. Entra a favor da minoria na Vela 3 do próximo ciclo.'
+    },
+    {
+      id: 'mhi_3_majority',
+      name: 'MHI 3 (Maioria)',
+      winRate: mhi3MajorityResult.winRate,
+      totalTrades: mhi3MajorityResult.totalTrades,
+      wins: mhi3MajorityResult.wins,
+      losses: mhi3MajorityResult.losses,
+      description: 'Analisa velas 3, 4 e 5 do ciclo de 5 min. Entra a favor da maioria na Vela 3 do próximo ciclo.'
     },
     {
       id: 'twin_towers',
@@ -1369,6 +1430,41 @@ export function getLiveSignal(strategyId, candles, maxMartingale = 0, streakShie
   return rawSignal;
 }
 
+/**
+ * Neural Recovery: Scans all strategy stats and active live signals
+ * to identify a high-confidence trade opportunity (WinRate > threshold).
+ */
+export function evaluateNeuralOpportunity(candles, strategiesStats, minWinRateThreshold = 85) {
+  if (!candles || candles.length < 10 || !strategiesStats) return null;
+  
+  const candidates = strategiesStats
+    .filter(s => s.winRate >= minWinRateThreshold && s.totalTrades >= 2)
+    .sort((a, b) => b.winRate - a.winRate);
+    
+  const targetPool = candidates.length > 0 
+    ? candidates 
+    : strategiesStats.filter(s => s.winRate >= 70).sort((a, b) => b.winRate - a.winRate);
+  
+  if (targetPool.length === 0) return null;
+  
+  const closedCandles = candles.slice(0, -1);
+  for (const strat of targetPool) {
+    const sig = getLiveSignal(strat.id, closedCandles, 0);
+    if (sig && sig.direction && sig.blockedBy !== 'STREAK_SHIELD') {
+      return {
+        strategyId: strat.id,
+        strategyName: strat.name,
+        winRate: strat.winRate,
+        direction: sig.direction,
+        triggerTime: sig.triggerTime,
+        confidence: Math.min(99, Math.round(strat.winRate))
+      };
+    }
+  }
+  
+  return null;
+}
+
 function computeRawLiveSignal(strategyId, candles) {
   const lastIndex = candles.length - 1;
   const lastCandle = candles[lastIndex];
@@ -1396,35 +1492,57 @@ function computeRawLiveSignal(strategyId, candles) {
     }
   }
   
-  if (strategyId === 'mhi_minority' || strategyId === 'mhi_majority') {
-    // MHI checks at the close of candle 5 (minutePos === 4)
-    // Candle 5 is active when minute % 5 === 4.
-    // If it's closed (i.e. we are at the very end of minute Pos 4, or we are at start of next cycle),
-    // let's check the current last 3 candles: indices lastIndex - 2, lastIndex - 1, lastIndex.
-    // Ensure they represent minute positions 2, 3, 4 of the current 5-minute block.
+  if (strategyId.startsWith('mhi_')) {
     const mPos = min % 5;
-    if (mPos === 4) {
+    const isMinority = strategyId.endsWith('minority');
+    
+    // MHI 1 (mhi_minority / mhi_majority): Checks at close of candle 5 (mPos === 4)
+    if ((strategyId === 'mhi_minority' || strategyId === 'mhi_majority') && mPos === 4) {
       const color3 = getCandleColor(candles[lastIndex - 2]);
       const color4 = getCandleColor(candles[lastIndex - 1]);
       const color5 = getCandleColor(lastCandle);
       
       if (color3 !== 'NEUTRAL' && color4 !== 'NEUTRAL' && color5 !== 'NEUTRAL') {
-        let greenCount = 0;
-        let redCount = 0;
+        let greenCount = 0, redCount = 0;
         [color3, color4, color5].forEach(col => {
           if (col === 'CALL') greenCount++;
           if (col === 'PUT') redCount++;
         });
-        
-        const isMinority = strategyId === 'mhi_minority';
-        let direction = null;
-        if (isMinority) {
-          direction = greenCount < redCount ? 'CALL' : 'PUT';
-        } else {
-          direction = greenCount > redCount ? 'CALL' : 'PUT';
-        }
-        
-        // Signal trigger time is start of next minute (which is minutePos 0, start of next cycle)
+        const direction = isMinority ? (greenCount < redCount ? 'CALL' : 'PUT') : (greenCount > redCount ? 'CALL' : 'PUT');
+        return { direction, triggerTime: lastCandle.epoch + 60 };
+      }
+    }
+    
+    // MHI 2 (mhi_2_minority / mhi_2_majority): Checks at close of candle 1 (mPos === 0)
+    if ((strategyId === 'mhi_2_minority' || strategyId === 'mhi_2_majority') && mPos === 0) {
+      const color3 = getCandleColor(candles[lastIndex - 3]);
+      const color4 = getCandleColor(candles[lastIndex - 2]);
+      const color5 = getCandleColor(candles[lastIndex - 1]);
+      
+      if (color3 !== 'NEUTRAL' && color4 !== 'NEUTRAL' && color5 !== 'NEUTRAL') {
+        let greenCount = 0, redCount = 0;
+        [color3, color4, color5].forEach(col => {
+          if (col === 'CALL') greenCount++;
+          if (col === 'PUT') redCount++;
+        });
+        const direction = isMinority ? (greenCount < redCount ? 'CALL' : 'PUT') : (greenCount > redCount ? 'CALL' : 'PUT');
+        return { direction, triggerTime: lastCandle.epoch + 60 };
+      }
+    }
+    
+    // MHI 3 (mhi_3_minority / mhi_3_majority): Checks at close of candle 2 (mPos === 1)
+    if ((strategyId === 'mhi_3_minority' || strategyId === 'mhi_3_majority') && mPos === 1) {
+      const color3 = getCandleColor(candles[lastIndex - 4]);
+      const color4 = getCandleColor(candles[lastIndex - 3]);
+      const color5 = getCandleColor(candles[lastIndex - 2]);
+      
+      if (color3 !== 'NEUTRAL' && color4 !== 'NEUTRAL' && color5 !== 'NEUTRAL') {
+        let greenCount = 0, redCount = 0;
+        [color3, color4, color5].forEach(col => {
+          if (col === 'CALL') greenCount++;
+          if (col === 'PUT') redCount++;
+        });
+        const direction = isMinority ? (greenCount < redCount ? 'CALL' : 'PUT') : (greenCount > redCount ? 'CALL' : 'PUT');
         return { direction, triggerTime: lastCandle.epoch + 60 };
       }
     }
@@ -1919,18 +2037,30 @@ export function runCustomStrategyBacktest(candles, config = {}) {
         if (lowerShadow >= 2 * body && upperShadow <= 0.3 * body) direction = 'CALL';
         else if (upperShadow >= 2 * body && lowerShadow <= 0.3 * body) direction = 'PUT';
       }
-    } else if (candlePattern === 'mhi_minority' || candlePattern === 'mhi_majority') {
+    } else if (candlePattern && candlePattern.startsWith('mhi_')) {
       const date = new Date(candles[i].epoch * 1000);
-      if (date.getMinutes() % 5 === 4) {
-        const c3 = getCandleColor(candles[i - 2]);
-        const c4 = getCandleColor(candles[i - 1]);
-        const c5 = getCandleColor(candles[i]);
-        if (c3 !== 'NEUTRAL' && c4 !== 'NEUTRAL' && c5 !== 'NEUTRAL') {
-          let g = 0, r = 0;
-          [c3, c4, c5].forEach(col => { if (col === 'CALL') g++; if (col === 'PUT') r++; });
-          const isMinority = candlePattern === 'mhi_minority';
-          direction = isMinority ? (g < r ? 'CALL' : 'PUT') : (g > r ? 'CALL' : 'PUT');
-        }
+      const mPos = date.getMinutes() % 5;
+      const isMinority = candlePattern.endsWith('minority');
+      
+      let c3 = null, c4 = null, c5 = null;
+      if ((candlePattern === 'mhi_minority' || candlePattern === 'mhi_majority') && mPos === 4) {
+        c3 = getCandleColor(candles[i - 2]);
+        c4 = getCandleColor(candles[i - 1]);
+        c5 = getCandleColor(candles[i]);
+      } else if ((candlePattern === 'mhi_2_minority' || candlePattern === 'mhi_2_majority') && mPos === 0) {
+        c3 = getCandleColor(candles[i - 3]);
+        c4 = getCandleColor(candles[i - 2]);
+        c5 = getCandleColor(candles[i - 1]);
+      } else if ((candlePattern === 'mhi_3_minority' || candlePattern === 'mhi_3_majority') && mPos === 1) {
+        c3 = getCandleColor(candles[i - 4]);
+        c4 = getCandleColor(candles[i - 3]);
+        c5 = getCandleColor(candles[i - 2]);
+      }
+
+      if (c3 && c4 && c5 && c3 !== 'NEUTRAL' && c4 !== 'NEUTRAL' && c5 !== 'NEUTRAL') {
+        let g = 0, r = 0;
+        [c3, c4, c5].forEach(col => { if (col === 'CALL') g++; if (col === 'PUT') r++; });
+        direction = isMinority ? (g < r ? 'CALL' : 'PUT') : (g > r ? 'CALL' : 'PUT');
       }
     }
 

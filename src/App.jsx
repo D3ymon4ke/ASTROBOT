@@ -329,8 +329,25 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [balance, setBalance] = useState(0);
   const [initialBalance, setInitialBalance] = useState(0);
-  const [accountInfo, setAccountInfo] = useState(null);
   const [latency, setLatency] = useState(0);
+
+  // Mobile Responsiveness Detector
+  const [isMobile, setIsMobile] = useState(() => {
+    return typeof window !== 'undefined' && window.innerWidth <= 768;
+  });
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
 
   // Profile & Gamification States
   const [profileData, setProfileData] = useState(() => {
@@ -563,7 +580,20 @@ export default function App() {
     enableStreakShield: true,
     maxStreakCandles: 4,
     streakShieldAction: 'block',
-    soundEnabled: true
+    soundEnabled: true,
+    // Recall Engine / Shadow Account
+    recallEnabled: false,
+    recallAccount: 'demo',
+    recallTrigger: 'last_gale',
+    recallMode: 'neural_recovery',
+    recallAttemptRule: 'single',
+    recallStakeMode: 'same',
+    recallCustomStake: 2.0,
+    recallStrategyMode: 'same',
+    recallCustomStrategy: 'mhi_minority',
+    recallCooldown: '5min',
+    recallMartingaleLevels: 2,
+    recallMartingaleMultiplier: 2.0
   };
 
   const [settings, setSettings] = useState(() => {
@@ -2257,11 +2287,18 @@ export default function App() {
     setAuthError('');
     if (rememberMe) {
       localStorage.setItem('deriv_token', token);
+      if (isDemo) {
+        localStorage.setItem('deriv_token_demo', token);
+      } else {
+        localStorage.setItem('deriv_token_real', token);
+      }
       localStorage.setItem('deriv_app_id', appId);
       localStorage.setItem('deriv_is_demo', isDemo ? 'true' : 'false');
       localStorage.setItem('astrobot_remember_me', 'true');
     } else {
       localStorage.removeItem('deriv_token');
+      localStorage.removeItem('deriv_token_demo');
+      localStorage.removeItem('deriv_token_real');
       localStorage.removeItem('deriv_app_id');
       localStorage.removeItem('deriv_is_demo');
       localStorage.setItem('astrobot_remember_me', 'false');
@@ -2312,27 +2349,33 @@ export default function App() {
       setCandles([]);
       stateRef.current.hasReceivedSync = false;
 
-      const savedToken = localStorage.getItem('deriv_token') || '';
+      // Smart token resolution: mode-specific token first, fallback to general deriv_token
+      const modeTokenKey = newIsDemo ? 'deriv_token_demo' : 'deriv_token_real';
+      const targetToken = localStorage.getItem(modeTokenKey) || localStorage.getItem('deriv_token') || '';
       const savedAppId = localStorage.getItem('deriv_app_id') || '33KjYszMx4FNIHT6qAJ7V';
 
       setIsDemo(newIsDemo);
       localStorage.setItem('deriv_is_demo', newIsDemo ? 'true' : 'false');
       setDbTrades(loadDbTrades(newIsDemo));
 
+      if (targetToken) {
+        setToken(targetToken);
+      }
+
       syncSettingsToDb({
         settings: {
           ...settings,
           isDemo: newIsDemo,
-          token: savedToken,
+          token: targetToken,
           appId: savedAppId
         }
       });
 
-      if (savedToken) {
-        await derivAPI.connect(savedToken, savedAppId, newIsDemo);
+      if (targetToken) {
+        await derivAPI.connect(targetToken, savedAppId, newIsDemo);
       } else {
         addLog({
-          message: '[Conexão] Token não encontrado para reconexão automática.',
+          message: '[Conexão] Token não encontrado para reconexão automática. Por favor insira seu token.',
           type: 'error',
           time: new Date().toLocaleTimeString()
         });
@@ -3078,16 +3121,16 @@ export default function App() {
               }} className="pricing-grid-responsive">
                 <div className="feature-card-premium">
                   <span style={{ fontSize: '0.68rem', color: '#8B5CF6', fontWeight: 'bold' }}>PROBABILÍSTICA (5 MIN)</span>
-                  <h3 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 'bold', margin: '0.25rem 0 0.75rem 0' }}>MHI Minoria</h3>
+                  <h3 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 'bold', margin: '0.25rem 0 0.75rem 0' }}>MHI 1, 2 e 3 (Minoria)</h3>
                   <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>
-                    Analisa as 3 últimas velas de um quadrante de 5 minutos e executa ordens na cor minoritária no início do próximo quadrante.
+                    Analisa as últimas 3 velas do quadrante de 5 min e entra a favor da minoria na Vela 1 (MHI 1), Vela 2 (MHI 2) ou Vela 3 (MHI 3) do próximo ciclo.
                   </p>
                 </div>
                 <div className="feature-card-premium">
                   <span style={{ fontSize: '0.68rem', color: '#38BDF8', fontWeight: 'bold' }}>PROBABILÍSTICA (5 MIN)</span>
-                  <h3 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 'bold', margin: '0.25rem 0 0.75rem 0' }}>MHI Maioria</h3>
+                  <h3 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 'bold', margin: '0.25rem 0 0.75rem 0' }}>MHI 1, 2 e 3 (Maioria)</h3>
                   <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: 0, lineHeight: '1.5' }}>
-                    Realiza a entrada a favor da cor majoritária das últimas 3 velas do quadrante de 5 minutos, ideal para mercados com forte tendência direcional.
+                    Entradas a favor da maioria das velas de análise nas Velas 1, 2 ou 3 do próximo ciclo, otimizadas para continuação de tendência.
                   </p>
                 </div>
                 <div className="feature-card-premium">
@@ -4671,7 +4714,7 @@ export default function App() {
   const keyDays = keyExpiresAt ? Math.max(0, Math.ceil((keyExpiresAt - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', background: '#09090F' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', background: '#06080E', overflow: 'hidden' }}>
       {/* Header bar - Premium Status Bar */}
       <header style={{
         background: 'rgba(14, 11, 24, 0.8)',
@@ -4687,17 +4730,35 @@ export default function App() {
         height: '64px'
       }}>
         {/* Left: Logo & Nav Links */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.75rem' : '2rem' }}>
+          {/* Mobile Drawer Toggle Button */}
+          <button
+            onClick={() => setIsMobileDrawerOpen(!isMobileDrawerOpen)}
+            style={{
+              display: isMobile ? 'flex' : 'none',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '8px',
+              padding: '6px',
+              color: 'white',
+              cursor: 'pointer'
+            }}
+          >
+            {isMobileDrawerOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: '42px', width: 'auto', objectFit: 'contain' }} />
+            <img src={logoImg} alt="ASTROBOT Logo" style={{ height: isMobile ? '34px' : '42px', width: 'auto', objectFit: 'contain' }} />
             <span style={{ fontSize: '0.55rem', background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.4)', padding: '1px 6px', borderRadius: '20px', fontWeight: 'bold', color: 'var(--primary-light)' }}>
               v2.5
             </span>
           </div>
 
-          {/* Nav links with Unified Dropdowns */}
-          <nav style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', position: 'relative' }}>
+          {/* Nav links with Unified Dropdowns (hidden on mobile via CSS class) */}
+          <nav className="desktop-nav-links" style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', position: 'relative' }}>
             {/* Dashboard */}
             <button
               onClick={() => {
@@ -5580,746 +5641,507 @@ export default function App() {
       <div key={activePage} className="page-transition-container">
       {(() => {
         if (activePage === 'dashboard') {
-          return (
-            <main className="dashboard-grid" style={{
-              flex: 1,
-              display: 'grid',
-              gridTemplateColumns: sidebarCollapsed ? '1fr' : '1fr 340px',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              padding: '1.25rem',
-              gap: '1.25rem',
-              overflow: 'hidden',
-              position: 'relative'
-            }}>
-              {/* Floating Expand Sidebar Button */}
-              {sidebarCollapsed && (
-                <button
-                  onClick={() => setSidebarCollapsed(false)}
-                  style={{
-                    position: 'absolute',
-                    top: '20px',
-                    right: '20px',
-                    background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
-                    border: 'none',
-                    color: 'white',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    fontSize: '0.68rem',
-                    fontWeight: 'bold',
-                    boxShadow: '0 0 10px rgba(139, 92, 246, 0.4)',
-                    cursor: 'pointer',
-                    zIndex: 100
-                  }}
-                >
-                  EXIBIR PAINEL
-                </button>
-              )}
+          // ── AI Copilot messages ────────────────────────────────────────
+          const copilotMessages = (() => {
+            if (!isRunning) return "Aguardando início. Volatilidade estável detectada.";
+            if (activeTradeCountdown && activeTradeCountdown.remaining > 0)
+              return `Sinal ${activeTradeCountdown.contractType} em ${activeTradeCountdown.symbol}. Executando ordem...`;
+            if (bestStrategy)
+              return `"${bestStrategy.name}" lidera com ${bestStrategy.winRate.toFixed(1)}% de assertividade.`;
+            return "Escaneando EMAs 9/21. Aguardando janela ideal.";
+          })();
 
-              {/* Left Side: Chart, Timeline & Thermometers */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
-                
-                {/* Deriv Disconnected Warning Banner */}
-                {(!connected || !settings.token) && (
-                  <div className="glass-panel" style={{
-                    padding: '0.85rem 1.25rem',
-                    background: 'rgba(239, 68, 68, 0.08)',
-                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                    boxShadow: '0 8px 30px rgba(239, 68, 68, 0.15)',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '1rem',
-                    animation: 'slideIn 0.3s ease'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 10px #ef4444' }} />
-                      <div>
-                        <strong style={{ fontSize: '0.85rem', color: '#ffffff', display: 'block' }}>Deriv Não Conectada</strong>
-                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                          {!settings.token ? 'Insira seu Token da API Deriv para liberar operações automáticas.' : 'Aguardando sincronização com a corretora Deriv...'}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setActivePage('settings')}
-                      style={{
-                        background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
-                        color: 'white',
-                        border: 'none',
-                        padding: '6px 14px',
-                        borderRadius: '8px',
-                        fontSize: '0.75rem',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      Configurar Token Deriv
-                    </button>
+          // ── Timeline step logic ────────────────────────────────────────
+          const timelineStep = getTimelineStep();
+          const timelineSteps = [
+            { label: 'Mercado' },
+            { label: 'Scanner' },
+            { label: 'IA' },
+            { label: 'Estratégia' },
+            { label: 'Execução' },
+            { label: 'Resultado' },
+            { label: 'Gestão' },
+          ];
+
+          // ── Asset label ───────────────────────────────────────────────
+          const assetLabel = (ASSETS_LIST.find(a => a.symbol === settings.symbol)?.name || settings.symbol);
+
+          return (
+            <div className="command-center-root">
+              {/* ════════════════════════════════════════════════════
+                  ① HERO BOT PANEL — "O Cérebro da IA"
+              ════════════════════════════════════════════════════ */}
+              <div className="hero-bot-panel">
+                {/* Scanner sweep when running */}
+                {isRunning && <div className="hero-scanner-line" />}
+
+                {/* LEFT: AI Online status */}
+                <div className="hero-ai-status">
+                  <div className={`hero-status-dot${!isRunning ? ' idle' : ''}`}
+                    style={isRunning ? {} : { background: '#475569', animation: 'none', boxShadow: 'none' }}
+                  />
+                  <span className={`hero-status-label${!isRunning ? ' offline' : ''}`}>
+                    {isRunning ? 'IA ONLINE' : 'STANDBY'}
+                  </span>
+                </div>
+
+                {/* CENTER: Metrics */}
+                <div className="hero-metrics">
+                  <div className="hero-metric-block">
+                    <span className="hero-metric-label">Estratégia</span>
+                    <span className="hero-metric-value">
+                      {settings.autoPilot ? 'Auto Pilot' : (bestStrategy?.name || settings.selectedStrategy.replace(/_/g, ' ').toUpperCase())}
+                    </span>
                   </div>
-                )}
-                
-                {/* AI recommendations or suggestion banner */}
-                {aiSuggestion && aiSuggestion.active && (
-                  <div className="glass-panel" style={{
-                    padding: '0.85rem 1.25rem',
-                    background: 'rgba(99, 102, 241, 0.08)',
-                    border: '1px solid rgba(99, 102, 241, 0.4)',
-                    boxShadow: '0 8px 30px rgba(99, 102, 241, 0.15)',
-                    borderRadius: '12px',
+
+                  <div className="hero-metric-block">
+                    <span className="hero-metric-label">Probabilidade</span>
+                    <span className="hero-metric-value mono green">
+                      {bestStrategy ? `${bestStrategy.winRate.toFixed(1)}%` : '—'}
+                    </span>
+                  </div>
+
+                  <div className="hero-metric-block">
+                    <span className="hero-metric-label">Mercado</span>
+                    <span className="hero-metric-value" style={{ fontSize: '0.8rem' }}>
+                      {assetLabel}
+                    </span>
+                  </div>
+
+                  <div className="hero-metric-block">
+                    <span className="hero-metric-label">Próxima Entrada</span>
+                    <span className="hero-metric-value mono purple">
+                      {activeTradeCountdown && activeTradeCountdown.remaining > 0
+                        ? `${activeTradeCountdown.remaining}s`
+                        : isRunning ? 'ANALISANDO' : '—'}
+                    </span>
+                  </div>
+
+                  <div className="hero-metric-block">
+                    <span className="hero-metric-label">Saldo</span>
+                    <span className="hero-metric-value mono">
+                      ${balance.toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="hero-metric-block" style={{ borderRight: 'none' }}>
+                    <span className="hero-metric-label">Sessão</span>
+                    <span className="hero-metric-value mono" style={{ color: netProfit >= 0 ? '#10b981' : '#ef4444' }}>
+                      {netProfit >= 0 ? '+' : ''}${netProfit.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* RIGHT: Neural pulse zone */}
+                <div className="hero-neural-zone">
+                  <div className={`hero-energy-bars${!isRunning ? ' idle' : ''}`}>
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <div key={i} className="hero-energy-bar" />
+                    ))}
+                  </div>
+                  <span style={{
+                    fontSize: '0.46rem',
+                    fontWeight: '700',
+                    letterSpacing: '1.5px',
+                    textTransform: 'uppercase',
+                    color: isRunning ? 'rgba(167,139,250,0.6)' : 'rgba(100,116,139,0.4)',
+                    fontFamily: 'var(--font-mono)'
+                  }}>
+                    {isRunning ? 'NEURAL ATIVO' : 'NEURAL OCIOSO'}
+                  </span>
+                </div>
+
+                {/* RECALL ENGINE HUD BAR */}
+                {settings.recallEnabled && (
+                  <div style={{
+                    width: '100%',
+                    gridColumn: '1 / -1',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: '1rem',
-                    animation: 'slideIn 0.3s ease',
-                    transition: 'all 0.3s ease'
+                    padding: '0.4rem 1rem',
+                    background: recallState?.active ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                    fontSize: '0.68rem',
+                    color: '#94a3b8'
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Cpu size={16} style={{ color: 'var(--primary-light)' }} className="pulse-primary" />
-                      <span style={{ fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                        Recomendação IA: A estratégia <strong>{aiSuggestion.strategyName}</strong> está com assertividade superior (<strong>{aiSuggestion.winRate.toFixed(1)}%</strong> vs {aiSuggestion.currentWinRate.toFixed(1)}%).
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: 'var(--primary-light)', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                        ──────── RECALL ENGINE ────────
+                      </span>
+                      <span style={{
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        fontSize: '0.6rem',
+                        fontWeight: 'bold',
+                        background: recallState?.active ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.05)',
+                        color: recallState?.active ? '#10b981' : '#94a3b8'
+                      }}>
+                        {recallState?.active ? '🟢 RECALL ATIVO' : '⚪ STANDBY'}
                       </span>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button
-                        onClick={() => {
-                          setSettings(prev => ({ ...prev, selectedStrategy: aiSuggestion.strategyId }));
-                          setAiSuggestion(prev => ({ ...prev, active: false }));
-                          addLog({
-                            message: `Estratégia alterada manualmente para ${aiSuggestion.strategyName} após sugestão do robô.`,
-                            type: 'info',
-                            time: new Date().toLocaleTimeString()
-                          });
-                        }}
-                        style={{
-                          background: 'linear-gradient(to right, var(--primary), var(--accent))',
-                          color: 'white',
-                          border: 'none',
-                          padding: '0.35rem 0.75rem',
-                          borderRadius: '6px',
-                          fontSize: '0.75rem',
-                          fontWeight: 'bold',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Mudar Agora
-                      </button>
-                      <button
-                        onClick={() => setAiSuggestion(prev => ({ ...prev, active: false }))}
-                        style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          color: 'var(--text-secondary)',
-                          border: 'none',
-                          padding: '0.35rem 0.75rem',
-                          borderRadius: '6px',
-                          fontSize: '0.75rem',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Ignorar
-                      </button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span>Conta Alvo: <strong style={{ color: 'white', textTransform: 'uppercase' }}>{settings.recallAccount || 'Demo'}</strong></span>
+                      <span>Modo: <strong style={{ color: '#a78bfa' }}>
+                        {settings.recallMode === 'neural_recovery' ? '🧠 Neural Recovery' : settings.recallMode === 'burst' ? '⚡ Burst Mode' : '🎯 Sinal Confirmado'}
+                      </strong></span>
+                      {recallState?.status === 'recovered' && (
+                        <span style={{ color: '#10b981', fontWeight: 'bold' }}>✔ Recuperação Concluída</span>
+                      )}
+                      {recallState?.status === 'exhausted' && (
+                        <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✖ Recall Encerrado</span>
+                      )}
                     </div>
                   </div>
                 )}
+              </div>
 
-                {/* Active Trade Countdown Banner */}
-                {activeTradeCountdown && activeTradeCountdown.remaining > 0 && (
-                  <div className="glass-panel" style={{
-                    padding: '0.85rem 1.25rem',
-                    background: 'rgba(139, 92, 246, 0.08)',
-                    border: '1px solid rgba(139, 92, 246, 0.3)',
-                    boxShadow: '0 0 15px rgba(139, 92, 246, 0.1)',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.4rem',
-                    transition: 'all 0.3s ease'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          color: activeTradeCountdown.contractType === 'CALL' ? 'var(--success)' : 'var(--danger)',
-                          fontWeight: 'bold',
-                          fontSize: '0.85rem'
-                        }}>
-                          {activeTradeCountdown.contractType === 'CALL' ? '▲ COMPRA (CALL)' : '▼ VENDA (PUT)'}
-                        </span>
-                        <span style={{ color: 'var(--text-secondary)' }}>no ativo</span>
-                        <strong>{activeTradeCountdown.symbol}</strong>
-                        <span style={{ color: 'var(--text-muted)' }}>| Entrada:</span>
-                        <strong style={{ fontFamily: 'var(--font-mono)' }}>${activeTradeCountdown.stake.toFixed(2)}</strong>
+              {/* ════════════════════════════════════════════════════
+                  ② CHART + ③ SIDEBAR — Layout principal
+              ════════════════════════════════════════════════════ */}
+              <div className="command-layout">
+
+                {/* ── CHART AREA ───────────────────────────────── */}
+                <div className="command-chart-area">
+
+                  {/* Disconnected warning */}
+                  {(!connected || !settings.token) && (
+                    <div className="cmd-alert-banner danger" style={{ marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 8px #ef4444', flexShrink: 0 }} />
+                        <div>
+                          <strong style={{ fontSize: '0.8rem', color: '#ffffff', display: 'block' }}>Deriv Não Conectada</strong>
+                          <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
+                            {!settings.token ? 'Insira seu API Token para liberar operações.' : 'Aguardando sincronização com a Deriv...'}
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <span style={{ color: 'var(--text-secondary)', marginRight: '4px' }}>Expiração em:</span>
-                        <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', color: 'var(--primary-light)' }}>
+                      <button
+                        onClick={() => setActivePage('settings')}
+                        style={{
+                          background: 'rgba(239,68,68,0.15)',
+                          border: '1px solid rgba(239,68,68,0.3)',
+                          color: '#f87171',
+                          padding: '5px 14px',
+                          borderRadius: '8px',
+                          fontSize: '0.7rem',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0
+                        }}
+                      >
+                        Configurar Token
+                      </button>
+                    </div>
+                  )}
+
+                  {/* AI Suggestion banner */}
+                  {aiSuggestion && aiSuggestion.active && (
+                    <div className="cmd-alert-banner info" style={{ marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Cpu size={13} style={{ color: '#a78bfa', flexShrink: 0 }} className="pulse-primary" />
+                        <span style={{ fontSize: '0.72rem', color: '#e2e8f0' }}>
+                          IA recomenda <strong style={{ color: '#a78bfa' }}>{aiSuggestion.strategyName}</strong> — {aiSuggestion.winRate.toFixed(1)}% vs {aiSuggestion.currentWinRate.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                        <button
+                          onClick={() => {
+                            setSettings(prev => ({ ...prev, selectedStrategy: aiSuggestion.strategyId }));
+                            setAiSuggestion(prev => ({ ...prev, active: false }));
+                          }}
+                          style={{ background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.4)', color: '#a78bfa', padding: '4px 10px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '700', cursor: 'pointer' }}
+                        >
+                          Aplicar
+                        </button>
+                        <button
+                          onClick={() => setAiSuggestion(prev => ({ ...prev, active: false }))}
+                          style={{ background: 'transparent', border: 'none', color: '#64748b', padding: '4px 8px', borderRadius: '6px', fontSize: '0.68rem', cursor: 'pointer' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Active trade countdown strip */}
+                  {activeTradeCountdown && activeTradeCountdown.remaining > 0 && (
+                    <div className="cmd-trade-strip" style={{ marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{
+                          color: activeTradeCountdown.contractType === 'CALL' ? '#10b981' : '#ef4444',
+                          fontWeight: '800',
+                          fontSize: '0.75rem'
+                        }}>
+                          {activeTradeCountdown.contractType === 'CALL' ? '▲' : '▼'} {activeTradeCountdown.contractType}
+                        </span>
+                        <span style={{ color: '#64748b' }}>{activeTradeCountdown.symbol}</span>
+                        <strong style={{ fontFamily: 'var(--font-mono)', color: '#e2e8f0' }}>${activeTradeCountdown.stake?.toFixed(2)}</strong>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div className="cmd-progress-bar" style={{ width: '100px' }}>
+                          <div className="cmd-progress-fill" style={{
+                            width: `${Math.min(100, Math.max(0, (activeTradeCountdown.remaining / activeTradeCountdown.totalDuration) * 100))}%`
+                          }} />
+                        </div>
+                        <strong style={{ fontFamily: 'var(--font-mono)', color: '#a78bfa', fontSize: '0.8rem' }}>
                           {activeTradeCountdown.remaining}s
                         </strong>
                       </div>
                     </div>
-                    <div style={{ width: '100%', height: '5px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{
-                        width: `${Math.min(100, Math.max(0, (activeTradeCountdown.remaining / activeTradeCountdown.totalDuration) * 100))}%`,
-                        height: '100%',
-                        background: 'linear-gradient(to right, var(--primary), var(--accent))',
-                        borderRadius: '3px',
-                        transition: 'width 1s linear'
-                      }}></div>
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Chart Wrapper Container */}
-                <div style={{ position: 'relative', width: '100%', height: '680px', borderRadius: '16px', overflow: 'hidden' }}>
-                  <Chart
-                    candles={candles}
-                    trades={trades}
-                    dbTrades={dbTrades}
-                    symbol={settings.symbol}
-                    activeTrade={stateRef.current.lastContractDetails}
-                    granularity={settings.granularity}
-                    strategy={settings.selectedStrategy}
-                    toggles={{}}
-                  />
+                  {/* ══ THE CHART — Protagonist ══ */}
+                  <div className="chart-container-premium">
+                    <Chart
+                      candles={candles}
+                      trades={trades}
+                      dbTrades={dbTrades}
+                      symbol={settings.symbol}
+                      activeTrade={stateRef.current.lastContractDetails}
+                      granularity={settings.granularity}
+                      strategy={settings.selectedStrategy}
+                      toggles={{}}
+                    />
 
-                  {/* Absolute HUD overlays on top of the Chart */}
-                  <div style={{
-                    position: 'absolute',
-                    top: '88px',
-                    left: '12px',
-                    display: 'flex',
-                    gap: '0.5rem',
-                    flexWrap: 'wrap',
-                    pointerEvents: 'none',
-                    zIndex: 10
-                  }}>
-                    {/* Probabilidade */}
-                    <div style={{ background: 'rgba(9, 9, 15, 0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '4px 8px', display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '0.5rem', color: 'var(--primary-light)', fontWeight: 'bold', textTransform: 'uppercase' }}>Probabilidade</span>
-                      <strong style={{ fontSize: '0.75rem', color: '#10b981', fontFamily: 'var(--font-mono)' }}>
-                        {bestStrategy ? `${bestStrategy.winRate.toFixed(1)}%` : '92.4%'}
-                      </strong>
-                    </div>
-
-                    {/* Estratégia */}
-                    <div style={{ background: 'rgba(9, 9, 15, 0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '4px 8px', display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '0.5rem', color: 'var(--primary-light)', fontWeight: 'bold', textTransform: 'uppercase' }}>Estratégia</span>
-                      <strong style={{ fontSize: '0.75rem', color: 'white' }}>
-                        {bestStrategy ? bestStrategy.name : settings.selectedStrategy.replace('_', ' ').toUpperCase()}
-                      </strong>
-                    </div>
-
-                    {/* Tendência */}
-                    <div style={{ background: 'rgba(9, 9, 15, 0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '4px 8px', display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '0.5rem', color: 'var(--primary-light)', fontWeight: 'bold', textTransform: 'uppercase' }}>Tendência</span>
-                      <strong style={{ fontSize: '0.75rem', color: (candles.length > 21) ? (calculateEMA(candles, 9)[candles.length - 1] > calculateEMA(candles, 21)[candles.length - 1] ? '#22c55e' : '#ef4444') : '#22c55e' }}>
-                        {(candles.length > 21) ? (calculateEMA(candles, 9)[candles.length - 1] > calculateEMA(candles, 21)[candles.length - 1] ? '▲ ALTA' : '▼ BAIXA') : '▲ COMPRA'}
-                      </strong>
-                    </div>
-
-                    {/* Próxima Vela */}
-                    <div style={{ background: 'rgba(9, 9, 15, 0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '4px 8px', display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '0.5rem', color: 'var(--primary-light)', fontWeight: 'bold', textTransform: 'uppercase' }}>Próxima Vela</span>
-                      <strong style={{ fontSize: '0.75rem', color: 'white' }}>
-                        {activeTradeCountdown ? 'EXECUÇÃO' : 'AGUARDANDO'}
-                      </strong>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Operations Timeline */}
-                <div style={{
-                  background: 'rgba(14, 11, 24, 0.45)',
-                  border: '1px solid rgba(255, 255, 255, 0.04)',
-                  borderRadius: '12px',
-                  padding: '0.75rem 1.25rem',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
-                }}>
-                  {(() => {
-                    const steps = [
-                      { label: 'Mercado', desc: 'Conexão ativa' },
-                      { label: 'IA analisando', desc: 'Média EMA 9/21' },
-                      { label: 'Estratégia', desc: 'Sinal probabilístico' },
-                      { label: 'Executado', desc: 'Contrato aberto' },
-                      { label: 'Resultado', desc: 'Ponto Spot' },
-                      { label: 'Gestão', desc: 'Gale / Soros' }
-                    ];
-                    
-                    const activeStep = getTimelineStep();
-
-                    return steps.map((step, idx) => {
-                      const isActive = idx <= activeStep;
-                      const isCurrent = idx === activeStep;
-
-                      return (
-                        <React.Fragment key={idx}>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1, position: 'relative' }}>
-                            <div style={{
-                              width: '18px',
-                              height: '18px',
-                              borderRadius: '50%',
-                              background: isCurrent ? 'var(--primary-light)' : (isActive ? 'var(--success)' : 'rgba(255,255,255,0.05)'),
-                              border: isCurrent ? '2px solid white' : (isActive ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255,255,255,0.1)'),
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '0.6rem',
-                              fontWeight: 'bold',
-                              color: isCurrent || isActive ? 'white' : '#64748b',
-                              boxShadow: isCurrent ? '0 0 10px var(--primary)' : (isActive ? '0 0 8px rgba(16, 185, 129, 0.3)' : 'none'),
-                              transition: 'all 0.3s ease',
-                              zIndex: 2
-                            }}>
-                              {idx + 1}
-                            </div>
-                            <span style={{ fontSize: '0.65rem', fontWeight: isCurrent ? 'bold' : '600', color: isCurrent ? 'white' : (isActive ? '#cbd5e1' : '#64748b'), textAlign: 'center' }}>{step.label}</span>
-                          </div>
-                          {idx < steps.length - 1 && (
-                            <div style={{
-                              height: '2px',
-                              flex: 1,
-                              background: idx < activeStep ? 'var(--success)' : 'rgba(255,255,255,0.05)',
-                              boxShadow: idx < activeStep ? '0 0 4px rgba(16, 185, 129, 0.4)' : 'none',
-                              marginTop: '-16px',
-                              transition: 'all 0.3s ease',
-                              zIndex: 1
-                            }} />
-                          )}
-                        </React.Fragment>
-                      );
-                    });
-                  })()}
-                </div>
-
-                {/* Motor de Estratégias Thermometers Row */}
-                {(() => {
-                  const getStratWinrate = (id, fallback) => {
-                    const found = strategiesStats.find(s => s.id === id);
-                    return found && found.totalTrades > 0 ? found.winRate : fallback;
-                  };
-
-                  const thermoList = [
-                    { name: 'MHI Minority', id: 'mhi_minority', def: 78.4 },
-                    { name: 'Marubozu', id: 'marubozu', def: 72.8 },
-                    { name: 'Padrão R7', id: 'r7', def: 69.5 },
-                    { name: 'Padrão R10', id: 'r10', def: 64.2 },
-                    { name: 'Três Mosqueteiros', id: 'three_musketeers', def: 81.3 }
-                  ];
-
-                  return (
-                    <div className="glass-panel" style={{ padding: '1rem', background: 'rgba(14, 11, 24, 0.45)', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <Cpu size={14} style={{ color: 'var(--primary-light)' }} />
-                        <span style={{ fontSize: '0.72rem', fontWeight: 'bold', color: 'var(--text-primary)', letterSpacing: '0.5px' }}>MOTOR DE ESTRATÉGIAS // EFICIÊNCIA PROBABILÍSTICA ATUAL</span>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.85rem' }}>
-                        {thermoList.map((t) => {
-                          const wr = getStratWinrate(t.id, t.def);
-                          const color = wr >= 75 ? 'var(--success)' : wr >= 65 ? 'var(--primary-light)' : 'var(--warning)';
-
-                          return (
-                            <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem' }}>
-                                <span style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>{t.name}</span>
-                                <strong style={{ color: color, fontFamily: 'var(--font-mono)' }}>{wr.toFixed(1)}%</strong>
-                              </div>
-                              <div style={{
-                                height: '6px',
-                                background: 'rgba(255, 255, 255, 0.03)',
-                                borderRadius: '10px',
-                                border: '1px solid rgba(255,255,255,0.05)',
-                                overflow: 'hidden',
-                                position: 'relative'
-                              }}>
-                                <div style={{
-                                  width: `${wr}%`,
-                                  height: '100%',
-                                  background: color,
-                                  boxShadow: `0 0 8px ${color}`,
-                                  borderRadius: '10px',
-                                  transition: 'width 0.5s ease-in-out'
-                                }} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-              </div>
-
-              {/* Right Sidebar Control Panel */}
-              <div style={{ display: sidebarCollapsed ? 'none' : 'flex', flexDirection: 'column' }}>
-                {/* Vertical Control Panel Box */}
-                <div className="glass-panel" style={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '1rem',
-                  padding: '1.25rem',
-                  background: 'rgba(14, 11, 24, 0.6)'
-                }}>
-                  
-                  {/* Status Indicator */}
-                  <div>
-                    <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', display: 'block', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status Operacional</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                      <span className={isRunning ? 'pulse-dot-green' : 'pulse-dot-red'} />
-                      <strong style={{ fontSize: '1rem', color: isRunning ? 'var(--success)' : 'var(--text-muted)' }}>
-                        {isRunning ? 'BOT OPERANDO' : 'ROBÔ PAUSADO'}
-                      </strong>
-                    </div>
-                  </div>
-
-                  {/* AI Neural Core Visualizer */}
-                  <div style={{
-                    position: 'relative',
-                    height: '175px',
-                    borderRadius: '10px',
-                    overflow: 'hidden',
-                    background: 'radial-gradient(circle at center, rgba(14, 11, 24, 0.4) 0%, rgba(9, 9, 15, 0.9) 100%)',
-                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                    boxShadow: isRunning ? '0 0 24px rgba(139, 92, 246, 0.2)' : 'none',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'flex-end',
-                    padding: '10px'
-                  }}>
-                    {/* Background Strands Animation */}
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1, pointerEvents: 'none' }}>
-                      <Strands
-                        colors={(() => {
-                          if (trades.length > 0) {
-                            const last = trades[trades.length - 1];
-                            if (last.profit > 0) return ["#10B981", "#34D399", "#059669"]; // Green theme
-                            if (last.profit < 0) return ["#EF4444", "#F87171", "#DC2626"]; // Red theme
-                          }
-                          return ["#8b5cf6", "#06B6D4", "#d946ef"]; // Default theme
-                        })()}
-                        count={isRunning ? 4 : 2}
-                        speed={isRunning ? 0.75 : 0.25}
-                        amplitude={isRunning ? 0.8 : 0.3}
-                        intensity={isRunning ? 0.7 : 0.3}
-                        glow={isRunning ? 2.8 : 1.2}
-                        thickness={isRunning ? 0.7 : 0.4}
-                        spread={1.2}
-                      />
-                    </div>
-                    
-                    {/* Text Overlay */}
-                    <div style={{ zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.4)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                          {isRunning ? 'Núcleo Neural Operacional' : 'Núcleo Neural Ocioso'}
-                        </span>
-                        <strong style={{ fontSize: '0.68rem', color: isRunning ? 'var(--primary-light)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          {isRunning ? 'Analisando Mercado...' : 'Modo Standby'}
-                        </strong>
-                      </div>
-                      
-                      {isRunning && (
+                    {/* HUD overlays — minimal, elegant */}
+                    <div style={{
+                      position: 'absolute',
+                      top: '52px',
+                      left: '12px',
+                      display: 'flex',
+                      gap: '6px',
+                      flexWrap: 'wrap',
+                      pointerEvents: 'none',
+                      zIndex: 10
+                    }}>
+                      {settings.recallEnabled && (
                         <div style={{
-                          fontSize: '0.5rem',
-                          background: 'rgba(139, 92, 246, 0.15)',
-                          border: '1px solid rgba(139, 92, 246, 0.4)',
-                          color: 'var(--primary-light)',
-                          padding: '2px 8px',
-                          borderRadius: '12px',
-                          fontWeight: 'bold',
-                          animation: 'pulse 2s infinite'
+                          background: recallState?.active ? 'rgba(139, 92, 246, 0.25)' : 'rgba(7, 8, 14, 0.82)',
+                          backdropFilter: 'blur(12px)',
+                          border: recallState?.active ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(139, 92, 246, 0.25)',
+                          borderRadius: '8px',
+                          padding: '4px 10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '1px'
                         }}>
-                          LIVE
+                          <span style={{ fontSize: '0.44rem', color: recallState?.active ? '#10b981' : 'rgba(167,139,250,0.8)', fontWeight: '800', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>
+                            Shadow Account
+                          </span>
+                          <strong style={{ fontSize: '0.7rem', color: recallState?.active ? '#10b981' : '#a78bfa', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {recallState?.active ? '🟢 RECALL ATIVO' : '🛡️ RECALL ON'}
+                          </strong>
+                        </div>
+                      )}
+
+                      {bestStrategy && (
+                        <div style={{
+                          background: 'rgba(7, 8, 14, 0.82)',
+                          backdropFilter: 'blur(12px)',
+                          border: '1px solid rgba(139, 92, 246, 0.2)',
+                          borderRadius: '8px',
+                          padding: '4px 10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '1px'
+                        }}>
+                          <span style={{ fontSize: '0.44rem', color: 'rgba(167,139,250,0.6)', fontWeight: '800', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Estratégia</span>
+                          <strong style={{ fontSize: '0.7rem', color: '#e2e8f0' }}>{bestStrategy.name}</strong>
+                        </div>
+                      )}
+                      {(candles.length > 21) && (
+                        <div style={{
+                          background: 'rgba(7, 8, 14, 0.82)',
+                          backdropFilter: 'blur(12px)',
+                          border: '1px solid rgba(255,255,255,0.06)',
+                          borderRadius: '8px',
+                          padding: '4px 10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '1px'
+                        }}>
+                          <span style={{ fontSize: '0.44rem', color: 'rgba(255,255,255,0.25)', fontWeight: '800', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Tendência</span>
+                          <strong style={{ fontSize: '0.7rem', color: calculateEMA(candles, 9)[candles.length - 1] > calculateEMA(candles, 21)[candles.length - 1] ? '#10b981' : '#ef4444' }}>
+                            {calculateEMA(candles, 9)[candles.length - 1] > calculateEMA(candles, 21)[candles.length - 1] ? '▲ ALTA' : '▼ BAIXA'}
+                          </strong>
                         </div>
                       )}
                     </div>
                   </div>
+                </div>
 
-                  {/* Giant Action Button */}
+                {/* ── COMMAND SIDEBAR ──────────────────────────── */}
+                <div className="command-sidebar">
+
+                  {/* BIG START / STOP BUTTON */}
                   <button
                     onClick={isRunning ? stopBot : startBot}
-                    style={{
-                      width: '100%',
-                      padding: '0.9rem',
-                      borderRadius: '10px',
-                      border: 'none',
-                      background: isRunning 
-                        ? 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)' 
-                        : 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
-                      color: 'white',
-                      fontWeight: '900',
-                      fontSize: '0.95rem',
-                      letterSpacing: '1px',
-                      cursor: 'pointer',
-                      boxShadow: isRunning 
-                        ? '0 0 20px rgba(239, 68, 68, 0.4)' 
-                        : '0 0 20px rgba(139, 92, 246, 0.3)',
-                      transition: 'all 0.3s ease',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px'
-                    }}
+                    className={`cmd-start-btn ${isRunning ? 'running' : 'stopped'}`}
+                    style={{ color: 'white' }}
                   >
-                    {isRunning 
-                      ? 'PARAR OPERAÇÕES' 
-                      : 'INICIAR BOT'}
+                    {isRunning ? (
+                      <>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'white', animation: 'hero-pulse-ring 1.5s infinite' }} />
+                        PARAR IA
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={15} />
+                        INICIAR IA
+                      </>
+                    )}
                   </button>
 
-                  {/* Speed Connection Status Badges */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Brain size={12} style={{ color: isRunning ? 'var(--success)' : 'var(--text-muted)' }} />
-                      <span style={{ fontSize: '0.62rem', fontWeight: 'bold' }}>IA: {isRunning ? 'ONLINE' : 'OFFLINE'}</span>
-                    </div>
-                    
-                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Radio size={12} style={{ color: connected ? 'var(--success)' : 'var(--danger)' }} />
-                      <span style={{ fontSize: '0.62rem', fontWeight: 'bold' }}>DERIV: {connected ? 'SYNCED' : 'ERR'}</span>
-                    </div>
-                  </div>
+                  {/* SIDEBAR BODY */}
+                  <div className="cmd-sidebar-body">
 
-                  {/* Financial & Parameter Specs */}
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontWeight: 'bold', textTransform: 'uppercase' }}>Painel da Sessão</span>
-                    
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.72rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>Estratégia Atual:</span>
-                        <strong style={{ color: 'white' }}>{settings.autoPilot ? 'Piloto Auto' : (bestStrategy?.name || settings.selectedStrategy.replace('_', ' ').toUpperCase())}</strong>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>Probabilidade:</span>
-                        <strong style={{ color: 'var(--success)' }}>{bestStrategy ? `${bestStrategy.winRate.toFixed(1)}%` : '92.4%'}</strong>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>Próxima Entrada:</span>
-                        <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>{activeTradeCountdown && activeTradeCountdown.remaining > 0 ? `${activeTradeCountdown.remaining}s` : (isRunning ? 'Analisando...' : 'Pausado')}</strong>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>Meta de Lucro:</span>
-                        <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>${Number(settings.takeProfit || 0).toFixed(2)}</strong>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>Stop Loss:</span>
-                        <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>${Number(settings.stopLoss || 0).toFixed(2)}</strong>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>Saldo Atual:</span>
-                        <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>${balance.toFixed(2)}</strong>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>Lucro da Sessão:</span>
-                        <strong style={{ color: netProfit >= 0 ? 'var(--success)' : 'var(--danger)', fontFamily: 'var(--font-mono)' }}>{netProfit >= 0 ? '+' : ''}${netProfit.toFixed(2)}</strong>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>Drawdown Máx:</span>
-                        <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>{maxDrawdown.toFixed(1)}%</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* AI Assistant messages console */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.65rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Brain size={11} style={{ color: 'var(--primary-light)' }} />
-                      <span style={{ fontSize: '0.55rem', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Assistente Virtual IA</span>
-                    </div>
-                    <div style={{
-                      background: 'rgba(9, 9, 15, 0.45)',
-                      borderRadius: '6px',
-                      padding: '7px 9px',
-                      fontSize: '0.62rem',
-                      color: '#94a3b8',
-                      lineHeight: '1.35',
-                      borderLeft: '2px solid rgba(139, 92, 246, 0.3)',
-                      maxHeight: '62px',
-                      overflowY: 'auto'
-                    }}>
-                      {(() => {
-                        if (!isRunning) {
-                          return "Aguardando início das operações. Volatilidade estável detectada.";
-                        }
-                        if (activeTradeCountdown) {
-                          return `Sinal de ${activeTradeCountdown.contractType} detectado em ${activeTradeCountdown.symbol}. Executando ordem...`;
-                        }
-                        if (bestStrategy) {
-                          return `"${bestStrategy.name}" lidera com ${bestStrategy.winRate.toFixed(1)}% de assertividade. Monitorando entradas.`;
-                        }
-                        return "Escaneando dados históricos e EMAs 9/21. Permaneça conectado.";
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Blacklisted Assets Widget (Below AI Virtual Assistant) */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.65rem', marginTop: '0.2rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <ShieldAlert size={11} style={{ color: '#ef4444' }} />
-                        <span style={{ fontSize: '0.55rem', fontWeight: 'bold', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          Ativos em Blacklist ({activeBlacklist.length})
+                    {/* CONNECTION STATUS */}
+                    <div className="cmd-status-section">
+                      <span className="cmd-section-label">Conexão</span>
+                      <div className="cmd-status-row">
+                        <span className="cmd-status-key">Status</span>
+                        <span className={`cmd-status-val ${connected ? 'green' : 'red'}`} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: connected ? '#10b981' : '#ef4444', display: 'inline-block' }} />
+                          {connected ? 'CONECTADO' : 'DESCONECTADO'}
                         </span>
                       </div>
-                      <button
-                        onClick={() => setShowAddBlacklistForm(!showAddBlacklistForm)}
-                        style={{
-                          background: showAddBlacklistForm ? 'rgba(239, 68, 68, 0.25)' : 'rgba(239, 68, 68, 0.1)',
-                          border: '1px solid rgba(239, 68, 68, 0.35)',
-                          color: '#f87171',
-                          borderRadius: '4px',
-                          padding: '2px 7px',
-                          fontSize: '0.55rem',
-                          fontWeight: 'bold',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '3px',
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        {showAddBlacklistForm ? '✖ Fechar' : '+ Bloquear'}
-                      </button>
+                      <div className="cmd-status-row">
+                        <span className="cmd-status-key">Mercado</span>
+                        <span className="cmd-status-val">{settings.symbol}</span>
+                      </div>
+                      <div className="cmd-status-row">
+                        <span className="cmd-status-key">Latência</span>
+                        <span className="cmd-status-val purple">{latency}ms</span>
+                      </div>
+                      <div className="cmd-status-row">
+                        <span className="cmd-status-key">Probabilidade</span>
+                        <span className="cmd-status-val green">{bestStrategy ? `${bestStrategy.winRate.toFixed(1)}%` : '—'}</span>
+                      </div>
                     </div>
 
-                    {showAddBlacklistForm && (
-                      <div style={{
-                        background: 'rgba(239, 68, 68, 0.08)',
-                        border: '1px solid rgba(239, 68, 68, 0.25)',
-                        borderRadius: '6px',
-                        padding: '8px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '6px',
-                        marginTop: '2px'
-                      }}>
-                        <span style={{ fontSize: '0.58rem', fontWeight: 'bold', color: 'white' }}>Bloquear ativo manualmente:</span>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <select
-                            value={newBlacklistSymbol}
-                            onChange={(e) => setNewBlacklistSymbol(e.target.value)}
-                            style={{
-                              flex: 1,
-                              padding: '4px',
-                              fontSize: '0.62rem',
-                              background: '#09090f',
-                              color: 'white',
-                              border: '1px solid rgba(255,255,255,0.1)',
-                              borderRadius: '4px'
-                            }}
-                          >
-                            {(ASSETS_LIST || []).map(a => (
-                              <option key={a.symbol} value={a.symbol}>{a.name} ({a.symbol})</option>
-                            ))}
-                          </select>
-                          <select
-                            value={newBlacklistDays}
-                            onChange={(e) => setNewBlacklistDays(parseInt(e.target.value))}
-                            style={{
-                              width: '75px',
-                              padding: '4px',
-                              fontSize: '0.62rem',
-                              background: '#09090f',
-                              color: 'white',
-                              border: '1px solid rgba(255,255,255,0.1)',
-                              borderRadius: '4px'
-                            }}
-                          >
-                            <option value={1}>1 dia</option>
-                            <option value={3}>3 dias</option>
-                            <option value={7}>7 dias</option>
-                            <option value={30}>30 dias</option>
-                          </select>
-                          <button
-                            onClick={() => {
-                              handleAddBlacklist(newBlacklistSymbol, newBlacklistDays, 'Bloqueio Manual');
-                              setShowAddBlacklistForm(false);
-                            }}
-                            style={{
-                              background: '#ef4444',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '4px 8px',
-                              fontSize: '0.6rem',
-                              fontWeight: 'bold',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Bloquear
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    <div className="cmd-divider" />
 
-                    <div style={{
-                      background: 'rgba(9, 9, 15, 0.45)',
-                      borderRadius: '6px',
-                      padding: '7px 9px',
-                      borderLeft: '2px solid #ef4444',
-                      maxHeight: '110px',
-                      overflowY: 'auto',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '5px'
-                    }}>
+                    {/* SESSION DATA */}
+                    <div className="cmd-status-section">
+                      <span className="cmd-section-label">Sessão</span>
+                      <div className="cmd-status-row">
+                        <span className="cmd-status-key">Lucro</span>
+                        <span className={`cmd-status-val ${netProfit >= 0 ? 'green' : 'red'}`}>
+                          {netProfit >= 0 ? '+' : ''}${netProfit.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="cmd-status-row">
+                        <span className="cmd-status-key">Meta</span>
+                        <span className="cmd-status-val">${Number(settings.takeProfit || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="cmd-status-row">
+                        <span className="cmd-status-key">Stop</span>
+                        <span className="cmd-status-val">${Number(settings.stopLoss || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="cmd-status-row">
+                        <span className="cmd-status-key">Drawdown</span>
+                        <span className={`cmd-status-val ${maxDrawdown > 20 ? 'red' : maxDrawdown > 10 ? 'purple' : 'muted'}`}>
+                          {maxDrawdown.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="cmd-divider" />
+
+                    {/* ASTROBOT COPILOT CHAT */}
+                    <div className="cmd-chat-box">
+                      <div className="cmd-chat-header">
+                        <div className="cmd-chat-dot" style={!isRunning ? { background: '#475569', animation: 'none' } : {}} />
+                        <span className="cmd-chat-title">ASTROBOT</span>
+                      </div>
+                      <p key={copilotMessages} className="cmd-chat-message">
+                        "{copilotMessages}"
+                      </p>
+                    </div>
+
+                    <div className="cmd-divider" />
+
+                    {/* BLACKLIST COMPACT */}
+                    <div className="cmd-blacklist-section">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span className="cmd-section-label">Blacklist ({activeBlacklist.length})</span>
+                        <button
+                          onClick={() => setShowAddBlacklistForm(!showAddBlacklistForm)}
+                          style={{
+                            background: 'rgba(239,68,68,0.08)',
+                            border: '1px solid rgba(239,68,68,0.2)',
+                            color: '#f87171',
+                            borderRadius: '5px',
+                            padding: '2px 7px',
+                            fontSize: '0.52rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            letterSpacing: '0.5px',
+                            textTransform: 'uppercase',
+                            fontFamily: 'var(--font-mono)'
+                          }}
+                        >
+                          {showAddBlacklistForm ? '✕ Fechar' : '+ Bloquear'}
+                        </button>
+                      </div>
+
+                      {showAddBlacklistForm && (
+                        <div className="cmd-blacklist-form">
+                          <span style={{ fontSize: '0.56rem', fontWeight: '700', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.5px', fontFamily: 'var(--font-mono)' }}>
+                            Bloquear ativo:
+                          </span>
+                          <div style={{ display: 'flex', gap: '5px' }}>
+                            <select
+                              value={newBlacklistSymbol}
+                              onChange={(e) => setNewBlacklistSymbol(e.target.value)}
+                              style={{ flex: 1, padding: '4px', fontSize: '0.6rem', background: '#07080e', color: 'white', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '5px' }}
+                            >
+                              {(ASSETS_LIST || []).map(a => (
+                                <option key={a.symbol} value={a.symbol}>{a.name}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={newBlacklistDays}
+                              onChange={(e) => setNewBlacklistDays(parseInt(e.target.value))}
+                              style={{ width: '65px', padding: '4px', fontSize: '0.6rem', background: '#07080e', color: 'white', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '5px' }}
+                            >
+                              <option value={1}>1d</option>
+                              <option value={3}>3d</option>
+                              <option value={7}>7d</option>
+                              <option value={30}>30d</option>
+                            </select>
+                            <button
+                              onClick={() => { handleAddBlacklist(newBlacklistSymbol, newBlacklistDays, 'Bloqueio Manual'); setShowAddBlacklistForm(false); }}
+                              style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: '5px', padding: '4px 8px', fontSize: '0.6rem', fontWeight: '700', cursor: 'pointer' }}
+                            >
+                              OK
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {activeBlacklist.length === 0 ? (
-                        <span style={{ fontSize: '0.6rem', color: '#64748b', fontStyle: 'italic' }}>
-                          Nenhum ativo bloqueado no momento. A IA opera livremente em todos os mercados.
+                        <span style={{ fontSize: '0.58rem', color: 'rgba(100,116,139,0.6)', fontStyle: 'italic', fontFamily: 'var(--font-mono)', padding: '4px 0' }}>
+                          Nenhum ativo bloqueado.
                         </span>
                       ) : (
-                        activeBlacklist.map((item) => {
+                        activeBlacklist.slice(0, 4).map((item) => {
                           const assetObj = (ASSETS_LIST || []).find(a => a.symbol === item.symbol);
-                          const assetLabel = assetObj ? assetObj.name : item.symbol;
-                          const remainingMs = item.expiresAt - Date.now();
-                          const remainingDays = Math.max(1, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
-
+                          const remainDays = Math.max(1, Math.ceil((item.expiresAt - Date.now()) / (1000 * 60 * 60 * 24)));
                           return (
-                            <div key={item.symbol} style={{
-                              display: 'flex',
-                              justify: 'space-between',
-                              alignItems: 'center',
-                              background: 'rgba(239, 68, 68, 0.06)',
-                              border: '1px solid rgba(239, 68, 68, 0.15)',
-                              borderRadius: '4px',
-                              padding: '4px 6px'
-                            }}>
-                              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <strong style={{ fontSize: '0.65rem', color: '#f87171' }}>
-                                  🚫 {assetLabel} <span style={{ fontSize: '0.55rem', color: '#94a3b8' }}>({item.symbol})</span>
-                                </strong>
-                                <span style={{ fontSize: '0.52rem', color: '#64748b' }}>
-                                  {item.reason || 'Stop Loss'} • Expira em {remainingDays}d
-                                </span>
+                            <div key={item.symbol} className="cmd-blacklist-item">
+                              <div>
+                                <strong style={{ color: '#f87171', display: 'block' }}>🚫 {assetObj?.name || item.symbol}</strong>
+                                <span style={{ color: '#64748b', fontSize: '0.55rem' }}>Expira em {remainDays}d</span>
                               </div>
                               <button
                                 onClick={() => handleRemoveBlacklist(item.symbol)}
-                                style={{
-                                  background: 'rgba(56, 189, 248, 0.1)',
-                                  border: '1px solid rgba(56, 189, 248, 0.25)',
-                                  color: '#38bdf8',
-                                  fontSize: '0.58rem',
-                                  fontWeight: 'bold',
-                                  cursor: 'pointer',
-                                  padding: '2px 6px',
-                                  borderRadius: '3px'
-                                }}
-                                title="Desbloquear este ativo"
+                                style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)', color: '#38bdf8', fontSize: '0.55rem', fontWeight: '700', cursor: 'pointer', padding: '2px 6px', borderRadius: '4px' }}
                               >
-                                🔓 Liberar
+                                🔓
                               </button>
                             </div>
                           );
@@ -6327,12 +6149,39 @@ export default function App() {
                       )}
                     </div>
                   </div>
-
                 </div>
               </div>
-            </main>
+
+              {/* ════════════════════════════════════════════════════
+                  ④ NEURAL TIMELINE FOOTER
+              ════════════════════════════════════════════════════ */}
+              <div className="neural-timeline">
+                <div className="timeline-track">
+                  {timelineSteps.map((step, idx) => {
+                    const isActive = idx < timelineStep;
+                    const isCurrent = idx === timelineStep;
+                    return (
+                      <React.Fragment key={idx}>
+                        <div className="timeline-step">
+                          <div className={`timeline-node${isCurrent ? ' current' : isActive ? ' active' : ''}`} />
+                          <span className={`timeline-step-label${isCurrent ? ' current' : isActive ? ' active' : ''}`}>
+                            {step.label}
+                          </span>
+                        </div>
+                        {idx < timelineSteps.length - 1 && (
+                          <div className={`timeline-connector${idx < timelineStep ? ' active' : ''}`} />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
           );
         }
+
+
 
         if (activePage === 'scanner') {
           return (
@@ -7503,6 +7352,251 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* MOBILE BOTTOM NAVIGATION TAB BAR (App Nativo iOS/Android style) */}
+      <div className="mobile-bottom-bar">
+        <button
+          className={`mobile-nav-item ${activePage === 'dashboard' ? 'active' : ''}`}
+          onClick={() => {
+            setActivePage('dashboard');
+            setIsMobileDrawerOpen(false);
+          }}
+        >
+          <Layers size={18} />
+          <span>Início</span>
+        </button>
+
+        <button
+          className={`mobile-nav-item ${activePage === 'automation' || activePage === 'scheduler' ? 'active' : ''}`}
+          onClick={() => {
+            setActivePage('automation');
+            setIsMobileDrawerOpen(false);
+          }}
+        >
+          <Zap size={18} />
+          <span>Robô</span>
+        </button>
+
+        <button
+          className={`mobile-nav-item ${activePage === 'scanner' || activePage === 'strategies' ? 'active' : ''}`}
+          onClick={() => {
+            setActivePage('scanner');
+            setIsMobileDrawerOpen(false);
+          }}
+        >
+          <Sparkles size={18} />
+          <span>Análise</span>
+        </button>
+
+        <button
+          className={`mobile-nav-item ${activePage === 'planning' || activePage === 'reports' ? 'active' : ''}`}
+          onClick={() => {
+            setActivePage('planning');
+            setIsMobileDrawerOpen(false);
+          }}
+        >
+          <Target size={18} />
+          <span>Gerenciador</span>
+        </button>
+
+        <button
+          className={`mobile-nav-item ${isMobileDrawerOpen || activePage === 'profile' ? 'active' : ''}`}
+          onClick={() => setIsMobileDrawerOpen(!isMobileDrawerOpen)}
+        >
+          <User size={18} />
+          <span>Menu</span>
+        </button>
+      </div>
+
+      {/* MOBILE SIDE DRAWER NAVIGATION OVERLAY */}
+      <div
+        className={`mobile-drawer-overlay ${isMobileDrawerOpen ? 'open' : ''}`}
+        onClick={() => setIsMobileDrawerOpen(false)}
+      >
+        <div
+          className="mobile-drawer-content"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Mobile Drawer Header / User Summary */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            paddingBottom: '1rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '50%',
+                overflow: 'hidden',
+                border: '1px solid var(--primary-light)',
+                background: 'rgba(255,255,255,0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                {profileImage ? (
+                  <img src={profileImage} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <User size={20} style={{ color: 'var(--primary-light)' }} />
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'white' }}>{welcomeName}</span>
+                <span style={{ fontSize: '0.62rem', color: isDemo ? 'var(--warning)' : 'var(--success)', fontWeight: 'bold' }}>
+                  CONTA {isDemo ? 'DEMO' : 'REAL'} • ${balance.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsMobileDrawerOpen(false)}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: 'none',
+                color: 'white',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Account Mode Toggle inside Drawer */}
+          <button
+            onClick={() => {
+              toggleAccountType();
+              setIsMobileDrawerOpen(false);
+            }}
+            disabled={switchingAccount || isRunning}
+            style={{
+              width: '100%',
+              padding: '0.65rem 1rem',
+              borderRadius: '12px',
+              background: isDemo ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+              border: isDemo ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
+              color: isDemo ? 'var(--warning)' : 'var(--success)',
+              fontWeight: 'bold',
+              fontSize: '0.78rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: isRunning ? 'not-allowed' : 'pointer'
+            }}
+          >
+            <span>Alternar para Conta {isDemo ? 'REAL' : 'DEMO'}</span>
+            <ChevronRight size={16} />
+          </button>
+
+          {/* Navigation Links Group */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.5rem' }}>
+            <span style={{ fontSize: '0.62rem', fontWeight: 'bold', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Navegação Principal
+            </span>
+
+            {[
+              { id: 'dashboard', label: 'Dashboard Principal', icon: Layers, color: '#a78bfa' },
+              { id: 'automation', label: 'Operações & Robô VPS', icon: Zap, color: '#10b981' },
+              { id: 'scanner', label: 'Scanner IA & Gráficos', icon: Sparkles, color: '#38bdf8' },
+              { id: 'strategies', label: 'Catálogo de Estratégias', icon: Brain, color: '#c084fc' },
+              { id: 'planning', label: 'Planejamento & Risco', icon: Target, color: '#f59e0b' },
+              { id: 'history', label: 'Histórico de Operações', icon: Clock, color: '#94a3b8' },
+              { id: 'reports', label: 'Relatórios Mensais', icon: Coins, color: '#34d399' },
+              { id: 'community', label: 'Comunidade & Ranking', icon: Users, color: '#f472b6' },
+              { id: 'telegram', label: 'Telegram Notificações', icon: Send, color: '#38bdf8' },
+              { id: 'training', label: 'Treinamento & Provas', icon: GraduationCap, color: '#10b981' },
+              { id: 'news', label: 'Atualizações & Novidades', icon: Newspaper, color: '#a78bfa' },
+              { id: 'downloads', label: 'Downloads & Apps', icon: Download, color: '#60a5fa' },
+              ...(isAdminLoggedIn ? [{ id: 'admin', label: 'Painel Admin ASTROBOT', icon: ShieldCheck, color: '#ef4444' }] : [])
+            ].map((item) => {
+              const Icon = item.icon;
+              const isActive = activePage === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActivePage(item.id);
+                    setIsMobileDrawerOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: '10px',
+                    background: isActive ? 'rgba(139, 92, 246, 0.18)' : 'rgba(255, 255, 255, 0.02)',
+                    border: isActive ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid transparent',
+                    color: isActive ? 'white' : 'var(--text-secondary)',
+                    fontWeight: isActive ? 'bold' : '500',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <Icon size={16} style={{ color: item.color }} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Drawer Footer Actions */}
+          <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <button
+              onClick={() => {
+                setActivePage('profile');
+                setIsMobileDrawerOpen(false);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '0.6rem 0.8rem',
+                borderRadius: '8px',
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                color: 'white',
+                fontSize: '0.78rem',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              <User size={15} /> Editar Perfil
+            </button>
+
+            <button
+              onClick={() => {
+                setIsMobileDrawerOpen(false);
+                handleDisconnect();
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '0.6rem 0.8rem',
+                borderRadius: '8px',
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#f87171',
+                fontSize: '0.78rem',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              <LogOut size={15} /> Desconectar
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
