@@ -336,6 +336,7 @@ export default function App() {
     return typeof window !== 'undefined' && window.innerWidth <= 768;
   });
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [showSessionResultsModal, setShowSessionResultsModal] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -5995,6 +5996,39 @@ export default function App() {
                     )}
                   </button>
 
+                  {/* SESSION RESULTS & ENTRIES BUTTON */}
+                  <button
+                    onClick={() => setShowSessionResultsModal(true)}
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: '10px',
+                      background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(56, 189, 248, 0.1) 100%)',
+                      border: '1px solid rgba(139, 92, 246, 0.35)',
+                      color: 'white',
+                      fontWeight: 'bold',
+                      fontSize: '0.78rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 15px rgba(139, 92, 246, 0.15)',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(56, 189, 248, 0.2) 100%)';
+                      e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.5)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(56, 189, 248, 0.1) 100%)';
+                      e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.35)';
+                    }}
+                  >
+                    <Activity size={15} style={{ color: '#a78bfa' }} />
+                    <span>Últimas Entradas & Resultados</span>
+                  </button>
+
                   {/* SIDEBAR BODY */}
                   <div className="cmd-sidebar-body">
 
@@ -7597,6 +7631,251 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* 📊 MODAL DE ÚLTIMAS ENTRADAS E RESULTADOS DA SESSÃO */}
+      {showSessionResultsModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(5, 4, 12, 0.85)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.25rem'
+        }}
+        onClick={() => setShowSessionResultsModal(false)}
+        >
+          <div style={{
+            width: '100%',
+            maxWidth: '780px',
+            maxHeight: '88vh',
+            background: 'linear-gradient(135deg, rgba(15, 12, 28, 0.98) 0%, rgba(9, 8, 16, 0.98) 100%)',
+            border: '1px solid rgba(139, 92, 246, 0.35)',
+            borderRadius: '24px',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 30px rgba(139, 92, 246, 0.15)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            animation: 'page-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+          }}
+          onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '1.25rem 1.5rem',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'rgba(255, 255, 255, 0.02)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  padding: '8px',
+                  borderRadius: '12px',
+                  background: 'rgba(139, 92, 246, 0.15)',
+                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                  color: 'var(--primary-light)',
+                  display: 'flex'
+                }}>
+                  <Activity size={18} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: 'white', margin: 0, letterSpacing: '-0.01em' }}>
+                    Resultados & Últimas Entradas
+                  </h3>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                    Resumo detalhado da sessão ativa ({isDemo ? 'Conta DEMO' : 'Conta REAL'})
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowSessionResultsModal(false)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  color: 'white',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Content Scroll Area */}
+            <div style={{ padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              
+              {/* Summary Cards Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
+                {/* Saldo Inicial */}
+                <div style={{ background: 'rgba(255, 255, 255, 0.025)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: '14px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '0.62rem', fontWeight: 'bold', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Banca Inicial</span>
+                  <strong style={{ fontSize: '1rem', color: 'white', fontFamily: 'var(--font-mono)' }}>${initialBalance.toFixed(2)}</strong>
+                </div>
+
+                {/* Saldo Atual */}
+                <div style={{ background: 'rgba(255, 255, 255, 0.025)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: '14px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '0.62rem', fontWeight: 'bold', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Banca Atual</span>
+                  <strong style={{ fontSize: '1rem', color: 'white', fontFamily: 'var(--font-mono)' }}>${balance.toFixed(2)}</strong>
+                </div>
+
+                {/* Resultado Líquido */}
+                <div style={{
+                  background: netProfit >= 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                  border: netProfit >= 0 ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)',
+                  borderRadius: '14px',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <span style={{ fontSize: '0.62rem', fontWeight: 'bold', color: netProfit >= 0 ? '#34d399' : '#f87171', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Resultado Sessão</span>
+                  <strong style={{ fontSize: '1.05rem', color: netProfit >= 0 ? '#10b981' : '#ef4444', fontFamily: 'var(--font-mono)' }}>
+                    {netProfit >= 0 ? '+' : ''}${netProfit.toFixed(2)}
+                  </strong>
+                </div>
+
+                {/* Assertividade Winrate */}
+                <div style={{ background: 'rgba(139, 92, 246, 0.08)', border: '1px solid rgba(139, 92, 246, 0.25)', borderRadius: '14px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '0.62rem', fontWeight: 'bold', color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Assertividade</span>
+                  <strong style={{ fontSize: '1rem', color: '#c084fc', fontFamily: 'var(--font-mono)' }}>
+                    {trades.length > 0 ? ((trades.filter(t => t.profit > 0).length / trades.length) * 100).toFixed(1) : '0.0'}%
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 'normal', marginLeft: '6px' }}>
+                      ({trades.filter(t => t.profit > 0).length}/{trades.length})
+                    </span>
+                  </strong>
+                </div>
+              </div>
+
+              {/* Trades Table Section */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: 'white', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                    Últimas {trades.length} Entradas da Sessão
+                  </span>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                    🟢 {trades.filter(t => t.profit > 0).length} Wins | 🔴 {trades.filter(t => t.profit <= 0).length} Losses
+                  </span>
+                </div>
+
+                {trades.length === 0 ? (
+                  <div style={{
+                    padding: '2.5rem',
+                    textAlign: 'center',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px dashed rgba(255, 255, 255, 0.1)',
+                    borderRadius: '16px',
+                    color: 'var(--text-secondary)',
+                    fontSize: '0.82rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <Activity size={24} style={{ color: 'var(--text-muted)' }} />
+                    <span>Nenhuma entrada registrada nesta sessão ainda.</span>
+                  </div>
+                ) : (
+                  <div style={{
+                    overflowX: 'auto',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderRadius: '14px',
+                    background: 'rgba(10, 8, 18, 0.6)'
+                  }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', color: 'var(--text-muted)' }}>
+                          <th style={{ padding: '10px 12px', fontWeight: '700' }}>Horário</th>
+                          <th style={{ padding: '10px 12px', fontWeight: '700' }}>Ativo</th>
+                          <th style={{ padding: '10px 12px', fontWeight: '700' }}>Contrato</th>
+                          <th style={{ padding: '10px 12px', fontWeight: '700' }}>Estratégia</th>
+                          <th style={{ padding: '10px 12px', fontWeight: '700' }}>Gale</th>
+                          <th style={{ padding: '10px 12px', fontWeight: '700' }}>Stake</th>
+                          <th style={{ padding: '10px 12px', fontWeight: '700', textAlign: 'right' }}>Resultado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...trades].reverse().slice(0, 30).map((t, index) => {
+                          const isWin = t.profit > 0;
+                          const formattedTime = t.time || (t.epoch ? new Date(t.epoch * 1000).toLocaleTimeString() : '—');
+                          return (
+                            <tr key={t.id || index} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.03)', transition: 'background 0.2s' }}>
+                              <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{formattedTime}</td>
+                              <td style={{ padding: '10px 12px', fontWeight: '600', color: 'white' }}>{t.symbol || settings.symbol}</td>
+                              <td style={{ padding: '10px 12px' }}>
+                                <span style={{
+                                  padding: '2px 6px',
+                                  borderRadius: '6px',
+                                  fontSize: '0.62rem',
+                                  fontWeight: 'bold',
+                                  background: (t.contractType === 'CALL' || t.contractType === 'HIGHER') ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                  color: (t.contractType === 'CALL' || t.contractType === 'HIGHER') ? '#34d399' : '#f87171',
+                                  border: (t.contractType === 'CALL' || t.contractType === 'HIGHER') ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)'
+                                }}>
+                                  {t.contractType || 'CALL'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{t.strategyName || t.strategy || 'Estratégia IA'}</td>
+                              <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', color: t.galeLevel > 0 ? '#f59e0b' : 'var(--text-muted)' }}>
+                                {t.galeLevel ? `Gale ${t.galeLevel}` : 'G0'}
+                              </td>
+                              <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', color: 'white' }}>${parseFloat(t.stake || 0).toFixed(2)}</td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 'bold', color: isWin ? '#10b981' : '#ef4444' }}>
+                                {isWin ? '+' : ''}${parseFloat(t.profit || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '1rem 1.5rem',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'rgba(255, 255, 255, 0.02)',
+              display: 'flex',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={() => setShowSessionResultsModal(false)}
+                style={{
+                  padding: '0.65rem 1.5rem',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  fontSize: '0.8rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)'
+                }}
+              >
+                Fechar Resumo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
