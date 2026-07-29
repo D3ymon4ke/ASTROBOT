@@ -337,6 +337,8 @@ export default function App() {
   });
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [showSessionResultsModal, setShowSessionResultsModal] = useState(false);
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -804,8 +806,6 @@ export default function App() {
   }, []);
 
   const [isInitializing, setIsInitializing] = useState(false);
-  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   // Welcome Onboarding Modal for New Users State
   const [showWelcomeModal, setShowWelcomeModal] = useState(() => {
@@ -5615,7 +5615,7 @@ export default function App() {
               <button
                 onClick={() => {
                   setIsProfileDropdownOpen(false);
-                  handleLogout();
+                  handleDisconnect();
                 }}
                 style={{
                   background: 'rgba(239, 68, 68, 0.08)',
