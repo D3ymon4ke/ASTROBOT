@@ -426,17 +426,55 @@ export class DerivAPI {
         this.onErrorReceived(data.error.message);
         this.disconnect();
       } else {
-        this.authorized = true;
         const auth = data.authorize;
-        this.log(`Autenticado com sucesso! Conta: ${auth.loginid} | Saldo: $${auth.balance}`, 'success');
+        const accountList = auth.account_list || [];
+
+        // Check if active account matches desired target mode (Demo vs Real)
+        if (!this.isDemo && (auth.is_virtual === 1 || (auth.loginid && auth.loginid.startsWith('VRTC')))) {
+          const realAcc = accountList.find(a => a.is_virtual === 0 || (a.loginid && !a.loginid.startsWith('VRTC')));
+          if (realAcc) {
+            this.log(`Alternando sessão Deriv para Conta REAL (${realAcc.loginid})...`, 'info');
+            this.ws.send(JSON.stringify({ active_account: realAcc.loginid }));
+            return;
+          }
+        } else if (this.isDemo && (auth.is_virtual === 0 || (auth.loginid && !auth.loginid.startsWith('VRTC')))) {
+          const demoAcc = accountList.find(a => a.is_virtual === 1 || (a.loginid && a.loginid.startsWith('VRTC')));
+          if (demoAcc) {
+            this.log(`Alternando sessão Deriv para Conta DEMO (${demoAcc.loginid})...`, 'info');
+            this.ws.send(JSON.stringify({ active_account: demoAcc.loginid }));
+            return;
+          }
+        }
+
+        this.authorized = true;
+        this.log(`Autenticado com sucesso! Conta: ${auth.loginid} (${this.isDemo ? 'DEMO' : 'REAL'}) | Saldo: $${auth.balance}`, 'success');
         this.onAuthSuccess({
           balance: parseFloat(auth.balance),
           email: auth.email,
           fullname: auth.fullname || auth.loginid,
-          currency: auth.currency
+          currency: auth.currency,
+          loginid: auth.loginid
         });
         
         // Start subscriptions
+        this.subscribeTicksAndCandles();
+      }
+    }
+
+    else if (msgType === 'active_account') {
+      if (data.error) {
+        this.log(`Erro ao alternar conta ativa: ${data.error.message}`, 'error');
+      } else {
+        const auth = data.active_account;
+        this.authorized = true;
+        this.log(`Sessão Deriv alternada para ${auth.loginid} (${this.isDemo ? 'REAL' : 'DEMO'})! Saldo: $${auth.balance}`, 'success');
+        this.onAuthSuccess({
+          balance: parseFloat(auth.balance),
+          email: auth.email,
+          fullname: auth.fullname || auth.loginid,
+          currency: auth.currency,
+          loginid: auth.loginid
+        });
         this.subscribeTicksAndCandles();
       }
     }

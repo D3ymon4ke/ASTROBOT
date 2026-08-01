@@ -2384,12 +2384,9 @@ export default function App() {
 
     const targetIsDemo = !isDemo;
     const modeTokenKey = targetIsDemo ? 'deriv_token_demo' : 'deriv_token_real';
-    const currentTokenKey = isDemo ? 'deriv_token_demo' : 'deriv_token_real';
-    const targetToken = localStorage.getItem(modeTokenKey);
-    const currentToken = localStorage.getItem(currentTokenKey) || localStorage.getItem('deriv_token');
+    const targetToken = localStorage.getItem(modeTokenKey) || localStorage.getItem('deriv_token');
 
-    // If target token is missing or identical to current token, open token input modal
-    if (!targetToken || targetToken === currentToken) {
+    if (!targetToken) {
       setPendingSwitchIsDemo(targetIsDemo);
       setSwitchTokenInput('');
       setSwitchTokenError('');
