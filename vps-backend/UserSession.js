@@ -1241,10 +1241,12 @@ export class UserSession {
         this.addLog({ message: `Ciclo finalizado por tempo limite de segurança de 3 horas.`, type: 'warning' });
         
         const staleId = this.activeCycleId;
+        const profit = this.balance - (this.initialBalance || this.balance);
+        const finishStatus = profit > 0 ? 'Meta Batida' : profit < 0 ? 'Stop Atingido' : 'Finalizado';
         this.stopBot();
         
-        // Override state to Finalizado so it doesn't trigger again immediately
-        this.cycles = this.cycles.map(c => c.id === staleId ? { ...c, status: 'Finalizado' } : c);
+        // Override state to Finalizado/Meta/Stop with finalProfit
+        this.cycles = this.cycles.map(c => c.id === staleId ? { ...c, status: finishStatus, finalProfit: profit } : c);
         this.activeCycleId = null;
         this.saveToFile();
         this.syncCyclesToFirestore();
@@ -1350,10 +1352,11 @@ export class UserSession {
         this.addLog({ message: `Ciclo finalizado pelo agendador para iniciar a próxima missão: ${pendingCycle.name}`, type: 'warning' });
         
         const profit = this.balance - this.initialBalance;
+        const finishStatus = profit > 0 ? 'Meta Batida' : profit < 0 ? 'Stop Atingido' : 'Finalizado';
         this.sendTelegramNotif('bot_stopped', `🛑 <b>CICLO ENCERRADO PELO AGENDADOR</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ciclo:</b> <code>${this.cycles.find(c => c.id === currentActiveId)?.name || 'N/A'}</code>\n<b>Saldo Final:</b> <code>$${this.balance}</code>\n<b>Resultado:</b> <code>$${profit.toFixed(2)}</code>`);
         
-        // Mark the previous cycle as Finalizado
-        this.cycles = this.cycles.map(c => c.id === currentActiveId ? { ...c, status: 'Finalizado' } : c);
+        // Mark the previous cycle with its status and profit
+        this.cycles = this.cycles.map(c => c.id === currentActiveId ? { ...c, status: finishStatus, finalProfit: profit } : c);
       }
       
       this.triggerCycle(pendingCycle);
@@ -2110,9 +2113,19 @@ export class UserSession {
           const val = c.finalProfit !== undefined ? ` (-$${Math.abs(parseFloat(c.finalProfit)).toFixed(2)})` : '';
           const t = c.stopTime ? ` [${c.stopTime}]` : '';
           statusBadge = `🛑 <b>Stop Loss</b>${val}${t}`;
-        } else if (c.status === 'Finalizado') {
+        } else if (['Finalizado', 'SEM OP', 'Sem Operação'].includes(c.status)) {
           concluidosCount++;
-          statusBadge = '🏁 <b>Finalizado</b>';
+          if (c.finalProfit !== undefined) {
+            if (c.finalProfit > 0) {
+              statusBadge = `🏆 <b>Meta Batida</b> (+$${parseFloat(c.finalProfit).toFixed(2)})`;
+            } else if (c.finalProfit < 0) {
+              statusBadge = `🛑 <b>Stop Loss</b> (-$${Math.abs(parseFloat(c.finalProfit)).toFixed(2)})`;
+            } else {
+              statusBadge = '⚡ <b>SEM OP</b> ($0.00)';
+            }
+          } else {
+            statusBadge = '⚡ <b>SEM OP</b>';
+          }
         } else {
           statusBadge = '⏳ <i>Aguardando</i>';
           aguardandoCount++;

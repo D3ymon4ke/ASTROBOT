@@ -799,9 +799,62 @@ export default function Scheduler({
                 const isSelected = c.id === selectedCycleId;
                 const statusInfo = getStatusDisplay(c.status);
                 const isRunning = activeCycleId === c.id;
-                const isWin = c.status === 'Meta Batida';
-                const isLoss = c.status === 'Stop Atingido';
-                const isFinished = isWin || isLoss;
+
+                const isWinStatus = c.status === 'Meta Batida';
+                const isLossStatus = c.status === 'Stop Atingido';
+                const isFinalizedStatus = c.status === 'Finalizado' || c.status === 'SEM OP' || c.status === 'Sem Operação' || c.status === 'Interrompido';
+
+                const isFinished = isWinStatus || isLossStatus || isFinalizedStatus;
+
+                let outcomeType = 'SEM_OP';
+                if (c.finalProfit !== undefined) {
+                  const p = parseFloat(c.finalProfit);
+                  if (p > 0) outcomeType = 'WIN';
+                  else if (p < 0) outcomeType = 'LOSS';
+                  else outcomeType = 'SEM_OP';
+                } else if (isWinStatus) {
+                  outcomeType = 'WIN';
+                } else if (isLossStatus) {
+                  outcomeType = 'LOSS';
+                } else {
+                  outcomeType = 'SEM_OP';
+                }
+
+                let overlayConfig = {
+                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(30, 27, 75, 0.88) 100%)',
+                  border: '1px solid rgba(129, 140, 248, 0.45)',
+                  boxShadow: '0 0 15px rgba(99, 102, 241, 0.3)',
+                  title: '⚡ SEM OP',
+                  titleColor: '#818cf8',
+                  textShadow: '0 0 10px rgba(99, 102, 241, 0.8)',
+                  valueText: '$0.00'
+                };
+
+                if (outcomeType === 'WIN') {
+                  overlayConfig = {
+                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 78, 59, 0.75) 100%)',
+                    border: '1px solid rgba(16, 185, 129, 0.5)',
+                    boxShadow: '0 0 15px rgba(16, 185, 129, 0.3)',
+                    title: '🏆 META BATIDA',
+                    titleColor: '#34d399',
+                    textShadow: '0 0 10px rgba(16, 185, 129, 0.8)',
+                    valueText: c.finalProfit !== undefined 
+                      ? `+$${parseFloat(c.finalProfit).toFixed(2)}` 
+                      : `+$${parseFloat(c.takeProfit || 0).toFixed(2)}`
+                  };
+                } else if (outcomeType === 'LOSS') {
+                  overlayConfig = {
+                    background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(127, 29, 29, 0.75) 100%)',
+                    border: '1px solid rgba(239, 68, 68, 0.5)',
+                    boxShadow: '0 0 15px rgba(239, 68, 68, 0.3)',
+                    title: '🛑 STOP LOSS ATINGIDO',
+                    titleColor: '#f87171',
+                    textShadow: '0 0 10px rgba(239, 68, 68, 0.8)',
+                    valueText: c.finalProfit !== undefined 
+                      ? `-$${Math.abs(parseFloat(c.finalProfit)).toFixed(2)}` 
+                      : `-$${parseFloat(c.stopLoss || 0).toFixed(2)}`
+                  };
+                }
 
                 return (
                   <div
@@ -870,7 +923,7 @@ export default function Scheduler({
                       </div>
                     </div>
 
-                    {/* Translucent Profit/Loss Overlay on Finished Cycle */}
+                    {/* Translucent Overlay on Finished Cycle */}
                     {isFinished && (
                       <div style={{
                         position: 'absolute',
@@ -878,9 +931,7 @@ export default function Scheduler({
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        background: isWin 
-                          ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 78, 59, 0.75) 100%)' 
-                          : 'linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(127, 29, 29, 0.75) 100%)',
+                        background: overlayConfig.background,
                         backdropFilter: 'blur(3px)',
                         display: 'flex',
                         flexDirection: 'column',
@@ -889,32 +940,30 @@ export default function Scheduler({
                         gap: '2px',
                         zIndex: 10,
                         borderRadius: '8px',
-                        border: isWin ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(239, 68, 68, 0.5)',
-                        boxShadow: isWin ? '0 0 15px rgba(16, 185, 129, 0.3)' : '0 0 15px rgba(239, 68, 68, 0.3)',
+                        border: overlayConfig.border,
+                        boxShadow: overlayConfig.shadow,
                         pointerEvents: 'auto'
                       }}>
                         <div style={{
                           fontSize: '0.62rem',
                           fontWeight: '800',
-                          color: isWin ? '#34d399' : '#f87171',
+                          color: overlayConfig.titleColor,
                           textTransform: 'uppercase',
                           letterSpacing: '0.5px',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '4px'
                         }}>
-                          {isWin ? '🏆 META BATIDA' : '🛑 STOP LOSS ATINGIDO'}
+                          {overlayConfig.title}
                         </div>
                         <div style={{
                           fontSize: '1.05rem',
                           fontWeight: '900',
                           fontFamily: 'var(--font-mono)',
                           color: 'white',
-                          textShadow: isWin ? '0 0 10px rgba(16, 185, 129, 0.8)' : '0 0 10px rgba(239, 68, 68, 0.8)'
+                          textShadow: overlayConfig.textShadow
                         }}>
-                          {c.finalProfit !== undefined 
-                            ? (c.finalProfit >= 0 ? `+$${parseFloat(c.finalProfit).toFixed(2)}` : `-$${Math.abs(parseFloat(c.finalProfit)).toFixed(2)}`)
-                            : (isWin ? `+$${c.takeProfit}` : `-$${c.stopLoss}`)}
+                          {overlayConfig.valueText}
                         </div>
                         <span style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.7)', fontWeight: '700' }}>
                           Missão Concluída
