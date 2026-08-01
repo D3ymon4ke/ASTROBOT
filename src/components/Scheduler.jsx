@@ -1721,405 +1721,429 @@ export default function Scheduler({
           animation: 'fadeIn 0.2s ease-out'
         }}>
           <div style={{
-            background: 'rgba(15, 11, 28, 0.95)',
-            border: '1px solid rgba(139, 92, 246, 0.3)',
-            boxShadow: '0 0 50px rgba(139, 92, 246, 0.2)',
-            borderRadius: '20px',
-            width: '480px',
-            maxWidth: '90%',
-            maxHeight: '92vh',
+            background: 'rgba(12, 10, 24, 0.96)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(139, 92, 246, 0.35)',
+            boxShadow: '0 0 60px rgba(139, 92, 246, 0.25)',
+            borderRadius: '24px',
+            width: '740px',
+            maxWidth: '94vw',
+            maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
             position: 'relative'
           }}>
             {/* Header */}
-            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '1.25rem 1.75rem', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)' }}>
               <div>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Sliders size={18} style={{ color: 'var(--primary-light)' }} /> Gerador de Linha do Tempo
+                <h3 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Sliders size={20} style={{ color: '#a78bfa' }} /> Gerador de Linha do Tempo
                 </h3>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                  Gere missões automaticamente em horários de maior probabilidade.
+                <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
+                  Gere missões de alta precisão automaticamente em horários com maior probabilidade estatística.
                 </span>
               </div>
               <button
                 onClick={() => setIsGeneratorOpen(false)}
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', cursor: 'pointer', borderRadius: '10px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s ease' }}
               >
                 <X size={18} />
               </button>
             </div>
 
-            {/* Content */}
-            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
-              {/* Numeric Parameters */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                <div>
-                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>VALOR DA ENTRADA</label>
-                  <input
-                    type="number"
-                    value={generatorData.stakeValue}
-                    onChange={(e) => setGeneratorData(prev => ({ ...prev, stakeValue: e.target.value }))}
-                    style={{
-                      fontSize: '0.78rem',
-                      padding: '0.55rem',
-                      background: '#09090f',
-                      color: 'white',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      width: '100%'
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>STOP WIN ($)</label>
-                  <input
-                    type="number"
-                    value={generatorData.takeProfit}
-                    onChange={(e) => setGeneratorData(prev => ({ ...prev, takeProfit: e.target.value }))}
-                    style={{
-                      fontSize: '0.78rem',
-                      padding: '0.55rem',
-                      background: '#09090f',
-                      color: 'white',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      width: '100%'
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>STOP LOSS ($)</label>
-                  <input
-                    type="number"
-                    value={generatorData.stopLoss}
-                    onChange={(e) => setGeneratorData(prev => ({ ...prev, stopLoss: e.target.value }))}
-                    style={{
-                      fontSize: '0.78rem',
-                      padding: '0.55rem',
-                      background: '#09090f',
-                      color: 'white',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      width: '100%'
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Gerenciamento e Martingale */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 1fr', gap: '10px' }}>
-                <div>
-                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>GERENCIAMENTO</label>
-                  <select
-                    value={generatorData.moneyManagement || 'martingale'}
-                    onChange={(e) => setGeneratorData(prev => ({ ...prev, moneyManagement: e.target.value }))}
-                    style={{
-                      fontSize: '0.78rem',
-                      padding: '0.55rem',
-                      background: '#09090f',
-                      color: 'white',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      width: '100%',
-                      height: '38px',
-                      outline: 'none'
-                    }}
-                  >
-                    <option value="fixed">Mão Fixa (Fixed)</option>
-                    <option value="martingale">Martingale</option>
-                    <option value="progressive_gale">Gale Progressivo</option>
-                    <option value="soros">Soros</option>
-                    <option value="iron_hands">Iron Hands</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>NÍVEIS GALE</label>
-                  <select
-                    value={generatorData.martingaleLevels ?? 2}
-                    onChange={(e) => setGeneratorData(prev => ({ ...prev, martingaleLevels: parseInt(e.target.value) }))}
-                    disabled={generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands'}
-                    style={{
-                      fontSize: '0.78rem',
-                      padding: '0.55rem',
-                      background: '#09090f',
-                      color: 'white',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      width: '100%',
-                      height: '38px',
-                      outline: 'none'
-                    }}
-                  >
-                    <option value="0">Sem Gale</option>
-                    <option value="1">1 Gale</option>
-                    <option value="2">2 Gales</option>
-                    <option value="3">3 Gales</option>
-                    <option value="4">4 Gales</option>
-                    <option value="5">5 Gales</option>
-                    <option value="6">6 Gales</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>MULTIPLICADOR</label>
-                  <input
-                    type="number"
-                    value={generatorData.martingaleMultiplier ?? 2.0}
-                    onChange={(e) => setGeneratorData(prev => ({ ...prev, martingaleMultiplier: parseFloat(e.target.value) }))}
-                    min="1.0"
-                    max="3.0"
-                    step="0.1"
-                    disabled={generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' || generatorData.martingaleLevels === 0}
-                    style={{
-                      fontSize: '0.78rem',
-                      padding: '0.55rem',
-                      background: '#09090f',
-                      color: 'white',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      width: '100%',
-                      height: '38px'
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Period Selectors */}
-              <div>
-                <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', letterSpacing: '0.5px' }}>PERÍODOS DE OPERAÇÃO</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  {[
-                    { key: 'dawn', label: 'Madrugada', desc: '00:00 às 06:00', icon: '🌙' },
-                    { key: 'morning', label: 'Manhã', desc: '06:00 às 12:00', icon: '🌅' },
-                    { key: 'afternoon', label: 'Tarde', desc: '12:00 às 18:00', icon: '🌇' },
-                    { key: 'night', label: 'Noite', desc: '18:00 às 00:00', icon: '🌌' }
-                  ].map(p => {
-                    const isSelected = generatorData.periods[p.key];
-                    return (
-                      <div
-                        key={p.key}
-                        onClick={() => setGeneratorData(prev => ({
-                          ...prev,
-                          periods: { ...prev.periods, [p.key]: !prev.periods[p.key] }
-                        }))}
-                        style={{
-                          padding: '10px 12px',
-                          background: isSelected ? 'rgba(139, 92, 246, 0.08)' : 'rgba(255, 255, 255, 0.01)',
-                          border: isSelected ? '1px solid var(--primary-light)' : '1px solid rgba(255, 255, 255, 0.05)',
-                          borderRadius: '12px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        <div style={{ fontSize: '1.2rem' }}>{p.icon}</div>
-                        <div>
-                          <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: isSelected ? 'white' : '#cbd5e1' }}>{p.label}</div>
-                          <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>{p.desc}</div>
-                        </div>
+            {/* Content Body - 2 Columns */}
+            <div style={{ padding: '1.5rem 1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                
+                {/* LEFT COLUMN: Financial & Martingale Parameters */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {/* Card 1: Metas Financeiras */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem' }}>
+                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '12px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      💰 Parâmetros Financeiros
+                    </span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>ENTRADA ($)</label>
+                        <input
+                          type="number"
+                          value={generatorData.stakeValue}
+                          onChange={(e) => setGeneratorData(prev => ({ ...prev, stakeValue: e.target.value }))}
+                          style={{
+                            fontSize: '0.82rem',
+                            padding: '0.6rem',
+                            background: '#09090f',
+                            color: 'white',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: '10px',
+                            width: '100%'
+                          }}
+                        />
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* ─── SMART HOURS FEATURE ─── */}
-              <div style={{
-                borderRadius: '14px',
-                border: generatorData.useSmartHours
-                  ? '1px solid rgba(16, 185, 129, 0.5)'
-                  : '1px solid rgba(255,255,255,0.06)',
-                background: generatorData.useSmartHours
-                  ? 'rgba(16, 185, 129, 0.05)'
-                  : 'rgba(255,255,255,0.01)',
-                overflow: 'hidden',
-                transition: 'all 0.3s ease'
-              }}>
-                {/* Toggle Header */}
-                <div style={{
-                  padding: '0.9rem 1rem',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{
-                      width: '34px', height: '34px', borderRadius: '10px',
-                      background: generatorData.useSmartHours ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.04)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '1.1rem', transition: 'all 0.3s ease'
-                    }}>🧠</div>
-                    <div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: generatorData.useSmartHours ? '#34d399' : 'white' }}>
-                        Melhores Horários Reais (G3+)
+                      <div>
+                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#34d399', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>STOP WIN ($)</label>
+                        <input
+                          type="number"
+                          value={generatorData.takeProfit}
+                          onChange={(e) => setGeneratorData(prev => ({ ...prev, takeProfit: e.target.value }))}
+                          style={{
+                            fontSize: '0.82rem',
+                            padding: '0.6rem',
+                            background: '#09090f',
+                            color: '#34d399',
+                            border: '1px solid rgba(52, 211, 153, 0.3)',
+                            borderRadius: '10px',
+                            width: '100%',
+                            fontWeight: 'bold'
+                          }}
+                        />
                       </div>
-                      <div style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', marginTop: '1px' }}>
-                        Gera missões apenas nos horários com mais acertos até G3 do seu histórico
+                      <div>
+                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#f87171', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>STOP LOSS ($)</label>
+                        <input
+                          type="number"
+                          value={generatorData.stopLoss}
+                          onChange={(e) => setGeneratorData(prev => ({ ...prev, stopLoss: e.target.value }))}
+                          style={{
+                            fontSize: '0.82rem',
+                            padding: '0.6rem',
+                            background: '#09090f',
+                            color: '#f87171',
+                            border: '1px solid rgba(248, 113, 113, 0.3)',
+                            borderRadius: '10px',
+                            width: '100%',
+                            fontWeight: 'bold'
+                          }}
+                        />
                       </div>
                     </div>
                   </div>
-                  <label className="switch">
-                    <input
-                      type="checkbox"
-                      checked={generatorData.useSmartHours}
-                      onChange={(e) => setGeneratorData(prev => ({ ...prev, useSmartHours: e.target.checked }))}
-                    />
-                    <span className="slider"></span>
-                  </label>
+
+                  {/* Card 2: Gerenciamento & Gale */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem' }}>
+                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '12px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      📊 Gerenciamento & Martingale
+                    </span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.9fr 0.9fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>MODO</label>
+                        <select
+                          value={generatorData.moneyManagement || 'martingale'}
+                          onChange={(e) => setGeneratorData(prev => ({ ...prev, moneyManagement: e.target.value }))}
+                          style={{
+                            fontSize: '0.78rem',
+                            padding: '0.55rem',
+                            background: '#09090f',
+                            color: 'white',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: '10px',
+                            width: '100%',
+                            height: '38px',
+                            outline: 'none'
+                          }}
+                        >
+                          <option value="fixed">Mão Fixa (Fixed)</option>
+                          <option value="martingale">Martingale</option>
+                          <option value="progressive_gale">Gale Progressivo</option>
+                          <option value="soros">Soros</option>
+                          <option value="iron_hands">Iron Hands</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>NÍVEIS GALE</label>
+                        <select
+                          value={generatorData.martingaleLevels ?? 2}
+                          onChange={(e) => setGeneratorData(prev => ({ ...prev, martingaleLevels: parseInt(e.target.value) }))}
+                          disabled={generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands'}
+                          style={{
+                            fontSize: '0.78rem',
+                            padding: '0.55rem',
+                            background: '#09090f',
+                            color: 'white',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: '10px',
+                            width: '100%',
+                            height: '38px',
+                            outline: 'none'
+                          }}
+                        >
+                          <option value="0">Sem Gale</option>
+                          <option value="1">1 Gale</option>
+                          <option value="2">2 Gales</option>
+                          <option value="3">3 Gales</option>
+                          <option value="4">4 Gales</option>
+                          <option value="5">5 Gales</option>
+                          <option value="6">6 Gales</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>MULTIPLICADOR</label>
+                        <input
+                          type="number"
+                          value={generatorData.martingaleMultiplier ?? 2.0}
+                          onChange={(e) => setGeneratorData(prev => ({ ...prev, martingaleMultiplier: parseFloat(e.target.value) }))}
+                          min="1.0"
+                          max="3.0"
+                          step="0.1"
+                          disabled={generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' || generatorData.martingaleLevels === 0}
+                          style={{
+                            fontSize: '0.78rem',
+                            padding: '0.55rem',
+                            background: '#09090f',
+                            color: 'white',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: '10px',
+                            width: '100%',
+                            height: '38px'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Filtros de Proteção */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '2px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      🛡️ Filtros & Proteção Avançada
+                    </span>
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                      <div>
+                        <strong style={{ color: '#34d399', display: 'block', fontSize: '0.75rem' }}>Streak Shield (Proteção de Tendência)</strong>
+                        <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Bloqueia ordens contra sequências de 4+ velas</span>
+                      </div>
+                      <label className="switch">
+                        <input 
+                          type="checkbox" 
+                          checked={generatorData.enableStreakShield ?? true} 
+                          onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStreakShield: e.target.checked }))} 
+                        />
+                        <span className="slider"></span>
+                      </label>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                      <span style={{ color: '#cbd5e1' }}>Vela Master como secundária</span>
+                      <label className="switch">
+                        <input 
+                          type="checkbox" 
+                          checked={generatorData.enableMasterCandleSecondary} 
+                          onChange={(e) => setGeneratorData(prev => ({ ...prev, enableMasterCandleSecondary: e.target.checked }))} 
+                        />
+                        <span className="slider"></span>
+                      </label>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                      <span style={{ color: '#cbd5e1' }}>Desativar estratégias lentas</span>
+                      <label className="switch">
+                        <input 
+                          type="checkbox" 
+                          checked={generatorData.disableSlowStrategies} 
+                          onChange={(e) => setGeneratorData(prev => ({ ...prev, disableSlowStrategies: e.target.checked }))} 
+                        />
+                        <span className="slider"></span>
+                      </label>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                      <span style={{ color: '#cbd5e1' }}>Desativar cruzamento de médias</span>
+                      <label className="switch">
+                        <input 
+                          type="checkbox" 
+                          checked={generatorData.disableMaCrossover} 
+                          onChange={(e) => setGeneratorData(prev => ({ ...prev, disableMaCrossover: e.target.checked }))} 
+                        />
+                        <span className="slider"></span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Smart Hours Preview - shown when toggle is ON */}
-                {generatorData.useSmartHours && (
-                  <div style={{ borderTop: '1px solid rgba(16, 185, 129, 0.15)', padding: '0.85rem 1rem' }}>
-                    {smartHours.length === 0 ? (
-                      <div style={{
-                        textAlign: 'center', padding: '1rem',
-                        color: '#94a3b8', fontSize: '0.72rem',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px'
-                      }}>
-                        <span style={{ fontSize: '1.5rem' }}>📊</span>
-                        <span>Nenhum histórico disponível ainda.</span>
-                        <span style={{ fontSize: '0.62rem', color: '#64748b' }}>
-                          Opere mais para acumular dados e o sistema detectará os melhores horários automaticamente.
-                        </span>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ fontSize: '0.6rem', fontWeight: '800', color: '#10b981', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '4px' }}>
-                          🏆 Top {smartHours.length} Horários Detectados
-                        </div>
-                        {smartHours.map((h, idx) => {
-                          const periodColor = getPeriodColor(h.hour);
-                          return (
-                            <div key={h.hour} style={{
+                {/* RIGHT COLUMN: Period Selectors & Smart Hours Engine */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {/* Period Selectors */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem' }}>
+                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '10px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      🕒 Períodos de Operação
+                    </span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      {[
+                        { key: 'dawn', label: 'Madrugada', desc: '00:00 às 06:00', icon: '🌙' },
+                        { key: 'morning', label: 'Manhã', desc: '06:00 às 12:00', icon: '🌅' },
+                        { key: 'afternoon', label: 'Tarde', desc: '12:00 às 18:00', icon: '🌇' },
+                        { key: 'night', label: 'Noite', desc: '18:00 às 00:00', icon: '🌌' }
+                      ].map(p => {
+                        const isSelected = generatorData.periods[p.key];
+                        return (
+                          <div
+                            key={p.key}
+                            onClick={() => setGeneratorData(prev => ({
+                              ...prev,
+                              periods: { ...prev.periods, [p.key]: !prev.periods[p.key] }
+                            }))}
+                            style={{
+                              padding: '10px 12px',
+                              background: isSelected ? 'rgba(139, 92, 246, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                              border: isSelected ? '1px solid #a78bfa' : '1px solid rgba(255, 255, 255, 0.06)',
+                              borderRadius: '12px',
+                              cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '8px',
-                              padding: '6px 8px',
-                              background: 'rgba(255,255,255,0.02)',
-                              borderRadius: '8px',
-                              border: `1px solid ${periodColor}22`
-                            }}>
-                              <div style={{
-                                width: '22px', height: '22px',
-                                borderRadius: '6px',
-                                background: `${periodColor}22`,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '0.6rem', fontWeight: 'bold', color: periodColor
-                              }}>
-                                #{idx + 1}
-                              </div>
-                              <div style={{ fontSize: '0.85rem' }}>{getPeriodIcon(h.hour)}</div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <span style={{ fontSize: '0.78rem', fontWeight: 'bold', fontFamily: 'var(--font-mono)', color: 'white' }}>
-                                    {String(h.hour).padStart(2, '0')}:00h
-                                  </span>
-                                  <span style={{
-                                    fontSize: '0.6rem', fontWeight: 'bold',
-                                    color: parseFloat(h.winRate) >= 70 ? '#34d399' : parseFloat(h.winRate) >= 55 ? '#f59e0b' : '#f87171',
-                                    background: parseFloat(h.winRate) >= 70 ? 'rgba(52,211,153,0.1)' : parseFloat(h.winRate) >= 55 ? 'rgba(245,158,11,0.1)' : 'rgba(248,113,113,0.1)',
-                                    padding: '1px 5px', borderRadius: '4px'
-                                  }}>
-                                    {h.winRate}%
-                                  </span>
-                                </div>
-                                <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '1px' }}>
-                                  {h.total} ops · G0:{h.g0Wins} G1:{h.g1Wins} G2:{h.g2Wins} G3:{h.g3Wins} · {h.losses} loss
-                                </div>
-                              </div>
-                              <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontSize: '0.62rem', fontWeight: 'bold', color: '#34d399' }}>
-                                  {h.wins}W
-                                </div>
-                                <div style={{ fontSize: '0.58rem', color: '#f87171' }}>
-                                  {h.losses}L
-                                </div>
-                              </div>
+                              gap: '10px',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            <div style={{ fontSize: '1.3rem' }}>{p.icon}</div>
+                            <div>
+                              <div style={{ fontSize: '0.78rem', fontWeight: 'bold', color: isSelected ? 'white' : '#cbd5e1' }}>{p.label}</div>
+                              <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>{p.desc}</div>
                             </div>
-                          );
-                        })}
-                        <div style={{ fontSize: '0.58rem', color: '#475569', marginTop: '4px', textAlign: 'center' }}>
-                          ⚡ Os períodos selecionados acima ainda filtram quais horários serão usados
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* ─── SMART HOURS FEATURE ─── */}
+                  <div style={{
+                    borderRadius: '16px',
+                    border: generatorData.useSmartHours
+                      ? '1px solid rgba(16, 185, 129, 0.5)'
+                      : '1px solid rgba(255,255,255,0.06)',
+                    background: generatorData.useSmartHours
+                      ? 'rgba(16, 185, 129, 0.06)'
+                      : 'rgba(255,255,255,0.02)',
+                    overflow: 'hidden',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    {/* Toggle Header */}
+                    <div style={{
+                      padding: '1rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '36px', height: '36px', borderRadius: '10px',
+                          background: generatorData.useSmartHours ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '1.2rem', transition: 'all 0.3s ease'
+                        }}>🧠</div>
+                        <div>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: generatorData.useSmartHours ? '#34d399' : 'white' }}>
+                            Smart Hours Engine (G3+)
+                          </div>
+                          <div style={{ fontSize: '0.62rem', color: '#94a3b8', marginTop: '1px' }}>
+                            Gera missões nos horários de maior assertividade estatística
+                          </div>
                         </div>
+                      </div>
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          checked={generatorData.useSmartHours}
+                          onChange={(e) => setGeneratorData(prev => ({ ...prev, useSmartHours: e.target.checked }))}
+                        />
+                        <span className="slider"></span>
+                      </label>
+                    </div>
+
+                    {/* Smart Hours Preview */}
+                    {generatorData.useSmartHours && (
+                      <div style={{ borderTop: '1px solid rgba(16, 185, 129, 0.15)', padding: '0.85rem 1rem' }}>
+                        {smartHours.length === 0 ? (
+                          <div style={{
+                            textAlign: 'center', padding: '1rem',
+                            color: '#94a3b8', fontSize: '0.72rem',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px'
+                          }}>
+                            <span style={{ fontSize: '1.5rem' }}>📊</span>
+                            <span>Nenhum histórico disponível no momento.</span>
+                            <span style={{ fontSize: '0.62rem', color: '#64748b' }}>
+                              O sistema detectará os melhores horários à medida que operar.
+                            </span>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div style={{ fontSize: '0.6rem', fontWeight: '800', color: '#10b981', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '4px' }}>
+                              🏆 Top {smartHours.length} Horários Detectados
+                            </div>
+                            {smartHours.map((h, idx) => {
+                              const periodColor = getPeriodColor(h.hour);
+                              return (
+                                <div key={h.hour} style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  padding: '6px 8px',
+                                  background: 'rgba(255,255,255,0.02)',
+                                  borderRadius: '8px',
+                                  border: `1px solid ${periodColor}22`
+                                }}>
+                                  <div style={{
+                                    width: '22px', height: '22px',
+                                    borderRadius: '6px',
+                                    background: `${periodColor}22`,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '0.6rem', fontWeight: 'bold', color: periodColor
+                                  }}>
+                                    #{idx + 1}
+                                  </div>
+                                  <div style={{ fontSize: '0.85rem' }}>{getPeriodIcon(h.hour)}</div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <span style={{ fontSize: '0.78rem', fontWeight: 'bold', fontFamily: 'var(--font-mono)', color: 'white' }}>
+                                        {String(h.hour).padStart(2, '0')}:00h
+                                      </span>
+                                      <span style={{
+                                        fontSize: '0.6rem', fontWeight: 'bold',
+                                        color: parseFloat(h.winRate) >= 70 ? '#34d399' : parseFloat(h.winRate) >= 55 ? '#f59e0b' : '#f87171',
+                                        background: parseFloat(h.winRate) >= 70 ? 'rgba(52,211,153,0.1)' : parseFloat(h.winRate) >= 55 ? 'rgba(245,158,11,0.1)' : 'rgba(248,113,113,0.1)',
+                                        padding: '1px 5px', borderRadius: '4px'
+                                      }}>
+                                        {h.winRate}%
+                                      </span>
+                                    </div>
+                                    <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '1px' }}>
+                                      {h.total} ops · G0:{h.g0Wins} G1:{h.g1Wins} G2:{h.g2Wins} G3:{h.g3Wins} · {h.losses} loss
+                                    </div>
+                                  </div>
+                                  <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '0.62rem', fontWeight: 'bold', color: '#34d399' }}>
+                                      {h.wins}W
+                                    </div>
+                                    <div style={{ fontSize: '0.58rem', color: '#f87171' }}>
+                                      {h.losses}L
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-
-              {/* Additional Options */}
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <label style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--text-muted)', display: 'block', marginBottom: '2px', letterSpacing: '0.5px' }}>CONFIGURAÇÕES ADICIONAIS</label>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                  <div>
-                    <strong style={{ color: '#34d399', display: 'block' }}>🛡️ Trava de Sequência (Streak Shield)</strong>
-                    <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Bloqueia ordens contra tendências de 4+ velas seguidas</span>
-                  </div>
-                  <label className="switch">
-                    <input 
-                      type="checkbox" 
-                      checked={generatorData.enableStreakShield ?? true} 
-                      onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStreakShield: e.target.checked }))} 
-                    />
-                    <span className="slider"></span>
-                  </label>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                  <span style={{ color: '#cbd5e1' }}>Vela Master como secundária</span>
-                  <label className="switch">
-                    <input 
-                      type="checkbox" 
-                      checked={generatorData.enableMasterCandleSecondary} 
-                      onChange={(e) => setGeneratorData(prev => ({ ...prev, enableMasterCandleSecondary: e.target.checked }))} 
-                    />
-                    <span className="slider"></span>
-                  </label>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                  <span style={{ color: '#cbd5e1' }}>Desativar estratégias lentas</span>
-                  <label className="switch">
-                    <input 
-                      type="checkbox" 
-                      checked={generatorData.disableSlowStrategies} 
-                      onChange={(e) => setGeneratorData(prev => ({ ...prev, disableSlowStrategies: e.target.checked }))} 
-                    />
-                    <span className="slider"></span>
-                  </label>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                  <span style={{ color: '#cbd5e1' }}>Desativar cruzamento de médias</span>
-                  <label className="switch">
-                    <input 
-                      type="checkbox" 
-                      checked={generatorData.disableMaCrossover} 
-                      onChange={(e) => setGeneratorData(prev => ({ ...prev, disableMaCrossover: e.target.checked }))} 
-                    />
-                    <span className="slider"></span>
-                  </label>
-                </div>
               </div>
             </div>
 
-            {/* Actions */}
-            <div style={{ padding: '1rem 1.5rem', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            {/* Footer Actions */}
+            <div style={{ padding: '1rem 1.75rem', background: 'rgba(0,0,0,0.3)', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
               <button
                 onClick={() => setIsGeneratorOpen(false)}
                 style={{
-                  padding: '0.55rem 1rem',
-                  fontSize: '0.75rem',
+                  padding: '0.6rem 1.2rem',
+                  fontSize: '0.78rem',
                   fontWeight: '800',
-                  color: 'white',
+                  color: '#cbd5e1',
                   background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: '10px',
                   cursor: 'pointer'
                 }}
               >
@@ -2129,15 +2153,15 @@ export default function Scheduler({
                 onClick={handleGenerateTimeline}
                 className="action-button-glow"
                 style={{
-                  padding: '0.55rem 1.25rem',
-                  fontSize: '0.75rem',
+                  padding: '0.6rem 1.5rem',
+                  fontSize: '0.78rem',
                   fontWeight: '800',
                   color: 'white',
                   background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
                   border: 'none',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   cursor: 'pointer',
-                  boxShadow: '0 0 12px rgba(139, 92, 246, 0.3)'
+                  boxShadow: '0 0 16px rgba(139, 92, 246, 0.4)'
                 }}
               >
                 Gerar Linha do Tempo 🚀

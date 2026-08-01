@@ -5868,31 +5868,75 @@ export default function App() {
                   )}
 
                   {/* Active trade countdown strip */}
-                  {activeTradeCountdown && activeTradeCountdown.remaining > 0 && (
-                    <div className="cmd-trade-strip" style={{ marginBottom: '10px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{
-                          color: activeTradeCountdown.contractType === 'CALL' ? '#10b981' : '#ef4444',
-                          fontWeight: '800',
-                          fontSize: '0.75rem'
-                        }}>
-                          {activeTradeCountdown.contractType === 'CALL' ? '▲' : '▼'} {activeTradeCountdown.contractType}
-                        </span>
-                        <span style={{ color: '#64748b' }}>{activeTradeCountdown.symbol}</span>
-                        <strong style={{ fontFamily: 'var(--font-mono)', color: '#e2e8f0' }}>${activeTradeCountdown.stake?.toFixed(2)}</strong>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div className="cmd-progress-bar" style={{ width: '100px' }}>
-                          <div className="cmd-progress-fill" style={{
-                            width: `${Math.min(100, Math.max(0, (activeTradeCountdown.remaining / activeTradeCountdown.totalDuration) * 100))}%`
-                          }} />
+                  {activeTradeCountdown && activeTradeCountdown.remaining > 0 && (() => {
+                    const profit = activeTradeCountdown.profit || 0;
+                    const isWin = profit > 0 || (
+                      activeTradeCountdown.entrySpot && activeTradeCountdown.currentSpot ? (
+                        activeTradeCountdown.contractType === 'CALL'
+                          ? activeTradeCountdown.currentSpot >= activeTradeCountdown.entrySpot
+                          : activeTradeCountdown.currentSpot <= activeTradeCountdown.entrySpot
+                      ) : true
+                    );
+                    const statusBg = isWin
+                      ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(6, 182, 212, 0.10) 100%)'
+                      : 'linear-gradient(135deg, rgba(239, 68, 68, 0.16) 0%, rgba(225, 29, 72, 0.10) 100%)';
+                    const statusBorder = isWin ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+                    const statusColor = isWin ? '#34d399' : '#f87171';
+                    const progressGradient = isWin
+                      ? 'linear-gradient(90deg, #10b981, #34d399)'
+                      : 'linear-gradient(90deg, #ef4444, #f43f5e)';
+
+                    return (
+                      <div className="cmd-trade-strip" style={{
+                        marginBottom: '10px',
+                        background: statusBg,
+                        border: `1px solid ${statusBorder}`,
+                        borderRadius: '10px',
+                        padding: '8px 14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        boxShadow: isWin ? '0 0 15px rgba(16, 185, 129, 0.15)' : '0 0 15px rgba(239, 68, 68, 0.15)',
+                        transition: 'all 0.3s ease'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{
+                            background: isWin ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+                            color: statusColor,
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            fontWeight: '800',
+                            fontSize: '0.72rem',
+                            letterSpacing: '0.5px'
+                          }}>
+                            {isWin ? '🟢 WIN POTENCIAL' : '🔴 LOSS POTENCIAL'}
+                          </span>
+                          <span style={{
+                            color: activeTradeCountdown.contractType === 'CALL' ? '#10b981' : '#ef4444',
+                            fontWeight: '800',
+                            fontSize: '0.75rem'
+                          }}>
+                            {activeTradeCountdown.contractType === 'CALL' ? '▲' : '▼'} {activeTradeCountdown.contractType}
+                          </span>
+                          <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: '600' }}>{activeTradeCountdown.symbol}</span>
+                          <strong style={{ fontFamily: 'var(--font-mono)', color: '#ffffff', fontSize: '0.85rem' }}>${activeTradeCountdown.stake?.toFixed(2)}</strong>
                         </div>
-                        <strong style={{ fontFamily: 'var(--font-mono)', color: '#a78bfa', fontSize: '0.8rem' }}>
-                          {activeTradeCountdown.remaining}s
-                        </strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div className="cmd-progress-bar" style={{ width: '110px', height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div className="cmd-progress-fill" style={{
+                              width: `${Math.min(100, Math.max(0, (activeTradeCountdown.remaining / activeTradeCountdown.totalDuration) * 100))}%`,
+                              background: progressGradient,
+                              height: '100%',
+                              transition: 'width 1s linear'
+                            }} />
+                          </div>
+                          <strong style={{ fontFamily: 'var(--font-mono)', color: statusColor, fontSize: '0.85rem' }}>
+                            {activeTradeCountdown.remaining}s
+                          </strong>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* ══ THE CHART — Protagonist ══ */}
                   <div className="chart-container-premium">
