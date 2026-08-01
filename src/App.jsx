@@ -764,6 +764,10 @@ export default function App() {
   const [overlayActive, setOverlayActive] = useState(false);
   const [bottomTab, setBottomTab] = useState('logs');
   const [activePage, setActivePage] = useState('dashboard');
+  const [showTokenSwitchModal, setShowTokenSwitchModal] = useState(false);
+  const [pendingSwitchIsDemo, setPendingSwitchIsDemo] = useState(false);
+  const [switchTokenInput, setSwitchTokenInput] = useState('');
+  const [switchTokenError, setSwitchTokenError] = useState('');
   const [showBetaFeatures, setShowBetaFeatures] = useState(
     localStorage.getItem('astrobot_beta_features') === 'true'
   );
@@ -2325,6 +2329,48 @@ export default function App() {
 
   const [switchingAccount, setSwitchingAccount] = useState(false);
 
+  const executeAccountSwitch = async (targetIsDemo, targetToken) => {
+    setSwitchingAccount(true);
+    addLog({
+      message: `[Conexão] Alternando para conta ${targetIsDemo ? 'DEMO' : 'REAL'}...`,
+      type: 'warning',
+      time: new Date().toLocaleTimeString()
+    });
+
+    try {
+      setAccountInfo(null);
+      setCandles([]);
+      stateRef.current.hasReceivedSync = false;
+      const savedAppId = localStorage.getItem('deriv_app_id') || '33KjYszMx4FNIHT6qAJ7V';
+
+      setIsDemo(targetIsDemo);
+      localStorage.setItem('deriv_is_demo', targetIsDemo ? 'true' : 'false');
+      localStorage.setItem(targetIsDemo ? 'deriv_token_demo' : 'deriv_token_real', targetToken);
+      localStorage.setItem('deriv_token', targetToken);
+      setDbTrades(loadDbTrades(targetIsDemo));
+      setToken(targetToken);
+
+      syncSettingsToDb({
+        settings: {
+          ...settings,
+          isDemo: targetIsDemo,
+          token: targetToken,
+          appId: savedAppId
+        }
+      });
+
+      await derivAPI.connect(targetToken, savedAppId, targetIsDemo);
+    } catch (err) {
+      addLog({
+        message: `[Conexão] Erro ao alternar conta: ${err.message || String(err)}`,
+        type: 'error',
+        time: new Date().toLocaleTimeString()
+      });
+    } finally {
+      setSwitchingAccount(false);
+    }
+  };
+
   const toggleAccountType = async () => {
     if (switchingAccount) return;
     if (isRunning) {
@@ -2336,60 +2382,22 @@ export default function App() {
       return;
     }
 
-    setSwitchingAccount(true);
-    const newIsDemo = !isDemo;
-    
-    addLog({
-      message: `[Conexão] Alternando para conta ${newIsDemo ? 'DEMO' : 'REAL'}...`,
-      type: 'warning',
-      time: new Date().toLocaleTimeString()
-    });
+    const targetIsDemo = !isDemo;
+    const modeTokenKey = targetIsDemo ? 'deriv_token_demo' : 'deriv_token_real';
+    const currentTokenKey = isDemo ? 'deriv_token_demo' : 'deriv_token_real';
+    const targetToken = localStorage.getItem(modeTokenKey);
+    const currentToken = localStorage.getItem(currentTokenKey) || localStorage.getItem('deriv_token');
 
-    try {
-      setAccountInfo(null);
-      setCandles([]);
-      stateRef.current.hasReceivedSync = false;
-
-      // Smart token resolution: mode-specific token first, fallback to general deriv_token
-      const modeTokenKey = newIsDemo ? 'deriv_token_demo' : 'deriv_token_real';
-      const targetToken = localStorage.getItem(modeTokenKey) || localStorage.getItem('deriv_token') || '';
-      const savedAppId = localStorage.getItem('deriv_app_id') || '33KjYszMx4FNIHT6qAJ7V';
-
-      setIsDemo(newIsDemo);
-      localStorage.setItem('deriv_is_demo', newIsDemo ? 'true' : 'false');
-      setDbTrades(loadDbTrades(newIsDemo));
-
-      if (targetToken) {
-        setToken(targetToken);
-      }
-
-      syncSettingsToDb({
-        settings: {
-          ...settings,
-          isDemo: newIsDemo,
-          token: targetToken,
-          appId: savedAppId
-        }
-      });
-
-      if (targetToken) {
-        await derivAPI.connect(targetToken, savedAppId, newIsDemo);
-      } else {
-        addLog({
-          message: '[Conexão] Token não encontrado para reconexão automática. Por favor insira seu token.',
-          type: 'error',
-          time: new Date().toLocaleTimeString()
-        });
-      }
-    } catch (err) {
-      addLog({
-        message: `[Conexão] Erro ao alternar conta: ${err.message || String(err)}`,
-        type: 'error',
-        time: new Date().toLocaleTimeString()
-      });
-    } finally {
-      setSwitchingAccount(false);
+    // If target token is missing or identical to current token, open token input modal
+    if (!targetToken || targetToken === currentToken) {
+      setPendingSwitchIsDemo(targetIsDemo);
+      setSwitchTokenInput('');
+      setSwitchTokenError('');
+      setShowTokenSwitchModal(true);
+      return;
     }
+
+    await executeAccountSwitch(targetIsDemo, targetToken);
   };
 
   // Start / Stop Bot handlers — delegate entirely to VPS
@@ -7915,6 +7923,151 @@ export default function App() {
                 }}
               >
                 Fechar Resumo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TOKEN SWITCH MODAL (DEMO / REAL) ─── */}
+      {showTokenSwitchModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(5, 3, 12, 0.85)',
+          backdropFilter: 'blur(12px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            background: 'rgba(15, 11, 28, 0.96)',
+            border: pendingSwitchIsDemo ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid rgba(16, 185, 129, 0.4)',
+            boxShadow: pendingSwitchIsDemo ? '0 0 50px rgba(245, 158, 11, 0.2)' : '0 0 50px rgba(16, 185, 129, 0.2)',
+            borderRadius: '24px',
+            width: '460px',
+            maxWidth: '92vw',
+            padding: '1.75rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+            position: 'relative'
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '42px', height: '42px', borderRadius: '12px',
+                  background: pendingSwitchIsDemo ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                  border: pendingSwitchIsDemo ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '1.2rem'
+                }}>
+                  {pendingSwitchIsDemo ? '🧪' : '💳'}
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>
+                    Conectar à Conta {pendingSwitchIsDemo ? 'DEMO' : 'REAL'}
+                  </h3>
+                  <span style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
+                    Insira o seu Token API da Deriv para a conta {pendingSwitchIsDemo ? 'Virtual (Demo)' : 'Real'}.
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTokenSwitchModal(false)}
+                style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: '#94a3b8', cursor: 'pointer', borderRadius: '8px', padding: '6px' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Input Form */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', letterSpacing: '0.5px' }}>
+                DERIV API TOKEN ({pendingSwitchIsDemo ? 'DEMO' : 'REAL'})
+              </label>
+              <input
+                type="password"
+                placeholder={`Cole o seu Token da conta ${pendingSwitchIsDemo ? 'Demo' : 'Real'}`}
+                value={switchTokenInput}
+                onChange={(e) => setSwitchTokenInput(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem 1rem',
+                  fontSize: '0.85rem',
+                  background: '#09090f',
+                  border: switchTokenError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: '12px',
+                  color: 'white',
+                  outline: 'none',
+                  fontFamily: 'var(--font-mono)'
+                }}
+              />
+              {switchTokenError && (
+                <span style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: '600' }}>
+                  {switchTokenError}
+                </span>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                <a
+                  href="https://app.deriv.com/account/api-token"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontSize: '0.68rem', color: '#60a5fa', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <span>Obter Token na Deriv (API Token) ↗</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '0.5rem' }}>
+              <button
+                onClick={() => setShowTokenSwitchModal(false)}
+                style={{
+                  padding: '0.6rem 1.2rem',
+                  borderRadius: '10px',
+                  background: 'transparent',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  color: '#cbd5e1',
+                  fontSize: '0.78rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (!switchTokenInput.trim()) {
+                    setSwitchTokenError('Por favor, cole o seu token da Deriv para conectar.');
+                    return;
+                  }
+                  setShowTokenSwitchModal(false);
+                  executeAccountSwitch(pendingSwitchIsDemo, switchTokenInput.trim());
+                }}
+                style={{
+                  padding: '0.6rem 1.4rem',
+                  borderRadius: '10px',
+                  background: pendingSwitchIsDemo
+                    ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                    : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: 'white',
+                  fontSize: '0.78rem',
+                  fontWeight: 'bold',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: pendingSwitchIsDemo ? '0 0 15px rgba(245, 158, 11, 0.3)' : '0 0 15px rgba(16, 185, 129, 0.3)'
+                }}
+              >
+                Salvar & Conectar {pendingSwitchIsDemo ? 'DEMO' : 'REAL'} 🚀
               </button>
             </div>
           </div>
