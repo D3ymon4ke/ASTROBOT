@@ -2123,6 +2123,9 @@ export default function App() {
       if (sync.settings) {
         setSettings(prev => ({ ...prev, ...sync.settings }));
         stateRef.current.settings = { ...stateRef.current.settings, ...sync.settings };
+        if (sync.settings.isDemo !== undefined) {
+          setIsDemo(sync.settings.isDemo);
+        }
       }
     };
 

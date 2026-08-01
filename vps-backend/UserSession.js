@@ -363,7 +363,11 @@ export class UserSession {
 
     this.derivAPI.onAuthSuccess = (info) => {
       this.balance = info.balance;
-      console.log(`Deriv Account Authorized for ${this.email}. Balance: ${info.balance}`);
+      const isRealAccount = info.loginid ? (!info.loginid.startsWith('VRTC')) : (this._activeMode === 'real');
+      this._activeMode = isRealAccount ? 'real' : 'demo';
+      this.settings.isDemo = !isRealAccount;
+      console.log(`Deriv Account Authorized for ${this.email}. Account: ${info.loginid || 'default'} (${this._activeMode.toUpperCase()}) | Balance: ${info.balance}`);
+      this.saveToFile();
       this.syncToClients();
       
       // If we had an active contract running before crash, re-subscribe to it
@@ -757,6 +761,7 @@ export class UserSession {
 
     if (newSettings.isDemo !== undefined) {
       const targetMode = newSettings.isDemo ? 'demo' : 'real';
+      this.settings.isDemo = newSettings.isDemo;
       if (targetMode !== this._activeMode) {
         if (this.isRunning) {
           this.addLog({
