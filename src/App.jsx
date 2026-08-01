@@ -641,6 +641,7 @@ export default function App() {
   const [adminXpGrantEmail, setAdminXpGrantEmail] = useState('');
   const [adminXpAmount, setAdminXpAmount] = useState(500);
   const [activeTradeCountdown, setActiveTradeCountdown] = useState(null);
+  const [accountInfo, setAccountInfo] = useState(null);
   const [dbTrades, setDbTrades] = useState([]);
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeName, setWelcomeName] = useState('');
@@ -2131,6 +2132,7 @@ export default function App() {
 
     derivAPI.onAuthSuccess = (info) => {
       setAuthError('');
+      setAccountInfo(info);
       
       const customName = localStorage.getItem('astrobot_custom_name') || welcomeName;
       const customImage = localStorage.getItem('astrobot_profile_image') || profileImage;
