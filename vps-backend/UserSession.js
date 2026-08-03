@@ -703,10 +703,24 @@ export class UserSession {
     
     this.sendTelegramNotif('bot_stopped', `🛑 <b>ASTROBOT PARADO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Saldo Final:</b> <code>$${this.balance}</code>\n<b>Resultado:</b> <code>$${(this.balance - this.initialBalance).toFixed(2)}</code>`);
 
-    // Reset active cycle so scheduler can trigger again on next scheduled time
+    // Record active cycle result before stopping
     if (this.activeCycleId) {
       const cycleId = this.activeCycleId;
-      this.cycles = this.cycles.map(c => c.id === cycleId ? { ...c, status: 'Aguardando' } : c);
+      let profit = this.balance - (this.initialBalance || this.balance);
+
+      // Fallback: If balance calculation is 0, check trades executed during this session
+      if (Math.abs(profit) < 0.01 && this.sessionStartTime) {
+        const cycleTrades = (this.trades || []).filter(t => {
+          const tradeTime = t.epoch ? t.epoch * 1000 : (t.timestamp || 0);
+          return tradeTime >= this.sessionStartTime;
+        });
+        if (cycleTrades.length > 0) {
+          profit = cycleTrades.reduce((acc, t) => acc + (parseFloat(t.profit) || 0), 0);
+        }
+      }
+
+      const finishStatus = profit > 0 ? 'Meta Batida' : profit < 0 ? 'Stop Atingido' : 'Finalizado';
+      this.cycles = this.cycles.map(c => c.id === cycleId ? { ...c, status: finishStatus, finalProfit: profit } : c);
       this.activeCycleId = null;
       this.syncCyclesToFirestore();
     }
@@ -1140,9 +1154,67 @@ export class UserSession {
     return summaryStats;
   }
 
+  reconcileCycleProfits() {
+    if (!this.cycles || this.cycles.length === 0 || !this.trades || this.trades.length === 0) return;
+
+    const now = new Date();
+    const sortedCycles = [...this.cycles].sort((a, b) => {
+      const [ah, am] = (a.startTime || '00:00').split(':').map(Number);
+      const [bh, bm] = (b.startTime || '00:00').split(':').map(Number);
+      return (ah * 60 + am) - (bh * 60 + bm);
+    });
+
+    let modified = false;
+
+    sortedCycles.forEach((c, index) => {
+      if (c.status === 'Ativo' || c.status === 'Aguardando') return;
+      if (c.finalProfit !== undefined && parseFloat(c.finalProfit) !== 0) return;
+
+      const [sh, sm] = (c.startTime || '00:00').split(':').map(Number);
+      const cycleStartTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm, 0).getTime();
+
+      let cycleEndTime;
+      if (index < sortedCycles.length - 1) {
+        const nextC = sortedCycles[index + 1];
+        const [nh, nm] = (nextC.startTime || '23:59').split(':').map(Number);
+        cycleEndTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), nh, nm, 0).getTime();
+      } else {
+        cycleEndTime = cycleStartTime + (3 * 3600 * 1000);
+      }
+
+      const matchingTrades = this.trades.filter(t => {
+        const tTime = t.epoch ? (t.epoch * 1000) : (t.timestamp || 0);
+        return tTime >= cycleStartTime && tTime <= cycleEndTime;
+      });
+
+      if (matchingTrades.length > 0) {
+        const calcProfit = matchingTrades.reduce((acc, t) => acc + (parseFloat(t.profit) || 0), 0);
+        if (calcProfit !== 0) {
+          const newStatus = calcProfit > 0 ? 'Meta Batida' : 'Stop Atingido';
+          this.cycles = this.cycles.map(orig => orig.id === c.id ? {
+            ...orig,
+            finalProfit: calcProfit,
+            status: newStatus
+          } : orig);
+          modified = true;
+          console.log(`[Reconcile] Cycle "${c.name}" retroactively matched $${calcProfit.toFixed(2)} (${matchingTrades.length} trades).`);
+        }
+      }
+    });
+
+    if (modified) {
+      this.saveToFile();
+      this.syncCyclesToFirestore();
+      this.syncToClients();
+    }
+  }
+
   // This should be run on a 5-second tick from the global server loop
   schedulerTick(now = new Date()) {
     if (!this.schedulerState) return;
+
+    // Retroactive reconciliation of cycle profits for past cycles
+    this.reconcileCycleProfits();
 
     // 0. Watchdog for Stuck Trade Contracts or Pending Registrations
     if (this.activeContractId) {
@@ -1351,7 +1423,17 @@ export class UserSession {
         this.isRunning = false;
         this.addLog({ message: `Ciclo finalizado pelo agendador para iniciar a próxima missão: ${pendingCycle.name}`, type: 'warning' });
         
-        const profit = this.balance - this.initialBalance;
+        let profit = this.balance - (this.initialBalance || this.balance);
+        if (Math.abs(profit) < 0.01 && this.sessionStartTime) {
+          const cycleTrades = (this.trades || []).filter(t => {
+            const tradeTime = t.epoch ? t.epoch * 1000 : (t.timestamp || 0);
+            return tradeTime >= this.sessionStartTime;
+          });
+          if (cycleTrades.length > 0) {
+            profit = cycleTrades.reduce((acc, t) => acc + (parseFloat(t.profit) || 0), 0);
+          }
+        }
+
         const finishStatus = profit > 0 ? 'Meta Batida' : profit < 0 ? 'Stop Atingido' : 'Finalizado';
         this.sendTelegramNotif('bot_stopped', `🛑 <b>CICLO ENCERRADO PELO AGENDADOR</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ciclo:</b> <code>${this.cycles.find(c => c.id === currentActiveId)?.name || 'N/A'}</code>\n<b>Saldo Final:</b> <code>$${this.balance}</code>\n<b>Resultado:</b> <code>$${profit.toFixed(2)}</code>`);
         

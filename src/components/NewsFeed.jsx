@@ -30,8 +30,8 @@ function renderContent(text) {
 }
 
 function PostCard({ post, isRead, onMarkRead }) {
-  if (!post) return null;
   const [expanded, setExpanded] = useState(false);
+  if (!post) return null;
   const tagInfo = TAG_INFO[post.tag] || TAG_INFO.novidade;
   const getSafeDate = (timeVal) => {
     if (!timeVal) return new Date();

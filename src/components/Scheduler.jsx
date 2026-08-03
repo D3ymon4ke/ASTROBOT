@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Clock, Plus, Trash2, Play, AlertCircle, CheckCircle, RefreshCw, Calendar, Power, 
   X, ChevronRight, ChevronLeft, User, Cpu, ShieldCheck, Layers, TrendingUp, 
   TrendingDown, Info, Sliders, Eye, Settings, Activity, FileText, Check, Search, Award 
 } from 'lucide-react';
+import Switch from './Switch';
 
 export default function Scheduler({
   schedulerState,
@@ -65,26 +66,78 @@ export default function Scheduler({
     color: '#8b5cf6' // Purple
   };
 
-  // Sanitize cycles array on the fly to support old items from localStorage
-  const sanitizedCycles = (cycles || []).map(c => ({
-    ...defaultCycle,
-    ...c,
-    selectedStrategy: c.selectedStrategy || c.strategy || defaultCycle.selectedStrategy,
-    days: c.days || defaultCycle.days,
-    icon: c.icon || defaultCycle.icon,
-    color: c.color || defaultCycle.color,
-    minProbability: c.minProbability || defaultCycle.minProbability,
-    minWinRate: c.minWinRate || defaultCycle.minWinRate,
-    backupSymbol: c.backupSymbol || defaultCycle.backupSymbol,
-    lockProfitSecured: c.lockProfitSecured ?? defaultCycle.lockProfitSecured,
-    moneyManagement: c.moneyManagement || (parseInt(c.martingaleLevels) > 0 ? 'martingale' : 'fixed'),
-    martingaleLevels: c.martingaleLevels ?? defaultCycle.martingaleLevels,
-    martingaleMultiplier: c.martingaleMultiplier ?? defaultCycle.martingaleMultiplier,
-    enableStreakShield: c.enableStreakShield ?? defaultCycle.enableStreakShield,
-    maxStreakCandles: c.maxStreakCandles ?? defaultCycle.maxStreakCandles,
-    streakShieldAction: c.streakShieldAction || defaultCycle.streakShieldAction,
-    timezone: c.timezone || defaultCycle.timezone
-  }));
+  // Sanitize cycles array on the fly to support old items from localStorage and match historical trades
+  const sanitizedCycles = useMemo(() => {
+    const rawList = (cycles || []).map(c => ({
+      ...defaultCycle,
+      ...c,
+      selectedStrategy: c.selectedStrategy || c.strategy || defaultCycle.selectedStrategy,
+      days: c.days || defaultCycle.days,
+      icon: c.icon || defaultCycle.icon,
+      color: c.color || defaultCycle.color,
+      minProbability: c.minProbability || defaultCycle.minProbability,
+      minWinRate: c.minWinRate || defaultCycle.minWinRate,
+      backupSymbol: c.backupSymbol || defaultCycle.backupSymbol,
+      lockProfitSecured: c.lockProfitSecured ?? defaultCycle.lockProfitSecured,
+      moneyManagement: c.moneyManagement || (parseInt(c.martingaleLevels) > 0 ? 'martingale' : 'fixed'),
+      martingaleLevels: c.martingaleLevels ?? defaultCycle.martingaleLevels,
+      martingaleMultiplier: c.martingaleMultiplier ?? defaultCycle.martingaleMultiplier,
+      enableStreakShield: c.enableStreakShield ?? defaultCycle.enableStreakShield,
+      maxStreakCandles: c.maxStreakCandles ?? defaultCycle.maxStreakCandles,
+      streakShieldAction: c.streakShieldAction || defaultCycle.streakShieldAction,
+      timezone: c.timezone || defaultCycle.timezone
+    }));
+
+    if (!historicalTrades || historicalTrades.length === 0) return rawList;
+
+    const sortedCycles = [...rawList].sort((a, b) => {
+      const [ah, am] = (a.startTime || '00:00').split(':').map(Number);
+      const [bh, bm] = (b.startTime || '00:00').split(':').map(Number);
+      return (ah * 60 + am) - (bh * 60 + bm);
+    });
+
+    return rawList.map(c => {
+      let finalProfit = c.finalProfit;
+      let status = c.status;
+
+      if ((finalProfit === undefined || parseFloat(finalProfit) === 0) && historicalTrades.length > 0) {
+        const now = new Date();
+        const [sh, sm] = (c.startTime || '00:00').split(':').map(Number);
+        const cycleStartTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm, 0).getTime();
+
+        const index = sortedCycles.findIndex(sc => sc.id === c.id);
+        let cycleEndTime;
+        if (index >= 0 && index < sortedCycles.length - 1) {
+          const nextC = sortedCycles[index + 1];
+          const [nh, nm] = (nextC.startTime || '23:59').split(':').map(Number);
+          cycleEndTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), nh, nm, 0).getTime();
+        } else {
+          cycleEndTime = cycleStartTime + (3 * 3600 * 1000);
+        }
+
+        const matchingTrades = historicalTrades.filter(t => {
+          const tTime = t.epoch ? (t.epoch * 1000) : (t.timestamp || 0);
+          return tTime >= cycleStartTime && tTime <= cycleEndTime;
+        });
+
+        if (matchingTrades.length > 0) {
+          const calcProfit = matchingTrades.reduce((acc, t) => acc + (parseFloat(t.profit) || 0), 0);
+          if (calcProfit !== 0) {
+            finalProfit = calcProfit;
+            if (status !== 'Ativo' && status !== 'Aguardando') {
+              status = calcProfit > 0 ? 'Meta Batida' : 'Stop Atingido';
+            }
+          }
+        }
+      }
+
+      return {
+        ...c,
+        status,
+        finalProfit
+      };
+    });
+  }, [cycles, historicalTrades]);
 
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
   const [selectedCycleId, setSelectedCycleId] = useState(null);
@@ -264,7 +317,24 @@ export default function Scheduler({
       }
     }
     
-    const targetAssets = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_50', '1HZ50V'];
+    // Filter target assets against active blacklisted assets in localStorage
+    let activeBlacklistedSymbols = [];
+    try {
+      const savedBlacklist = localStorage.getItem('astrobot_blacklisted_assets');
+      if (savedBlacklist) {
+        const parsed = JSON.parse(savedBlacklist);
+        const now = Date.now();
+        activeBlacklistedSymbols = parsed
+          .filter(item => item.expiresAt > now)
+          .map(item => item.symbol);
+      }
+    } catch (e) {
+      console.error('Error reading blacklisted assets in Scheduler generator:', e);
+    }
+
+    const defaultTargetAssets = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_50', '1HZ50V'];
+    const filteredTargetAssets = defaultTargetAssets.filter(s => !activeBlacklistedSymbols.includes(s));
+    const targetAssets = filteredTargetAssets.length > 0 ? filteredTargetAssets : ['R_100'];
     let generatedCount = 0;
     
     Object.keys(periodConfigs).forEach(periodKey => {
@@ -712,14 +782,7 @@ export default function Scheduler({
                 {schedulerState ? 'ONLINE & MONITORANDO' : 'DESACTIVADO'}
               </strong>
             </div>
-            <label className="switch" style={{ width: '42px', height: '22px' }}>
-              <input
-                type="checkbox"
-                checked={schedulerState}
-                onChange={(e) => onToggleScheduler(e.target.checked)}
-              />
-              <span className="slider" style={{ borderRadius: '22px' }}></span>
-            </label>
+            <Switch showStatus={false} checked={schedulerState} onChange={(e) => onToggleScheduler(e.target.checked)} />
           </div>
 
           {/* Scheduling Generator Button */}
@@ -800,14 +863,14 @@ export default function Scheduler({
                 const statusInfo = getStatusDisplay(c.status);
                 const isRunning = activeCycleId === c.id;
 
-                const isWinStatus = c.status === 'Meta Batida';
-                const isLossStatus = c.status === 'Stop Atingido';
+                const isWinStatus = c.status === 'Meta Batida' || (c.finalProfit !== undefined && parseFloat(c.finalProfit) > 0);
+                const isLossStatus = c.status === 'Stop Atingido' || (c.finalProfit !== undefined && parseFloat(c.finalProfit) < 0);
                 const isFinalizedStatus = c.status === 'Finalizado' || c.status === 'SEM OP' || c.status === 'Sem Operação' || c.status === 'Interrompido';
 
-                const isFinished = isWinStatus || isLossStatus || isFinalizedStatus;
+                const isFinished = (isWinStatus || isLossStatus || isFinalizedStatus || (c.finalProfit !== undefined && parseFloat(c.finalProfit) !== 0)) && !isRunning;
 
                 let outcomeType = 'SEM_OP';
-                if (c.finalProfit !== undefined) {
+                if (c.finalProfit !== undefined && parseFloat(c.finalProfit) !== 0) {
                   const p = parseFloat(c.finalProfit);
                   if (p > 0) outcomeType = 'WIN';
                   else if (p < 0) outcomeType = 'LOSS';
@@ -831,11 +894,14 @@ export default function Scheduler({
                 };
 
                 if (outcomeType === 'WIN') {
+                  const hasTarget = c.takeProfit && parseFloat(c.takeProfit) > 0;
+                  const isPartial = c.finalProfit !== undefined && hasTarget && parseFloat(c.finalProfit) < (parseFloat(c.takeProfit) - 0.05);
+
                   overlayConfig = {
                     background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 78, 59, 0.75) 100%)',
                     border: '1px solid rgba(16, 185, 129, 0.5)',
                     boxShadow: '0 0 15px rgba(16, 185, 129, 0.3)',
-                    title: '🏆 META BATIDA',
+                    title: isPartial ? '🏆 LUCRO ALCANÇADO' : '🏆 META BATIDA',
                     titleColor: '#34d399',
                     textShadow: '0 0 10px rgba(16, 185, 129, 0.8)',
                     valueText: c.finalProfit !== undefined 
@@ -843,11 +909,14 @@ export default function Scheduler({
                       : `+$${parseFloat(c.takeProfit || 0).toFixed(2)}`
                   };
                 } else if (outcomeType === 'LOSS') {
+                  const hasStop = c.stopLoss && parseFloat(c.stopLoss) > 0;
+                  const isPartialLoss = c.finalProfit !== undefined && hasStop && Math.abs(parseFloat(c.finalProfit)) < (parseFloat(c.stopLoss) - 0.05);
+
                   overlayConfig = {
                     background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(127, 29, 29, 0.75) 100%)',
                     border: '1px solid rgba(239, 68, 68, 0.5)',
                     boxShadow: '0 0 15px rgba(239, 68, 68, 0.3)',
-                    title: '🛑 STOP LOSS ATINGIDO',
+                    title: isPartialLoss ? '🛑 ENCERRADO COM PERDA' : '🛑 STOP LOSS ATINGIDO',
                     titleColor: '#f87171',
                     textShadow: '0 0 10px rgba(239, 68, 68, 0.8)',
                     valueText: c.finalProfit !== undefined 
@@ -1065,20 +1134,7 @@ export default function Scheduler({
                     <span style={{ fontSize: '0.72rem', color: selectedCycle.active ? '#10b981' : 'var(--text-muted)' }}>
                       {selectedCycle.active ? 'Ativo' : 'Desativado'}
                     </span>
-                    <label className="switch" style={{ width: '36px', height: '18px' }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedCycle.active}
-                        onChange={() => {
-                          if (activeCycleId === selectedCycle.id) {
-                            onStopBot();
-                          } else {
-                            handleToggleCycleActive(selectedCycle.id, selectedCycle.active);
-                          }
-                        }}
-                      />
-                      <span className="slider" style={{ borderRadius: '18px' }}></span>
-                    </label>
+                    <Switch showStatus={false} scale={0.75} checked={selectedCycle.active} onChange={() => { if (activeCycleId === selectedCycle.id) { onStopBot(); } else { handleToggleCycleActive(selectedCycle.id, selectedCycle.active); } }} />
                   </div>
                 </div>
               </div>
@@ -1537,14 +1593,7 @@ export default function Scheduler({
               {/* Reset Enabled Switch */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Reset Automático:</span>
-                <label className="switch" style={{ width: '34px', height: '18px' }}>
-                  <input
-                    type="checkbox"
-                    checked={!!autoReset.enabled}
-                    onChange={(e) => handleUpdateAutoReset({ enabled: e.target.checked })}
-                  />
-                  <span className="slider" style={{ borderRadius: '18px' }}></span>
-                </label>
+                <Switch showStatus={false} scale={0.75} checked={!!autoReset.enabled} onChange={(e) => handleUpdateAutoReset({ enabled: e.target.checked })} />
               </div>
 
               {/* Reset Time Input */}
@@ -1569,27 +1618,13 @@ export default function Scheduler({
               {/* Auto Renew Switch */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Renovação Automática:</span>
-                <label className="switch" style={{ width: '34px', height: '18px' }}>
-                  <input
-                    type="checkbox"
-                    checked={!!autoReset.autoRenew}
-                    onChange={(e) => handleUpdateAutoReset({ autoRenew: e.target.checked })}
-                  />
-                  <span className="slider" style={{ borderRadius: '18px' }}></span>
-                </label>
+                <Switch showStatus={false} scale={0.75} checked={!!autoReset.autoRenew} onChange={(e) => handleUpdateAutoReset({ autoRenew: e.target.checked })} />
               </div>
 
               {/* Telegram Notify Switch */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Relatório no Telegram:</span>
-                <label className="switch" style={{ width: '34px', height: '18px' }}>
-                  <input
-                    type="checkbox"
-                    checked={!!autoReset.telegramNotify}
-                    onChange={(e) => handleUpdateAutoReset({ telegramNotify: e.target.checked })}
-                  />
-                  <span className="slider" style={{ borderRadius: '18px' }}></span>
-                </label>
+                <Switch showStatus={false} scale={0.75} checked={!!autoReset.telegramNotify} onChange={(e) => handleUpdateAutoReset({ telegramNotify: e.target.checked })} />
               </div>
             </div>
 
@@ -1962,50 +1997,22 @@ export default function Scheduler({
                         <strong style={{ color: '#34d399', display: 'block', fontSize: '0.75rem' }}>Streak Shield (Proteção de Tendência)</strong>
                         <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Bloqueia ordens contra sequências de 4+ velas</span>
                       </div>
-                      <label className="switch">
-                        <input 
-                          type="checkbox" 
-                          checked={generatorData.enableStreakShield ?? true} 
-                          onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStreakShield: e.target.checked }))} 
-                        />
-                        <span className="slider"></span>
-                      </label>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableStreakShield ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStreakShield: e.target.checked }))} />
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
                       <span style={{ color: '#cbd5e1' }}>Vela Master como secundária</span>
-                      <label className="switch">
-                        <input 
-                          type="checkbox" 
-                          checked={generatorData.enableMasterCandleSecondary} 
-                          onChange={(e) => setGeneratorData(prev => ({ ...prev, enableMasterCandleSecondary: e.target.checked }))} 
-                        />
-                        <span className="slider"></span>
-                      </label>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableMasterCandleSecondary} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableMasterCandleSecondary: e.target.checked }))} />
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
                       <span style={{ color: '#cbd5e1' }}>Desativar estratégias lentas</span>
-                      <label className="switch">
-                        <input 
-                          type="checkbox" 
-                          checked={generatorData.disableSlowStrategies} 
-                          onChange={(e) => setGeneratorData(prev => ({ ...prev, disableSlowStrategies: e.target.checked }))} 
-                        />
-                        <span className="slider"></span>
-                      </label>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.disableSlowStrategies} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableSlowStrategies: e.target.checked }))} />
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
                       <span style={{ color: '#cbd5e1' }}>Desativar cruzamento de médias</span>
-                      <label className="switch">
-                        <input 
-                          type="checkbox" 
-                          checked={generatorData.disableMaCrossover} 
-                          onChange={(e) => setGeneratorData(prev => ({ ...prev, disableMaCrossover: e.target.checked }))} 
-                        />
-                        <span className="slider"></span>
-                      </label>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.disableMaCrossover} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableMaCrossover: e.target.checked }))} />
                     </div>
                   </div>
                 </div>
@@ -2673,14 +2680,7 @@ export default function Scheduler({
                           <strong style={{ fontSize: '0.75rem', color: '#34d399', display: 'block' }}>🛡️ Trava de Sequência (Streak Shield)</strong>
                           <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Bloqueia ordens contra tendências de 4+ velas seguidas</span>
                         </div>
-                        <label className="switch" style={{ width: '34px', height: '18px' }}>
-                          <input
-                            type="checkbox"
-                            checked={wizardData.enableStreakShield ?? true}
-                            onChange={(e) => setWizardData({ ...wizardData, enableStreakShield: e.target.checked })}
-                          />
-                          <span className="slider" style={{ borderRadius: '18px' }}></span>
-                        </label>
+                        <Switch showStatus={false} scale={0.75} checked={wizardData.enableStreakShield ?? true} onChange={(e) => setWizardData({ ...wizardData, enableStreakShield: e.target.checked })} />
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
@@ -2688,14 +2688,7 @@ export default function Scheduler({
                           <strong style={{ fontSize: '0.75rem', color: 'white', display: 'block' }}>Vela Mestra Secundária</strong>
                           <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Filtra/opera rompimentos baseados em máximas/mínimas</span>
                         </div>
-                        <label className="switch" style={{ width: '34px', height: '18px' }}>
-                          <input
-                            type="checkbox"
-                            checked={wizardData.enableMasterCandleSecondary}
-                            onChange={(e) => setWizardData({ ...wizardData, enableMasterCandleSecondary: e.target.checked })}
-                          />
-                          <span className="slider" style={{ borderRadius: '18px' }}></span>
-                        </label>
+                        <Switch showStatus={false} scale={0.75} checked={wizardData.enableMasterCandleSecondary} onChange={(e) => setWizardData({ ...wizardData, enableMasterCandleSecondary: e.target.checked })} />
                       </div>
                       
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
@@ -2703,14 +2696,7 @@ export default function Scheduler({
                           <strong style={{ fontSize: '0.75rem', color: 'white', display: 'block' }}>Excluir Estratégias Lentas</strong>
                           <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Pula Pullback e Reversão no piloto automático</span>
                         </div>
-                        <label className="switch" style={{ width: '34px', height: '18px' }}>
-                          <input
-                            type="checkbox"
-                            checked={wizardData.disableSlowStrategies}
-                            onChange={(e) => setWizardData({ ...wizardData, disableSlowStrategies: e.target.checked })}
-                          />
-                          <span className="slider" style={{ borderRadius: '18px' }}></span>
-                        </label>
+                        <Switch showStatus={false} scale={0.75} checked={wizardData.disableSlowStrategies} onChange={(e) => setWizardData({ ...wizardData, disableSlowStrategies: e.target.checked })} />
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
@@ -2718,14 +2704,7 @@ export default function Scheduler({
                           <strong style={{ fontSize: '0.75rem', color: 'white', display: 'block' }}>Excluir Cruzamento de Médias</strong>
                           <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Pula Cruzamento de Médias no piloto automático</span>
                         </div>
-                        <label className="switch" style={{ width: '34px', height: '18px' }}>
-                          <input
-                            type="checkbox"
-                            checked={wizardData.disableMaCrossover}
-                            onChange={(e) => setWizardData({ ...wizardData, disableMaCrossover: e.target.checked })}
-                          />
-                          <span className="slider" style={{ borderRadius: '18px' }}></span>
-                        </label>
+                        <Switch showStatus={false} scale={0.75} checked={wizardData.disableMaCrossover} onChange={(e) => setWizardData({ ...wizardData, disableMaCrossover: e.target.checked })} />
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
@@ -2733,14 +2712,7 @@ export default function Scheduler({
                           <strong style={{ fontSize: '0.75rem', color: 'white', display: 'block' }}>Travar Lucros e Garantir Meta (`Lock Profit`)</strong>
                           <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Encerra o ciclo imediatamente ao bater o Take Profit</span>
                         </div>
-                        <label className="switch" style={{ width: '34px', height: '18px' }}>
-                          <input
-                            type="checkbox"
-                            checked={wizardData.lockProfitSecured ?? true}
-                            onChange={(e) => setWizardData({ ...wizardData, lockProfitSecured: e.target.checked })}
-                          />
-                          <span className="slider" style={{ borderRadius: '18px' }}></span>
-                        </label>
+                        <Switch showStatus={false} scale={0.75} checked={wizardData.lockProfitSecured ?? true} onChange={(e) => setWizardData({ ...wizardData, lockProfitSecured: e.target.checked })} />
                       </div>
                     </div>
                   </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Settings as SettingsIcon, Play, Square, AlertCircle, ChevronLeft, ChevronRight, HelpCircle, Globe, Cpu, Coins, ShieldCheck, Zap, Activity, Save, Volume2, ShieldAlert, Users } from 'lucide-react';
 import { playWinSound, playLossSound, playClickSound } from '../utils/sound';
+import Switch from './Switch';
 
 export default function Settings({
   settings,
@@ -340,10 +341,7 @@ export default function Settings({
                   <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>PILOTO AUTOMÁTICO</label>
                   <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Chaveia estratégias pela maior winrate</span>
                 </div>
-                <label className="switch">
-                  <input type="checkbox" name="autoPilot" checked={settings.autoPilot} onChange={handleInputChange} disabled={isRunning} />
-                  <span className="slider"></span>
-                </label>
+                <Switch name="autoPilot" checked={settings.autoPilot} onChange={handleInputChange} disabled={isRunning} />
               </div>
 
               {settings.autoPilot && (
@@ -352,10 +350,7 @@ export default function Settings({
                     <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'white' }}>EXCLUIR PULLBACK/REVERSÃO</label>
                     <span style={{ fontSize: '0.58rem', color: '#94A3B8', display: 'block' }}>Ignora análises lentas de suporte/resistência</span>
                   </div>
-                  <label className="switch">
-                    <input type="checkbox" name="disableSlowStrategies" checked={settings.disableSlowStrategies || false} onChange={handleInputChange} disabled={isRunning} />
-                    <span className="slider"></span>
-                  </label>
+                  <Switch name="disableSlowStrategies" checked={settings.disableSlowStrategies || false} onChange={handleInputChange} disabled={isRunning} />
                 </div>
               )}
 
@@ -616,10 +611,7 @@ export default function Settings({
                   <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>AGENDADOR DE CICLOS</label>
                   <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Liga/Desliga robô em horários programados</span>
                 </div>
-                <label className="switch">
-                  <input type="checkbox" checked={schedulerState} onChange={(e) => onToggleScheduler(e.target.checked)} />
-                  <span className="slider"></span>
-                </label>
+                <Switch checked={schedulerState} onChange={(e) => onToggleScheduler(e.target.checked)} />
               </div>
               <div style={{ padding: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)', borderRadius: '6px', fontSize: '0.68rem', color: '#94A3B8', lineHeight: '1.4' }}>
                 ⚠️ Programe e adicione os múltiplos horários na aba <strong>Agendador & Ciclos (Automação)</strong> localizada no rodapé central.
@@ -657,10 +649,7 @@ export default function Settings({
                   <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>TRAVA DE SEQUÊNCIA (STREAK SHIELD)</label>
                   <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Bloqueia ordens contra tendências de 4+ velas da mesma cor</span>
                 </div>
-                <label className="switch" style={{ flexShrink: 0 }}>
-                  <input type="checkbox" name="enableStreakShield" checked={settings.enableStreakShield ?? true} onChange={handleInputChange} disabled={isRunning} />
-                  <span className="slider"></span>
-                </label>
+                <Switch name="enableStreakShield" checked={settings.enableStreakShield ?? true} onChange={handleInputChange} disabled={isRunning} style={{ flexShrink: 0 }} />
               </div>
 
               {(settings.enableStreakShield ?? true) && (
@@ -699,10 +688,7 @@ export default function Settings({
                   <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>VELA MESTRA SECUNDÁRIA</label>
                   <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Opera rompimentos de vela mestra de forma secundária</span>
                 </div>
-                <label className="switch" style={{ flexShrink: 0 }}>
-                  <input type="checkbox" name="enableMasterCandleSecondary" checked={settings.enableMasterCandleSecondary || false} onChange={handleInputChange} disabled={isRunning} />
-                  <span className="slider"></span>
-                </label>
+                <Switch name="enableMasterCandleSecondary" checked={settings.enableMasterCandleSecondary || false} onChange={handleInputChange} disabled={isRunning} style={{ flexShrink: 0 }} />
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.4rem 0.6rem', background: 'rgba(56, 189, 248, 0.06)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '6px', fontSize: '0.68rem', color: '#38bdf8' }}>
@@ -742,10 +728,7 @@ export default function Settings({
                   <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>ACTIVAR RECALL ENGINE</label>
                   <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Aciona a Shadow Account em momentos de perda</span>
                 </div>
-                <label className="switch">
-                  <input type="checkbox" name="recallEnabled" checked={settings.recallEnabled || false} onChange={handleInputChange} disabled={isRunning} />
-                  <span className="slider"></span>
-                </label>
+                <Switch name="recallEnabled" checked={settings.recallEnabled || false} onChange={handleInputChange} disabled={isRunning} />
               </div>
 
               {settings.recallEnabled && (
@@ -865,15 +848,12 @@ export default function Settings({
                   <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>ALERTAS SONOROS</label>
                   <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Habilitar avisos sonoros de WIN e LOSS</span>
                 </div>
-                <label className="switch" style={{ flexShrink: 0 }}>
-                  <input 
-                    type="checkbox" 
-                    name="soundEnabled" 
-                    checked={settings.soundEnabled !== false} 
-                    onChange={handleInputChange} 
-                  />
-                  <span className="slider"></span>
-                </label>
+                <Switch 
+                  name="soundEnabled" 
+                  checked={settings.soundEnabled !== false} 
+                  onChange={handleInputChange} 
+                  style={{ flexShrink: 0 }}
+                />
               </div>
 
               {settings.soundEnabled !== false && (
@@ -972,14 +952,11 @@ export default function Settings({
                   <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>MÓDULOS BETA</label>
                   <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Habilitar Feed da Comunidade e Rankings Sociais</span>
                 </div>
-                <label className="switch" style={{ flexShrink: 0 }}>
-                  <input 
-                    type="checkbox" 
-                    checked={showBetaFeatures} 
-                    onChange={handleToggleBeta} 
-                  />
-                  <span className="slider"></span>
-                </label>
+                <Switch 
+                  checked={showBetaFeatures} 
+                  onChange={handleToggleBeta} 
+                  style={{ flexShrink: 0 }}
+                />
               </div>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.4rem 0.6rem', background: 'rgba(168, 85, 247, 0.06)', border: '1px solid rgba(168, 85, 247, 0.2)', borderRadius: '6px', fontSize: '0.68rem', color: '#c084fc' }}>

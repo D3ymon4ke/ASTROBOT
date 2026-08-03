@@ -16,6 +16,7 @@ import DownloadsEditor from './components/DownloadsEditor';
 import DownloadsFeed from './components/DownloadsFeed';
 import Reports from './components/Reports';
 import NeuralLoader from './components/NeuralLoader';
+import EvilEye from './components/EvilEye';
 import StrategiesCatalog from './components/StrategiesCatalog';
 import Planning from './components/Planning';
 import Strands from './components/Strands';
@@ -773,6 +774,8 @@ export default function App() {
   const [showBetaFeatures, setShowBetaFeatures] = useState(
     localStorage.getItem('astrobot_beta_features') === 'true'
   );
+  const [recentTradeResult, setRecentTradeResult] = useState(null);
+  const recentTradeTimerRef = useRef(null);
 
   useEffect(() => {
     const handleBetaChanged = () => {
@@ -2061,6 +2064,13 @@ export default function App() {
 
       if (!isFirstSync && sync.trades && sync.trades.length > stateRef.current.trades.length) {
         const lastTrade = sync.trades[sync.trades.length - 1];
+        const isWinResult = lastTrade.result === 'WIN' || (lastTrade.profit !== undefined && lastTrade.profit > 0);
+        setRecentTradeResult(isWinResult ? 'WIN' : 'LOSS');
+        if (recentTradeTimerRef.current) clearTimeout(recentTradeTimerRef.current);
+        recentTradeTimerRef.current = setTimeout(() => {
+          setRecentTradeResult(null);
+        }, 12000);
+
         if (stateRef.current.settings.soundEnabled !== false) {
           if (lastTrade.result === 'WIN') {
             playWinSound();
@@ -5744,24 +5754,72 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* RIGHT: Neural pulse zone */}
-                <div className="hero-neural-zone">
-                  <div className={`hero-energy-bars${!isRunning ? ' idle' : ''}`}>
-                    {Array.from({ length: 8 }).map((_, i) => (
-                      <div key={i} className="hero-energy-bar" />
-                    ))}
-                  </div>
-                  <span style={{
-                    fontSize: '0.46rem',
-                    fontWeight: '700',
-                    letterSpacing: '1.5px',
-                    textTransform: 'uppercase',
-                    color: isRunning ? 'rgba(167,139,250,0.6)' : 'rgba(100,116,139,0.4)',
-                    fontFamily: 'var(--font-mono)'
-                  }}>
-                    {isRunning ? 'NEURAL ATIVO' : 'NEURAL OCIOSO'}
-                  </span>
-                </div>
+                {/* RIGHT: Neural pulse zone with WebGL EvilEye component */}
+                {(() => {
+                  const neuralStatus = (() => {
+                    if (activeTradeCountdown && activeTradeCountdown.remaining > 0) {
+                      const profit = activeTradeCountdown.profit || 0;
+                      const isWin = profit > 0 || (
+                        activeTradeCountdown.entrySpot && activeTradeCountdown.currentSpot ? (
+                          activeTradeCountdown.contractType === 'CALL'
+                            ? activeTradeCountdown.currentSpot >= activeTradeCountdown.entrySpot
+                            : activeTradeCountdown.currentSpot <= activeTradeCountdown.entrySpot
+                        ) : true
+                      );
+                      return isWin ? 'win' : 'loss';
+                    }
+                    if (recentTradeResult) {
+                      return recentTradeResult.toLowerCase();
+                    }
+                    if (isRunning) {
+                      return 'active';
+                    }
+                    return 'idle';
+                  })();
+
+                  const eyeColor = neuralStatus === 'win' 
+                    ? '#059669' 
+                    : neuralStatus === 'loss' 
+                    ? '#EF4444' 
+                    : isRunning 
+                    ? '#36F9C7' 
+                    : '#334155';
+
+                  const intensity = neuralStatus === 'win' ? 1.35 : neuralStatus === 'loss' ? 1.5 : isRunning ? 1.4 : 0.4;
+                  const flameSpeed = neuralStatus === 'win' || neuralStatus === 'loss' ? 1.4 : isRunning ? 1.0 : 0.15;
+                  const glowIntensity = neuralStatus === 'win' ? 0.38 : neuralStatus === 'loss' ? 0.45 : isRunning ? 0.4 : 0.15;
+                  const eyelidOpen = isRunning || neuralStatus === 'win' || neuralStatus === 'loss' ? 1.0 : 0.0;
+
+                  return (
+                    <div className="hero-neural-zone" style={{ overflow: 'hidden', padding: '4px 0' }}>
+                      <div style={{ width: '100%', flex: 1, minHeight: '85px', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <EvilEye
+                          eyeColor={eyeColor}
+                          intensity={intensity}
+                          pupilSize={0.58}
+                          irisWidth={0.28}
+                          glowIntensity={glowIntensity}
+                          scale={1.35}
+                          flameSpeed={flameSpeed}
+                          eyelidOpen={eyelidOpen}
+                          backgroundColor="transparent"
+                        />
+                      </div>
+                      <span style={{
+                        fontSize: '0.48rem',
+                        fontWeight: '800',
+                        letterSpacing: '1.2px',
+                        textTransform: 'uppercase',
+                        color: neuralStatus === 'win' ? '#059669' : neuralStatus === 'loss' ? '#ef4444' : isRunning ? 'rgba(54,249,199,0.9)' : 'rgba(100,116,139,0.5)',
+                        fontFamily: 'var(--font-mono)',
+                        marginTop: '2px',
+                        transition: 'color 0.4s ease'
+                      }}>
+                        {neuralStatus === 'win' ? 'NEURAL WIN 🟢' : neuralStatus === 'loss' ? 'NEURAL LOSS 🔴' : isRunning ? 'NEURAL ATIVO' : 'NEURAL OCIOSO'}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 {/* RECALL ENGINE HUD BAR */}
                 {settings.recallEnabled && (

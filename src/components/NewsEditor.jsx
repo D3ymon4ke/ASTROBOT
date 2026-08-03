@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Image, Tag, Pin, Send, AlertCircle, CheckCircle, X, FileText } from 'lucide-react';
+import Switch from './Switch';
 
 const TAG_OPTIONS = [
   { value: 'patch', label: '🔧 Patch Notes', color: '#8b5cf6' },
@@ -162,10 +163,7 @@ export default function NewsEditor({ posts = [], onPostsChange, isAdmin }) {
               </select>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '1.2rem' }}>
-              <label className="switch" style={{ width: '34px', height: '18px' }}>
-                <input type="checkbox" checked={pinned} onChange={e => setPinned(e.target.checked)} />
-                <span className="slider" style={{ borderRadius: '18px' }}></span>
-              </label>
+              <Switch showStatus={false} scale={0.75} checked={pinned} onChange={e => setPinned(e.target.checked)} />
               <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <Pin size={12} /> Fixar
               </span>

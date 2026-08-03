@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Send, AlertCircle, CheckCircle, Monitor, FileText, Globe, ToggleLeft, ToggleRight } from 'lucide-react';
+import Switch from './Switch';
 
 export default function DownloadsEditor({ downloads = [], onDownloadsChange, isAdmin }) {
   const [version, setVersion] = useState('');
@@ -144,10 +145,7 @@ export default function DownloadsEditor({ downloads = [], onDownloadsChange, isA
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '1.2rem' }}>
-              <label className="switch" style={{ width: '34px', height: '18px' }}>
-                <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} />
-                <span className="slider" style={{ borderRadius: '18px' }}></span>
-              </label>
+              <Switch showStatus={false} scale={0.75} checked={active} onChange={e => setActive(e.target.checked)} />
               <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Ativo</span>
             </div>
           </div>

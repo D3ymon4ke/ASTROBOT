@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Send, CheckCircle, AlertCircle, HelpCircle, Save, Bell, Shield, TrendingUp, Info } from 'lucide-react';
 import { sendTelegramMessage } from '../utils/telegram';
 import { derivAPI } from '../deriv/DerivAPI';
+import Switch from './Switch';
 
 export default function TelegramConfig({
   settings,
@@ -270,10 +271,7 @@ export default function TelegramConfig({
           }}>
             {status.label}
           </span>
-          <label className="switch">
-            <input type="checkbox" checked={config.enabled} onChange={handleToggleActive} />
-            <span className="slider"></span>
-          </label>
+          <Switch checked={config.enabled} onChange={handleToggleActive} />
         </div>
       </div>
 
@@ -566,10 +564,7 @@ export default function TelegramConfig({
                 ].map(item => (
                   <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
                     <span style={{ color: '#cbd5e1' }}>{item.label}</span>
-                    <label className="switch scale-switch">
-                      <input type="checkbox" checked={config.notifications[item.key]} onChange={() => handleNotificationToggle(item.key)} />
-                      <span className="slider"></span>
-                    </label>
+                    <Switch showStatus={false} scale={0.85} checked={config.notifications[item.key]} onChange={() => handleNotificationToggle(item.key)} />
                   </div>
                 ))}
               </div>
@@ -589,10 +584,7 @@ export default function TelegramConfig({
                 ].map(item => (
                   <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
                     <span style={{ color: '#cbd5e1' }}>{item.label}</span>
-                    <label className="switch scale-switch">
-                      <input type="checkbox" checked={config.notifications[item.key]} onChange={() => handleNotificationToggle(item.key)} />
-                      <span className="slider"></span>
-                    </label>
+                    <Switch showStatus={false} scale={0.85} checked={config.notifications[item.key]} onChange={() => handleNotificationToggle(item.key)} />
                   </div>
                 ))}
               </div>
@@ -610,10 +602,7 @@ export default function TelegramConfig({
                 ].map(item => (
                   <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
                     <span style={{ color: '#cbd5e1' }}>{item.label}</span>
-                    <label className="switch scale-switch">
-                      <input type="checkbox" checked={config.notifications[item.key]} onChange={() => handleNotificationToggle(item.key)} />
-                      <span className="slider"></span>
-                    </label>
+                    <Switch showStatus={false} scale={0.85} checked={config.notifications[item.key]} onChange={() => handleNotificationToggle(item.key)} />
                   </div>
                 ))}
               </div>
@@ -631,10 +620,7 @@ export default function TelegramConfig({
                 ].map(item => (
                   <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
                     <span style={{ color: '#cbd5e1' }}>{item.label}</span>
-                    <label className="switch scale-switch">
-                      <input type="checkbox" checked={config.notifications[item.key]} onChange={() => handleNotificationToggle(item.key)} />
-                      <span className="slider"></span>
-                    </label>
+                    <Switch showStatus={false} scale={0.85} checked={config.notifications[item.key]} onChange={() => handleNotificationToggle(item.key)} />
                   </div>
                 ))}
               </div>
