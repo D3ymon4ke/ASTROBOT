@@ -1896,13 +1896,14 @@ export class UserSession {
       // Telegram win/loss notifications
       if (isWin) {
         const sessionProfit = newBal - this.initialBalance;
-        const goalPct = this.settings.takeProfit > 0 ? (sessionProfit / this.settings.takeProfit) * 100 : 0;
+        const goalPct = this.settings.takeProfit > 0 ? Math.max(0, (sessionProfit / this.settings.takeProfit) * 100) : 0;
         this.sendTelegramNotif('win', formatWinMessage(profit, newBal, goalPct));
       } else {
         const nextGale = this.galeLevel + 1;
-        const maxGale = parseInt(this.settings.martingaleMaxLevels || '2');
-        const hasGale = nextGale <= maxGale && (this.settings.moneyManagement === 'martingale' || this.settings.moneyManagement === 'progressive_gale');
-        const nextStakeEst = hasGale ? parseFloat(this.settings.stakeValue) * Math.pow(parseFloat(this.settings.martingaleMultiplier || '2.2'), nextGale) : 0;
+        const allowGale = this.settings.moneyManagement === 'sorosgale' ? (this.settings.sorosgaleAllowGale !== false) : true;
+        const maxGale = parseInt(this.settings.moneyManagement === 'sorosgale' ? (this.settings.sorosgaleMaxGale || '2') : (this.settings.martingaleMaxLevels || '2'));
+        const hasGale = allowGale && nextGale <= maxGale && (['martingale', 'progressive_gale', 'sorosgale'].includes(this.settings.moneyManagement));
+        const nextStakeEst = hasGale ? (this.currentSorosStake || (parseFloat(this.settings.stakeValue) * Math.pow(parseFloat(this.settings.martingaleMultiplier || '2.0'), nextGale))) : 0;
         this.sendTelegramNotif('loss', formatLossMessage(profit, newBal, hasGale ? nextGale : 0, nextStakeEst));
       }
 
@@ -2235,14 +2236,23 @@ export class UserSession {
         `🤖 <i>Monitorando conexões e margem de garantia.</i>`
       );
     } else if (cmd === '/lucro' || cmd === '📈 relatório') {
-      const profit = this.balance - this.initialBalance;
+      let profit = this.balance - (this.initialBalance || this.balance);
+      if (this.sessionStartTime) {
+        const cycleTrades = (this.trades || []).filter(t => {
+          const tradeTime = t.epoch ? t.epoch * 1000 : (t.timestamp || 0);
+          return tradeTime >= this.sessionStartTime;
+        });
+        if (cycleTrades.length > 0) {
+          profit = cycleTrades.reduce((acc, t) => acc + (parseFloat(t.profit) || 0), 0);
+        }
+      }
       const sign = profit >= 0 ? '+' : '';
       reply(
-        `📈 <b>ASTROBOT • RESULTADO DA SESSÃO</b>\n` +
+        `📈 <b>ASTROBOT • RESULTADO DA SESSÃO ATIVA</b>\n` +
         `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `💵 <b>Resultado:</b> <code>${sign}$${profit.toFixed(2)}</code>\n` +
-        `💳 <b>Saldo em Conta:</b> <code>$${this.balance?.toFixed(2)}</code>\n` +
-        `🤖 <i>Banca inicial da sessão: $${this.initialBalance?.toFixed(2)}</i>`
+        `💵 <b>Resultado da Sessão:</b> <code>${sign}$${profit.toFixed(2)}</code>\n` +
+        `💳 <b>Saldo Atual em Conta:</b> <code>$${this.balance?.toFixed(2)}</code>\n` +
+        `🤖 <i>Micro-Meta Alvo: $${parseFloat(this.settings.takeProfit || '5.00').toFixed(2)}</i>`
       );
     } else if (cmd === '/status') {
       const profit = this.balance - this.initialBalance;
