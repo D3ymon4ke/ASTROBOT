@@ -1586,6 +1586,8 @@ export class UserSession {
 
     // Check Stop Loss / Take Profit
     const profit = this.balance - this.initialBalance;
+    
+    // 1. Take Profit reached
     if (profit >= parseFloat(this.settings.takeProfit)) {
       this.addLog({ message: `Meta de Lucro (Take Profit) atingida! Parando bot. Lucro: $${profit.toFixed(2)}`, type: 'success' });
       
@@ -1606,6 +1608,57 @@ export class UserSession {
       return;
     }
 
+    // 2. TIME GUARD: If active cycle runs for 30+ minutes and profit is positive (> $0.00), lock profit and finish cycle!
+    if (this.activeCycleId && this.sessionStartTime && (Date.now() - this.sessionStartTime) >= 30 * 60 * 1000) {
+      if (profit > 0) {
+        this.addLog({ message: `⏱️ [Time Guard] Sessão ativa há 30+ minutos com resultado positivo (+$${profit.toFixed(2)}). Garantindo lucro acumulado e finalizando missão...`, type: 'success' });
+        
+        const winCount = this.trades.filter(t => t.profit > 0).length;
+        const winrate = this.trades.length > 0 ? (winCount / this.trades.length) * 100 : 0;
+        this.sendTelegramNotif('take_profit', formatTakeProfitMessage(profit, this.trades.length, winrate, 'Conclusão por Tempo Limite (30m)'));
+
+        const cycleId = this.activeCycleId;
+        const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        this.cycles = this.cycles.map(c => c.id === cycleId ? { ...c, status: 'Meta Batida', finalProfit: profit, winTime: timeNow } : c);
+        this.activeCycleId = null;
+        this.syncCyclesToFirestore();
+
+        this.autoShareSessionResult(profit, true);
+        this.stopBot();
+        return;
+      } else if ((Date.now() - this.sessionStartTime) >= 45 * 60 * 1000 && this.settings.symbol && !this.isAssetBlacklisted(this.settings.symbol)) {
+        // If session exceeds 45 minutes and is stuck around breakeven, switch asset
+        this.addLog({ message: `🛡️ [Time Guard] Sessão estagnada há 45+ minutos no ativo ${this.settings.symbol}. Alternando ativo automaticamente para romper o empasse...`, type: 'warning' });
+        this.addAssetToBlacklist(this.settings.symbol, 1, 'Estagnação de Tempo');
+        const altAssets = ['R_100', '1HZ75V', 'R_75', '1HZ100V', 'R_50', '1HZ50V'];
+        const safeAlt = altAssets.find(s => !this.isAssetBlacklisted(s)) || 'R_100';
+        this.settings.symbol = safeAlt;
+        this.derivAPI.changeSymbol(safeAlt, parseInt(this.settings.granularity));
+        this.syncSettingsToFirestore();
+      }
+    }
+
+    // 3. CHOPPINESS / STALEMATE FAILOVER: If session has >= 6 trades and profit is stuck between -$1.50 and +$1.50, auto-switch asset
+    if (this.sessionStartTime && this.settings.symbol && !this.isAssetBlacklisted(this.settings.symbol)) {
+      const sessionTrades = (this.trades || []).filter(t => {
+        const tTime = t.epoch ? t.epoch * 1000 : (t.timestamp || 0);
+        return tTime >= this.sessionStartTime;
+      });
+      if (sessionTrades.length >= 6 && Math.abs(profit) < 1.50) {
+        this.addLog({
+          message: `🛡️ [Filtro Anti-Estagnação] Detectado mercado ruidoso/lateral em ${this.settings.symbol} (${sessionTrades.length} trades sem direção clara). Alternando para novo ativo seguro...`,
+          type: 'warning'
+        });
+        this.addAssetToBlacklist(this.settings.symbol, 1, 'Mercado Ruidoso / Empasse');
+        const altAssets = ['R_100', '1HZ75V', 'R_75', '1HZ100V', 'R_50', '1HZ50V'];
+        const safeAlt = altAssets.find(s => !this.isAssetBlacklisted(s)) || 'R_100';
+        this.settings.symbol = safeAlt;
+        this.derivAPI.changeSymbol(safeAlt, parseInt(this.settings.granularity));
+        this.syncSettingsToFirestore();
+      }
+    }
+
+    // 4. Stop Loss reached
     if (profit <= -parseFloat(this.settings.stopLoss)) {
       this.addLog({ message: `Limite de Perda (Stop Loss) atingido! Parando bot. Prejuízo: $${profit.toFixed(2)}`, type: 'error' });
       
