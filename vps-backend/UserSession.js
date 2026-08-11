@@ -2236,23 +2236,41 @@ export class UserSession {
         `🤖 <i>Monitorando conexões e margem de garantia.</i>`
       );
     } else if (cmd === '/lucro' || cmd === '📈 relatório') {
-      let profit = this.balance - (this.initialBalance || this.balance);
-      if (this.sessionStartTime) {
-        const cycleTrades = (this.trades || []).filter(t => {
-          const tradeTime = t.epoch ? t.epoch * 1000 : (t.timestamp || 0);
-          return tradeTime >= this.sessionStartTime;
-        });
-        if (cycleTrades.length > 0) {
-          profit = cycleTrades.reduce((acc, t) => acc + (parseFloat(t.profit) || 0), 0);
-        }
-      }
+      const activeCycle = (this.cycles || []).find(c => c.id === this.activeCycleId);
+      const cycleName = activeCycle ? activeCycle.name : (this.isRunning ? 'Sessão Ativa' : 'Nenhuma Missão Em Execução');
+
+      const cycleTrades = (this.trades || []).filter(t => {
+        const tradeTime = t.epoch ? t.epoch * 1000 : (t.timestamp || 0);
+        return this.sessionStartTime ? tradeTime >= this.sessionStartTime : false;
+      });
+
+      const wins = cycleTrades.filter(t => (parseFloat(t.profit) || 0) > 0).length;
+      const losses = cycleTrades.filter(t => (parseFloat(t.profit) || 0) < 0).length;
+      const totalOps = wins + losses;
+      const sessionWinrate = totalOps > 0 ? ((wins / totalOps) * 100).toFixed(1) : '0.0';
+      const profit = cycleTrades.reduce((acc, t) => acc + (parseFloat(t.profit) || 0), 0);
       const sign = profit >= 0 ? '+' : '';
+
+      const takeProfit = parseFloat(this.settings.takeProfit || '5.00');
+      const progressPct = takeProfit > 0 ? Math.min(100, Math.max(0, (profit / takeProfit) * 100)).toFixed(1) : '0.0';
+      const mgmtName = this.settings.moneyManagement === 'sorosgale' ? '🚀 Sorosgale' : this.settings.moneyManagement === 'soros' ? 'Soros' : 'Martingale';
+      const nextStake = this.calculateCurrentStake(false);
+
       reply(
-        `📈 <b>ASTROBOT • RESULTADO DA SESSÃO ATIVA</b>\n` +
+        `📈 <b>ASTROBOT • RELATÓRIO DA SESSÃO ATIVA</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🎯 <b>Missão Ativa:</b> <code>${cycleName}</code>\n` +
+        `🛡️ <b>Gerenciamento:</b> <code>${mgmtName}</code>\n` +
+        `📈 <b>Ativo:</b> <code>${this.settings.symbol} (M${this.settings.granularity === '60' ? '1' : '5'})</code>\n\n` +
+        `📊 <b>DESEMPENHO DA SESSÃO</b>\n` +
         `━━━━━━━━━━━━━━━━━━━━━━\n` +
         `💵 <b>Resultado da Sessão:</b> <code>${sign}$${profit.toFixed(2)}</code>\n` +
-        `💳 <b>Saldo Atual em Conta:</b> <code>$${this.balance?.toFixed(2)}</code>\n` +
-        `🤖 <i>Micro-Meta Alvo: $${parseFloat(this.settings.takeProfit || '5.00').toFixed(2)}</i>`
+        `🎯 <b>Micro-Meta Alvo:</b> <code>$${takeProfit.toFixed(2)}</code> (Progresso: <code>${progressPct}%</code>)\n` +
+        `💳 <b>Saldo em Conta:</b> <code>$${this.balance?.toFixed(2)}</code>\n` +
+        `🏆 <b>Placar da Sessão:</b> <code>${wins}W - ${losses}L</code> (Winrate: <code>${sessionWinrate}%</code>)\n` +
+        `🔥 <b>Próxima Stake:</b> <code>$${nextStake.toFixed(2)}</code>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🤖 <i>Monitoramento contínuo via Inteligência Artificial.</i>`
       );
     } else if (cmd === '/status') {
       const profit = this.balance - this.initialBalance;
