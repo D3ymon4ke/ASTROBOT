@@ -1271,9 +1271,15 @@ export class UserSession {
         if (this.activeTradeCountdown && this.activeTradeCountdown.dateExpiry) {
           this.stuckContractStartTime = null;
           const nowEpoch = Math.floor(now.getTime() / 1000);
-          if (nowEpoch > this.activeTradeCountdown.dateExpiry + 20) { // 20s grace period past expiry
-            console.log(`[Watchdog] Ordem ${this.activeContractId} expirada sem evento de fechamento para ${this.email}. Liberando trava.`);
-            this.addLog({ message: `[Watchdog] Ordem #${this.activeContractId} finalizada por tempo decorrido. Liberando execução.`, type: 'warning' });
+          if (nowEpoch > this.activeTradeCountdown.dateExpiry + 15) { // 15s grace period past expiry
+            console.log(`[Watchdog] Ordem ${this.activeContractId} expirada sem evento de fechamento para ${this.email}. Solicitando consulta à Deriv...`);
+            
+            // Try fetching contract update explicitly from Deriv API before forcing lock release
+            if (this.derivAPI && this.derivAPI.connected) {
+              this.derivAPI.subscribeContract(this.activeContractId);
+            }
+            
+            this.addLog({ message: `[Watchdog] Verificando resultado final da ordem #${this.activeContractId} no servidor Deriv...`, type: 'warning' });
             this.activeContractId = null;
             this.activeTradeCountdown = null;
             this.saveToFile();
@@ -1935,29 +1941,45 @@ export class UserSession {
       
       else if (mode === 'soros' || mode === 'sorosgale') {
         if (isWin) {
-          const nextLevel = this.galeLevel + 1;
+          const wasGaleRecovery = details.galeLevel > 0;
           const maxLevels = parseInt(mode === 'sorosgale' ? (this.settings.sorosgaleLevels || '2') : (this.settings.martingaleMaxLevels || '2'));
-          
-          if (nextLevel < maxLevels) {
-            this.galeLevel = nextLevel;
-            const compoundingRatio = mode === 'sorosgale'
-              ? (parseFloat(this.settings.sorosgaleCompounding || '100') / 100)
-              : Math.min(1.0, parseFloat(this.settings.martingaleMultiplier || '1.0') >= 10 ? parseFloat(this.settings.martingaleMultiplier) / 100 : parseFloat(this.settings.martingaleMultiplier));
-            const prevSorosStake = this.currentSorosStake || details.stake;
-            const nextSorosStake = prevSorosStake + (profit * compoundingRatio);
-            this.currentSorosStake = parseFloat(nextSorosStake.toFixed(2));
-            
+
+          if (wasGaleRecovery && mode === 'sorosgale') {
+            // After winning a recovery Gale, convert profit into Soros Compounding Level 1!
+            const baseStake = parseFloat(this.settings.stakeValue || '1.00');
+            const compoundingRatio = (parseFloat(this.settings.sorosgaleCompounding || '100') / 100);
+            const netProfitOnGale = Math.max(0, profit - (details.stake - baseStake));
+            const nextSorosStake = baseStake + (netProfitOnGale * compoundingRatio);
+
+            this.galeLevel = 1;
+            this.currentSorosStake = parseFloat((nextSorosStake > baseStake ? nextSorosStake : baseStake + profit).toFixed(2));
             this.addLog({
-              message: `🚀 [${mode === 'sorosgale' ? 'Sorosgale' : 'Soros'}] Vitória! Avançando para Nível ${nextLevel + 1}/${maxLevels}. Próxima entrada: $${this.currentSorosStake}`,
+              message: `🚀 [Sorosgale] Vitória no Gale de Recuperação! Iniciando compounding Soros Nível 1. Próxima entrada: $${this.currentSorosStake}`,
               type: 'success'
             });
           } else {
-            this.galeLevel = 0;
-            this.currentSorosStake = 0;
-            this.addLog({
-              message: `🏆 [${mode === 'sorosgale' ? 'Sorosgale' : 'Soros'}] Ciclo Concluído com Sucesso! Resetando para a entrada inicial.`,
-              type: 'success'
-            });
+            const nextLevel = this.galeLevel + 1;
+            if (nextLevel < maxLevels) {
+              this.galeLevel = nextLevel;
+              const compoundingRatio = mode === 'sorosgale'
+                ? (parseFloat(this.settings.sorosgaleCompounding || '100') / 100)
+                : Math.min(1.0, parseFloat(this.settings.martingaleMultiplier || '1.0') >= 10 ? parseFloat(this.settings.martingaleMultiplier) / 100 : parseFloat(this.settings.martingaleMultiplier));
+              const prevSorosStake = this.currentSorosStake || details.stake;
+              const nextSorosStake = prevSorosStake + (profit * compoundingRatio);
+              this.currentSorosStake = parseFloat(nextSorosStake.toFixed(2));
+              
+              this.addLog({
+                message: `🚀 [${mode === 'sorosgale' ? 'Sorosgale' : 'Soros'}] Vitória! Avançando para Nível ${nextLevel + 1}/${maxLevels}. Próxima entrada: $${this.currentSorosStake}`,
+                type: 'success'
+              });
+            } else {
+              this.galeLevel = 0;
+              this.currentSorosStake = 0;
+              this.addLog({
+                message: `🏆 [${mode === 'sorosgale' ? 'Sorosgale' : 'Soros'}] Ciclo Concluído com Sucesso! Resetando para a entrada inicial.`,
+                type: 'success'
+              });
+            }
           }
         } else {
           const allowGale = mode === 'sorosgale' && (this.settings.sorosgaleAllowGale !== false);
