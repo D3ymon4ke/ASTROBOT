@@ -2082,35 +2082,51 @@ export default function Scheduler({
                     </div>
                   </div>
 
-                  {/* Card 3: Filtros de Proteção */}
-                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '2px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                      🛡️ Filtros & Proteção Avançada
-                    </span>
-                    
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                      <div>
-                        <strong style={{ color: '#34d399', display: 'block', fontSize: '0.75rem' }}>Streak Shield (Proteção de Tendência)</strong>
-                        <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Bloqueia ordens contra sequências de 4+ velas</span>
+                    {/* Card 3: Filtros de Proteção */}
+                    <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '2px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                        🛡️ Filtros & Proteção Avançada
+                      </span>
+                      
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                        <div>
+                          <strong style={{ color: '#34d399', display: 'block', fontSize: '0.75rem' }}>Streak Shield (Proteção de Tendência)</strong>
+                          <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Bloqueia ordens contra sequências de 4+ velas</span>
+                        </div>
+                        <Switch showStatus={false} scale={0.8} checked={generatorData.enableStreakShield ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStreakShield: e.target.checked }))} />
                       </div>
-                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableStreakShield ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStreakShield: e.target.checked }))} />
-                    </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                      <span style={{ color: '#cbd5e1' }}>Vela Master como secundária</span>
-                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableMasterCandleSecondary} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableMasterCandleSecondary: e.target.checked }))} />
-                    </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                        <div>
+                          <strong style={{ color: '#60a5fa', display: 'block', fontSize: '0.75rem' }}>⏱️ Time Guard (Trava 30 Minutos)</strong>
+                          <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Garante lucro positivo acumulado e encerra missão se ultrapassar 30 min</span>
+                        </div>
+                        <Switch showStatus={false} scale={0.8} checked={generatorData.enableTimeGuard ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableTimeGuard: e.target.checked }))} />
+                      </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                      <span style={{ color: '#cbd5e1' }}>Desativar estratégias lentas</span>
-                      <Switch showStatus={false} scale={0.8} checked={generatorData.disableSlowStrategies} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableSlowStrategies: e.target.checked }))} />
-                    </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                        <div>
+                          <strong style={{ color: '#fbbf24', display: 'block', fontSize: '0.75rem' }}>🔄 Filtro Anti-Estagnação de Ativo</strong>
+                          <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Troca automaticamente de ativo se registrar 6+ ops sem sair do zero</span>
+                        </div>
+                        <Switch showStatus={false} scale={0.8} checked={generatorData.enableStalemateFailover ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStalemateFailover: e.target.checked }))} />
+                      </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                      <span style={{ color: '#cbd5e1' }}>Desativar cruzamento de médias</span>
-                      <Switch showStatus={false} scale={0.8} checked={generatorData.disableMaCrossover} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableMaCrossover: e.target.checked }))} />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                        <span style={{ color: '#cbd5e1' }}>Vela Master como secundária</span>
+                        <Switch showStatus={false} scale={0.8} checked={generatorData.enableMasterCandleSecondary} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableMasterCandleSecondary: e.target.checked }))} />
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                        <span style={{ color: '#cbd5e1' }}>Desativar estratégias lentas</span>
+                        <Switch showStatus={false} scale={0.8} checked={generatorData.disableSlowStrategies} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableSlowStrategies: e.target.checked }))} />
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                        <span style={{ color: '#cbd5e1' }}>Desativar cruzamento de médias</span>
+                        <Switch showStatus={false} scale={0.8} checked={generatorData.disableMaCrossover} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableMaCrossover: e.target.checked }))} />
+                      </div>
                     </div>
-                  </div>
                 </div>
 
                 {/* RIGHT COLUMN: Period Selectors & Smart Hours Engine */}
@@ -2778,6 +2794,22 @@ export default function Scheduler({
                           <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Bloqueia ordens contra tendências de 4+ velas seguidas</span>
                         </div>
                         <Switch showStatus={false} scale={0.75} checked={wizardData.enableStreakShield ?? true} onChange={(e) => setWizardData({ ...wizardData, enableStreakShield: e.target.checked })} />
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                        <div>
+                          <strong style={{ fontSize: '0.75rem', color: '#60a5fa', display: 'block' }}>⏱️ Time Guard (Trava 30 min)</strong>
+                          <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Trava lucro positivo acumulado se a sessão passar de 30 min</span>
+                        </div>
+                        <Switch showStatus={false} scale={0.75} checked={wizardData.enableTimeGuard ?? true} onChange={(e) => setWizardData({ ...wizardData, enableTimeGuard: e.target.checked })} />
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                        <div>
+                          <strong style={{ fontSize: '0.75rem', color: '#fbbf24', display: 'block' }}>🔄 Filtro Anti-Estagnação (Ativo)</strong>
+                          <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>Troca de ativo se registrar 6+ ops sem sair do zero a zero</span>
+                        </div>
+                        <Switch showStatus={false} scale={0.75} checked={wizardData.enableStalemateFailover ?? true} onChange={(e) => setWizardData({ ...wizardData, enableStalemateFailover: e.target.checked })} />
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
