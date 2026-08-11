@@ -2008,7 +2008,7 @@ export default function Scheduler({
                       <div>
                         <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>MODO</label>
                         <select
-                          value={generatorData.moneyManagement || 'martingale'}
+                          value={generatorData.moneyManagement || 'sorosgale'}
                           onChange={(e) => setGeneratorData(prev => ({ ...prev, moneyManagement: e.target.value }))}
                           style={{
                             fontSize: '0.78rem',
@@ -2022,10 +2022,11 @@ export default function Scheduler({
                             outline: 'none'
                           }}
                         >
+                          <option value="sorosgale">🚀 Sorosgale</option>
                           <option value="fixed">Mão Fixa (Fixed)</option>
                           <option value="martingale">Martingale</option>
                           <option value="progressive_gale">Gale Progressivo</option>
-                          <option value="soros">Soros</option>
+                          <option value="soros">Soros (Apenas Win)</option>
                           <option value="iron_hands">Iron Hands</option>
                         </select>
                       </div>
@@ -2719,10 +2720,11 @@ export default function Scheduler({
                         Gerenciamento de Banca
                       </label>
                       <select
-                        value={wizardData.moneyManagement || 'martingale'}
+                        value={wizardData.moneyManagement || 'sorosgale'}
                         onChange={(e) => setWizardData({ ...wizardData, moneyManagement: e.target.value })}
                         style={{ height: '38px', fontSize: '0.85rem' }}
                       >
+                        <option value="sorosgale">🚀 Sorosgale</option>
                         <option value="fixed">Mão Fixa (Fixed)</option>
                         <option value="martingale">Martingale</option>
                         <option value="progressive_gale">Gale Progressivo</option>
