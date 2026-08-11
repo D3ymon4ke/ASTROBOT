@@ -1160,6 +1160,68 @@ export default function Scheduler({
                 </div>
               </div>
 
+              {/* Smart Hours IA & Sorosgale Highlight Banner */}
+              {(() => {
+                const isSmartHours = selectedCycle.name.includes('%') || selectedCycle.name.includes('ops');
+                const winRateMatch = selectedCycle.name.match(/(\d+(?:\.\d+)?%)/);
+                const opsMatch = selectedCycle.name.match(/\((\d+\s*ops)\)/);
+                const winRateText = winRateMatch ? winRateMatch[1] : null;
+                const opsText = opsMatch ? opsMatch[1] : null;
+
+                return (
+                  <div style={{
+                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%)',
+                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                    borderRadius: '12px',
+                    padding: '0.85rem 1rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div style={{
+                        background: 'rgba(139, 92, 246, 0.2)',
+                        border: '1px solid rgba(139, 92, 246, 0.4)',
+                        borderRadius: '8px',
+                        padding: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--primary-light)'
+                      }}>
+                        <Award size={18} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.78rem', fontWeight: '800', color: 'white', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>🧠 SMART HOURS ENGINE (IA ESTATÍSTICA)</span>
+                          {isSmartHours && (
+                            <span style={{ fontSize: '0.58rem', background: '#10B981', color: 'white', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>
+                              OTIMIZADO
+                            </span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: '0.68rem', color: '#94A3B8', marginTop: '2px', display: 'block' }}>
+                          {isSmartHours
+                            ? `Horário de alta assertividade probabilística: ${winRateText ? winRateText + ' de acertos' : ''} ${opsText ? '(' + opsText + ' analisadas)' : ''}`
+                            : 'Missão otimizada com busca dinâmica de melhor estratégia pelo Piloto Automático.'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)', textAlign: 'right' }}>
+                        <span style={{ fontSize: '0.58rem', color: '#94A3B8', display: 'block' }}>GERENCIAMENTO</span>
+                        <strong style={{ fontSize: '0.72rem', color: 'var(--primary-light)' }}>
+                          {selectedCycle.moneyManagement === 'sorosgale' ? '🚀 Sorosgale' : selectedCycle.moneyManagement === 'soros' ? 'Soros' : 'Martingale'}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Action Buttons Toolbar */}
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {activeCycleId === selectedCycle.id ? (
@@ -1332,19 +1394,25 @@ export default function Scheduler({
                   gap: '0.5rem'
                 }}>
                   <strong style={{ fontSize: '0.75rem', color: 'var(--primary-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Gestão de Risco
+                    Gestão de Risco & Micro-Metas
                   </strong>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Modo Financeiro:</span>
+                      <strong style={{ color: 'var(--primary-light)' }}>
+                        {selectedCycle.moneyManagement === 'sorosgale' ? '🚀 Sorosgale' : selectedCycle.moneyManagement === 'soros' ? 'Soros' : selectedCycle.moneyManagement === 'martingale' ? 'Martingale' : 'Mão Fixa'}
+                      </strong>
+                    </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Valor Entrada:</span>
                       <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>${selectedCycle.stakeValue.toFixed(2)}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Meta de Lucro:</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Micro-Meta da Sessão:</span>
                       <strong style={{ color: '#10b981', fontFamily: 'var(--font-mono)' }}>${selectedCycle.takeProfit.toFixed(2)}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Stop Loss:</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Stop Loss da Sessão:</span>
                       <strong style={{ color: '#ef4444', fontFamily: 'var(--font-mono)' }}>${selectedCycle.stopLoss.toFixed(2)}</strong>
                     </div>
                   </div>
@@ -1392,12 +1460,18 @@ export default function Scheduler({
                   gap: '0.5rem'
                 }}>
                   <strong style={{ fontSize: '0.75rem', color: 'var(--primary-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Martingale & Filtros
+                    {selectedCycle.moneyManagement === 'sorosgale' ? 'Sorosgale & Filtros' : 'Martingale & Filtros'}
                   </strong>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Níveis de Martingale:</span>
-                      <strong style={{ color: 'white' }}>{selectedCycle.martingaleLevels || 2} Níveis</strong>
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {selectedCycle.moneyManagement === 'sorosgale' ? 'Recuperação Gales (Loss):' : 'Níveis de Martingale:'}
+                      </span>
+                      <strong style={{ color: 'white' }}>
+                        {selectedCycle.moneyManagement === 'sorosgale'
+                          ? `${selectedCycle.sorosgaleMaxGale || selectedCycle.martingaleLevels || 2} Gales`
+                          : `${selectedCycle.martingaleLevels || 0} Níveis`}
+                      </strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Multiplicador Gale:</span>
