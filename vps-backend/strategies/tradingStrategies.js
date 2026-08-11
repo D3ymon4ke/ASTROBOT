@@ -936,6 +936,70 @@ export function runMasterCandleBacktest(candles, maxMartingale = 0) {
   return { winRate, totalTrades: total, wins, losses, signals };
 }
 
+export function runPadrao21Backtest(candles, maxMartingale = 0) {
+  if (candles.length < 20) return { winRate: 0, totalTrades: 0, wins: 0, losses: 0, signals: [] };
+  let wins = 0;
+  let losses = 0;
+  const signals = [];
+  const cycles = {};
+
+  for (let i = 0; i < candles.length; i++) {
+    const c = candles[i];
+    const date = new Date(c.epoch * 1000);
+    const minute = date.getMinutes();
+    const cycleStartMinute = minute - (minute % 15);
+    const cycleId = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${cycleStartMinute}`;
+    if (!cycles[cycleId]) cycles[cycleId] = [];
+    cycles[cycleId].push({ candle: c, index: i, minutePos: minute % 15 });
+  }
+
+  const cycleIds = Object.keys(cycles).sort();
+  for (let cIdx = 0; cIdx < cycleIds.length - 1; cIdx++) {
+    const currentCycle = cycles[cycleIds[cIdx]];
+    const nextCycle = cycles[cycleIds[cIdx + 1]];
+    if (!nextCycle) continue;
+
+    const c13 = currentCycle.find(item => item.minutePos === 12);
+    const c14 = currentCycle.find(item => item.minutePos === 13);
+    const c15 = currentCycle.find(item => item.minutePos === 14);
+    if (!c13 || !c14 || !c15) continue;
+
+    const col13 = getCandleColor(c13.candle);
+    const col14 = getCandleColor(c14.candle);
+    const col15 = getCandleColor(c15.candle);
+    if (col13 === 'NEUTRAL' || col14 === 'NEUTRAL' || col15 === 'NEUTRAL') continue;
+
+    let greenCount = 0;
+    let redCount = 0;
+    [col13, col14, col15].forEach(col => {
+      if (col === 'CALL') greenCount++;
+      if (col === 'PUT') redCount++;
+    });
+
+    const direction = greenCount < redCount ? 'CALL' : 'PUT';
+    const targetEntry = nextCycle.find(item => item.minutePos === 0);
+    if (!targetEntry) continue;
+
+    const evaluation = evaluateTrade(candles, targetEntry.index, direction, maxMartingale);
+    if (evaluation.result !== 'PENDING') {
+      const isWin = evaluation.result === 'WIN';
+      if (isWin) wins++; else losses++;
+      signals.push({
+        epoch: targetEntry.candle.epoch,
+        time: new Date(targetEntry.candle.epoch * 1000).toLocaleTimeString(),
+        direction,
+        result: evaluation.result,
+        steps: evaluation.steps,
+        candleIndex: targetEntry.index
+      });
+    }
+  }
+
+  const total = wins + losses;
+  const winRate = total > 0 ? (wins / total) * 100 : 0;
+  return { winRate, totalTrades: total, wins, losses, signals };
+}
+
 export function analyzeStrategies(candles, maxMartingale = 0) {
   const maResult = runMACrossoverBacktest(candles, maxMartingale);
   const mhiMinorityResult = runMHIBacktest(candles, maxMartingale, 'minority', 1);
@@ -949,6 +1013,7 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
   const padrao23Result = runPadrao23Backtest(candles, maxMartingale);
   const padrao3x1Result = runPadrao3x1Backtest(candles, maxMartingale);
   const padraoImparResult = runPadraoImparBacktest(candles, maxMartingale);
+  const padrao21Result = runPadrao21Backtest(candles, maxMartingale);
   const r7Result = runR7Backtest(candles, maxMartingale);
   const pullbackResult = runPullbackBacktest(candles, maxMartingale);
   const reversalResult = runReversalBacktest(candles, maxMartingale);
@@ -958,8 +1023,16 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
   const marubozuResult = runMarubozuBacktest(candles, maxMartingale);
   const bosChochResult = runBosChochBacktest(candles, maxMartingale);
   const masterCandleResult = runMasterCandleBacktest(candles, maxMartingale);
+
+  const getWeightedWinRate = (winRate, totalTrades) => {
+    if (!totalTrades || totalTrades <= 0) return 0;
+    if (totalTrades < 5) {
+      return Math.min(winRate * (totalTrades / 5), 88.5);
+    }
+    return winRate >= 99.0 ? 92.5 : winRate;
+  };
   
-  return [
+  const rawList = [
     { id: 'ma_crossover', name: 'Cruzamento de Médias (9/21)', winRate: maResult.winRate, totalTrades: maResult.totalTrades, wins: maResult.wins, losses: maResult.losses, description: 'Entrada baseada no cruzamento da Média Móvel Rápida (EMA 9) sobre a Média Móvel Lenta (EMA 21).' },
     { id: 'mhi_minority', name: 'MHI 1 (Minoria)', winRate: mhiMinorityResult.winRate, totalTrades: mhiMinorityResult.totalTrades, wins: mhiMinorityResult.wins, losses: mhiMinorityResult.losses, description: 'Analisa velas 3, 4 e 5 do ciclo de 5 min. Entra a favor da minoria na Vela 1 do próximo ciclo.' },
     { id: 'mhi_majority', name: 'MHI 1 (Maioria)', winRate: mhiMajorityResult.winRate, totalTrades: mhiMajorityResult.totalTrades, wins: mhiMajorityResult.wins, losses: mhiMajorityResult.losses, description: 'Analisa velas 3, 4 e 5 do ciclo de 5 min. Entra a favor da maioria na Vela 1 do próximo ciclo.' },
@@ -972,6 +1045,7 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
     { id: 'padrao_23', name: 'Padrão 23', winRate: padrao23Result.winRate, totalTrades: padrao23Result.totalTrades, wins: padrao23Result.wins, losses: padrao23Result.losses, description: 'Analisa a 1ª vela do ciclo de 5 minutos. Entra na 2ª vela prevendo a mesma cor.' },
     { id: 'padrao_3x1', name: 'Padrão 3x1', winRate: padrao3x1Result.winRate, totalTrades: padrao3x1Result.totalTrades, wins: padrao3x1Result.wins, losses: padrao3x1Result.losses, description: 'Analisa as 3 primeiras velas do ciclo de 5 minutos. Entra na 5ª vela na cor da minoria.' },
     { id: 'padrao_impar', name: 'Padrão Ímpar', winRate: padraoImparResult.winRate, totalTrades: padraoImparResult.totalTrades, wins: padraoImparResult.wins, losses: padraoImparResult.losses, description: 'Analisa a 3ª vela do ciclo de 5 minutos. Entra na 1ª vela do próximo ciclo na mesma cor.' },
+    { id: 'padrao_21', name: 'Padrão 21 (MHI 15m)', winRate: padrao21Result.winRate, totalTrades: padrao21Result.totalTrades, wins: padrao21Result.wins, losses: padrao21Result.losses, description: 'Analisa as últimas 3 velas do bloco de 15 minutos. Entra a favor da minoria na 1ª vela do próximo bloco.' },
     { id: 'r7', name: 'Padrão R7', winRate: r7Result.winRate, totalTrades: r7Result.totalTrades, wins: r7Result.wins, losses: r7Result.losses, description: 'Analisa a 9ª vela do ciclo de 10 minutos anterior. Entra na 7ª vela do ciclo atual na mesma cor.' },
     { id: 'pullback', name: 'Pullback na Média (EMA 20)', winRate: pullbackResult.winRate, totalTrades: pullbackResult.totalTrades, wins: pullbackResult.wins, losses: pullbackResult.losses, description: 'Entrada de tendência em toques na Média Móvel EMA 20.' },
     { id: 'reversal', name: 'Reversão (Hammer / Shooting)', winRate: reversalResult.winRate, totalTrades: reversalResult.totalTrades, wins: reversalResult.wins, losses: reversalResult.losses, description: 'Entrada contra a tendência ao identificar velas de exaustão Hammer/Shooting Star.' },
@@ -982,6 +1056,11 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
     { id: 'bos_choch', name: 'BOS + ChoCH', winRate: bosChochResult.winRate, totalTrades: bosChochResult.totalTrades, wins: bosChochResult.wins, losses: bosChochResult.losses, description: 'SMC: Quebra de Estrutura (BOS) após Mudança de Caractere (ChoCH) identificada.' },
     { id: 'master_candle', name: 'Vela Mestra (Master Candle)', winRate: masterCandleResult.winRate, totalTrades: masterCandleResult.totalTrades, wins: masterCandleResult.wins, losses: masterCandleResult.losses, description: 'Vela com grande amplitude que contém as 4 velas seguintes. Entrada no rompimento das extremidades.' }
   ];
+
+  return rawList.map(item => ({
+    ...item,
+    weightedWinRate: getWeightedWinRate(item.winRate, item.totalTrades)
+  }));
 }
 
 export function getConsecutiveCandlesStreak(candles) {
@@ -1088,6 +1167,21 @@ function computeRawLiveSignal(strategyId, candles) {
     if (prevFast >= prevSlow && currFast < currSlow) return { direction: 'PUT', triggerTime: lastCandle.epoch + 60 };
   }
   
+  if (strategyId === 'padrao_21') {
+    const mPos = min % 15;
+    if (mPos === 14) {
+      const col13 = getCandleColor(candles[lastIndex - 2]);
+      const col14 = getCandleColor(candles[lastIndex - 1]);
+      const col15 = getCandleColor(lastCandle);
+      if (col13 !== 'NEUTRAL' && col14 !== 'NEUTRAL' && col15 !== 'NEUTRAL') {
+        let greenCount = 0, redCount = 0;
+        [col13, col14, col15].forEach(col => { if (col === 'CALL') greenCount++; if (col === 'PUT') redCount++; });
+        const direction = greenCount < redCount ? 'CALL' : 'PUT';
+        return { direction, triggerTime: lastCandle.epoch + 60 };
+      }
+    }
+  }
+
   if (strategyId.startsWith('mhi_')) {
     const mPos = min % 5;
     const isMinority = strategyId.endsWith('minority');

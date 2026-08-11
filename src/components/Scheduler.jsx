@@ -46,11 +46,17 @@ export default function Scheduler({
     symbol: 'R_100',
     granularity: '60', // 1m
     selectedStrategy: 'autopilot',
-    moneyManagement: 'martingale',
+    moneyManagement: 'sorosgale',
     stakeValue: 1.0,
-    takeProfit: 10.0,
-    stopLoss: 20.0,
+    takeProfit: 5.0,
+    stopLoss: 15.0,
     martingaleLevels: 2,
+    sorosgaleLevels: 2,
+    sorosgaleCompounding: 100,
+    sorosgaleAllowGale: true,
+    microMetaEnabled: true,
+    microMetaTarget: 5.0,
+    autoBlacklistConsolidation: true,
     martingaleMultiplier: 2.0,
     enableStreakShield: true,
     maxStreakCandles: 4,
@@ -62,8 +68,8 @@ export default function Scheduler({
     minWinRate: 65,
     backupSymbol: '1HZ100V',
     lockProfitSecured: true,
-    icon: '🤖',
-    color: '#8b5cf6' // Purple
+    icon: '🚀',
+    color: '#8b5cf6'
   };
 
   // Sanitize cycles array on the fly to support old items from localStorage and match historical trades
@@ -88,26 +94,23 @@ export default function Scheduler({
       timezone: c.timezone || defaultCycle.timezone
     }));
 
-    if (!historicalTrades || historicalTrades.length === 0) return rawList;
-
     const sortedCycles = [...rawList].sort((a, b) => {
       const [ah, am] = (a.startTime || '00:00').split(':').map(Number);
       const [bh, bm] = (b.startTime || '00:00').split(':').map(Number);
       return (ah * 60 + am) - (bh * 60 + bm);
     });
 
-    return rawList.map(c => {
+    return sortedCycles.map((c, index) => {
       let finalProfit = c.finalProfit;
       let status = c.status;
 
-      if ((finalProfit === undefined || parseFloat(finalProfit) === 0) && historicalTrades.length > 0) {
+      if ((finalProfit === undefined || parseFloat(finalProfit) === 0) && historicalTrades && historicalTrades.length > 0) {
         const now = new Date();
         const [sh, sm] = (c.startTime || '00:00').split(':').map(Number);
         const cycleStartTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm, 0).getTime();
 
-        const index = sortedCycles.findIndex(sc => sc.id === c.id);
         let cycleEndTime;
-        if (index >= 0 && index < sortedCycles.length - 1) {
+        if (index < sortedCycles.length - 1) {
           const nextC = sortedCycles[index + 1];
           const [nh, nm] = (nextC.startTime || '23:59').split(':').map(Number);
           cycleEndTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), nh, nm, 0).getTime();
@@ -384,7 +387,11 @@ export default function Scheduler({
       return;
     }
     
-    const updatedCycles = [...sanitizedCycles, ...newCycles];
+    const updatedCycles = [...sanitizedCycles, ...newCycles].sort((a, b) => {
+      const [ah, am] = (a.startTime || '00:00').split(':').map(Number);
+      const [bh, bm] = (b.startTime || '00:00').split(':').map(Number);
+      return (ah * 60 + am) - (bh * 60 + bm);
+    });
     onSaveCycles(updatedCycles);
     setIsGeneratorOpen(false);
   };
@@ -414,8 +421,12 @@ export default function Scheduler({
     { symbol: '1HZ50V', name: 'Volatility 50 (1s) Index' },
     { symbol: '1HZ75V', name: 'Volatility 75 (1s) Index' },
     { symbol: '1HZ100V', name: 'Volatility 100 (1s) Index' },
+    { symbol: '1HZ150V', name: 'Volatility 150 (1s) Index' },
     { symbol: '1HZ200V', name: 'Volatility 200 (1s) Index' },
     { symbol: '1HZ300V', name: 'Volatility 300 (1s) Index' },
+    { symbol: 'JD75', name: 'Jump 75 Index' },
+    { symbol: 'JD100', name: 'Jump 100 Index' },
+    { symbol: 'frxXAUUSD', name: 'Ouro / Gold (XAU/USD)' },
     { symbol: 'RDBEAR', name: 'Bear Market Index' },
     { symbol: 'RDBULL', name: 'Bull Market Index' },
     { symbol: 'frxEURUSD', name: 'EUR/USD' },
@@ -437,6 +448,7 @@ export default function Scheduler({
     { id: 'padrao_23', name: 'Padrão 23' },
     { id: 'padrao_3x1', name: 'Padrão 3x1' },
     { id: 'padrao_impar', name: 'Padrão Ímpar' },
+    { id: 'padrao_21', name: 'Padrão 21 (MHI 15m)' },
     { id: 'r7', name: 'Padrão R7' },
     { id: 'pullback', name: 'Pullback na Média (EMA 20)' },
     { id: 'reversal', name: 'Reversão (Hammer / Shooting)' },
@@ -858,7 +870,7 @@ export default function Scheduler({
                 <span style={{ fontSize: '0.72rem' }}>Nenhuma missão programada.</span>
               </div>
             ) : (
-              sanitizedCycles.map((c) => {
+              sanitizedCycles.map((c, idx) => {
                 const isSelected = c.id === selectedCycleId;
                 const statusInfo = getStatusDisplay(c.status);
                 const isRunning = activeCycleId === c.id;
@@ -959,6 +971,7 @@ export default function Scheduler({
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 'bold' }}>
+                          <span style={{ fontSize: '0.62rem', background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '1px 5px', borderRadius: '4px', color: '#a78bfa', fontFamily: 'var(--font-mono)' }}>#{idx + 1}</span>
                           <span>{c.icon}</span>
                           <span style={{ color: c.active ? 'white' : 'var(--text-muted)' }}>{c.name}</span>
                         </span>

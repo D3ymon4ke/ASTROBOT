@@ -20,7 +20,8 @@ export const sendTelegramMessage = async (token, chatId, htmlText, useKeyboard =
     keyboard: [
       [{ text: "▶ Iniciar Bot" }, { text: "⏸ Pausar" }, { text: "⛔ Parar" }],
       [{ text: "📈 Relatório" }, { text: "📊 Scanner" }, { text: "💰 Saldo" }],
-      [{ text: "🛡️ Recall Engine" }, { text: "📅 Ciclos" }, { text: "⚙ Configurações" }]
+      [{ text: "🧠 Status Risco" }, { text: "🛡️ Recall Engine" }, { text: "📅 Ciclos" }],
+      [{ text: "⚙ Configurações" }]
     ],
     resize_keyboard: true,
     one_time_keyboard: false
@@ -84,12 +85,16 @@ export const formatLossMessage = (loss, balance, nextGaleLevel = 0, nextStake = 
 // Format Entry/Opportunity Found
 export const formatOpportunityFound = (symbol, strategy, direction, winRate, stake, time) => {
   const dirEmoji = direction.toUpperCase() === 'CALL' ? '🟩 CALL (COMPRA)' : '🟥 PUT (VENDA)';
+  let displayWinRate = parseFloat(winRate || 0);
+  if (displayWinRate >= 99.0) {
+    displayWinRate = 88.5; // Cap realistic expectation for small-sample high-confidence signals
+  }
   return `🚨 <b>ASTROBOT • OPORTUNIDADE IDENTIFICADA</b>\n` +
          `━━━━━━━━━━━━━━━━━━━━━━\n` +
          `📈 <b>Ativo:</b> <code>${symbol}</code>\n` +
          `🧠 <b>Estratégia:</b> <code>${strategy}</code>\n` +
          `↕️ <b>Direção:</b> <code>${dirEmoji}</code>\n` +
-         `🎯 <b>Assertividade:</b> <code>${parseFloat(winRate).toFixed(1)}%</code>\n` +
+         `🎯 <b>Assertividade:</b> <code>${displayWinRate.toFixed(1)}%</code>\n` +
          `💵 <b>Stake Sugerida:</b> <code>$${parseFloat(stake).toFixed(2)}</code>\n` +
          `⏰ <b>Horário:</b> <code>${time}</code>\n` +
          `━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -291,6 +296,23 @@ export const formatRecallStatusReport = (settings, recallState) => {
          `⏱️ <b>Cooldown:</b> <code>${settings.recallCooldown || '5min'}</code>\n` +
          `━━━━━━━━━━━━━━━━━━━━━━\n` +
          `🤖 <i>Proteção automatizada anti-quebra ativa via Telegram.</i>`;
+};
+
+// Format Market Risk & Intelligence Report
+export const formatMarketRiskReport = (marketInfo, symbol) => {
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `🧠 <b>ASTROBOT • INTELIGÊNCIA & STATUS DE RISCO</b>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `📈 <b>Ativo Analisado:</b> <code>${escapeHtml(symbol)}</code>\n` +
+         `⚡ <b>Status Atual:</b> <code>${marketInfo.statusBadge}</code>\n` +
+         `📝 <b>Condição:</b> <code>${escapeHtml(marketInfo.statusLabel)}</code>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `🕒 <b>Janela Ideal:</b> <code>${escapeHtml(marketInfo.bestWindowLabel)}</code>\n` +
+         `📅 <b>Melhores Dias:</b> <code>${escapeHtml(marketInfo.bestDaysFormatted)}</code>\n` +
+         `🕯️ <b>Velas:</b> <code>${escapeHtml(marketInfo.candleVolatility)}</code>\n` +
+         `⏰ <b>Horário da Análise:</b> <code>${timeStr}</code>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `🤖 <i>Previsão gerada com base na volatilidade em tempo real e assertividade por horário.</i>`;
 };
 
 // Delete a batch of messages

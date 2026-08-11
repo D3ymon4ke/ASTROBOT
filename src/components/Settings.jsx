@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, Play, Square, AlertCircle, ChevronLeft, ChevronRight, HelpCircle, Globe, Cpu, Coins, ShieldCheck, Zap, Activity, Save, Volume2, ShieldAlert, Users } from 'lucide-react';
-import { playWinSound, playLossSound, playClickSound } from '../utils/sound';
+import {
+  Settings as SettingsIcon, Play, Square, AlertCircle, ChevronLeft, ChevronRight,
+  HelpCircle, Globe, Cpu, Coins, ShieldCheck, Zap, Activity, Save, Volume2,
+  ShieldAlert, Users, Rocket, Target, BarChart3, FlaskConical, Sparkles, AlertTriangle
+} from 'lucide-react';
 import Switch from './Switch';
+import SorosgaleSimulator from './SorosgaleSimulator';
 
 export default function Settings({
   settings,
@@ -16,20 +20,11 @@ export default function Settings({
   onToggleCollapse,
   schedulerState = false,
   onToggleScheduler = () => {},
-  onSaveSettings = () => {}
+  onSaveSettings = () => {},
+  trades = []
 }) {
-  const [activeModule, setActiveModule] = useState('mercado');
+  const [activeTab, setActiveTab] = useState('mercado');
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [showBetaFeatures, setShowBetaFeatures] = useState(
-    localStorage.getItem('astrobot_beta_features') === 'true'
-  );
-
-  const handleToggleBeta = (e) => {
-    const val = e.target.checked;
-    setShowBetaFeatures(val);
-    localStorage.setItem('astrobot_beta_features', val ? 'true' : 'false');
-    window.dispatchEvent(new Event('astrobot_beta_features_changed'));
-  };
 
   const handleSave = () => {
     onSaveSettings();
@@ -77,15 +72,17 @@ export default function Settings({
   const getMoneyManagementLabel = (val) => {
     switch (val) {
       case 'fixed': return 'Mão Fixa';
-      case 'martingale': return 'Martingale';
+      case 'sorosgale': return '🚀 Sorosgale';
+      case 'soros': return 'Soros';
+      case 'martingale': return 'Martingale Tradicional';
       case 'progressive_gale': return 'Gale Prog.';
       case 'reverse_gale': return 'Gale Inv.';
       case 'iron_hands': return 'Mãos de Ferro';
-      case 'soros': return 'Soros';
       default: return 'Fixa';
     }
   };
 
+  // COLLAPSED VIEW FOR SIDEBAR PRESERVED & ENHANCED
   if (collapsed) {
     return (
       <div className="glass-panel" style={{
@@ -100,7 +97,6 @@ export default function Settings({
         background: '#0e0b1880',
         backdropFilter: 'blur(10px)'
       }}>
-        {/* Toggle Button */}
         <button
           onClick={onToggleCollapse}
           className="icon-button"
@@ -132,7 +128,6 @@ export default function Settings({
           width: '100%',
           flex: 1
         }}>
-          {/* Quick info badges */}
           <div style={{
             fontSize: '0.65rem',
             fontWeight: 'bold',
@@ -224,9 +219,16 @@ export default function Settings({
     );
   }
 
-  const toggleModule = (moduleName) => {
-    setActiveModule(activeModule === moduleName ? '' : moduleName);
-  };
+  // TABS DEFINITION FOR REDESIGNED SETTINGS UI
+  const navTabs = [
+    { id: 'mercado', label: 'Mercado', icon: Globe },
+    { id: 'ia', label: 'Motor IA', icon: Cpu },
+    { id: 'sorosgale', label: 'Sorosgale & Gestão', icon: Rocket, badge: 'NOVO' },
+    { id: 'micrometas', label: 'Micro-Metas', icon: Target },
+    { id: 'seguranca', label: 'Segurança & Trava', icon: ShieldCheck },
+    { id: 'recall', label: 'Shadow Account', icon: Users },
+    { id: 'laboratorio', label: 'Laboratório Estudos', icon: FlaskConical, badge: 'TESTE' }
+  ];
 
   return (
     <div className="glass-panel" style={{
@@ -235,231 +237,315 @@ export default function Settings({
       display: 'flex',
       flexDirection: 'column',
       gap: '1rem',
-      background: 'rgba(14, 11, 24, 0.65)',
+      background: 'rgba(14, 11, 24, 0.75)',
       borderRight: '1px solid var(--border-color)',
       boxSizing: 'border-box'
     }}>
-      {/* Title */}
+      {/* Title & Save Header Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           <SettingsIcon size={18} style={{ color: 'var(--primary-light)' }} className="pulse-primary" />
-          <h2 style={{ fontSize: '0.95rem', fontWeight: '800', letterSpacing: '0.5px', color: 'white' }}>MÓDULOS DE CONFIG</h2>
+          <div>
+            <h2 style={{ fontSize: '0.95rem', fontWeight: '800', letterSpacing: '0.5px', color: 'white', margin: 0 }}>
+              PAINEL DE CONFIGURAÇÕES & IA
+            </h2>
+            <span style={{ fontSize: '0.62rem', color: '#94A3B8' }}>ASTROBOT v3.5 • Motor de Alta Precisão</span>
+          </div>
         </div>
-        <button
-          onClick={onToggleCollapse}
-          className="icon-button"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--text-secondary)',
-            cursor: 'pointer',
-            padding: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          title="Recolher Painel"
-        >
-          <ChevronLeft size={18} />
-        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button
+            onClick={handleSave}
+            className="success"
+            style={{
+              padding: '6px 12px',
+              fontSize: '0.75rem',
+              fontWeight: 'bold',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            <Save size={14} /> {saveSuccess ? 'Salvo! ✓' : 'Salvar'}
+          </button>
+          
+          <button
+            onClick={onToggleCollapse}
+            className="icon-button"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            title="Recolher Painel"
+          >
+            <ChevronLeft size={18} />
+          </button>
+        </div>
       </div>
 
-      {/* Modules List Accordion */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', flex: 1, paddingRight: '2px' }} className="modules-scrollbar">
-        
-        {/* MODULE 1: MERCADO */}
-        <div style={{
-          background: activeModule === 'mercado' ? 'rgba(139, 92, 246, 0.06)' : 'rgba(255, 255, 255, 0.01)',
-          border: activeModule === 'mercado' ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.03)',
-          borderRadius: '12px',
-          padding: '0.75rem',
-          transition: 'all 0.25s ease',
-          boxShadow: activeModule === 'mercado' ? '0 4px 15px rgba(139, 92, 246, 0.1)' : 'none'
-        }}>
-          <div onClick={() => toggleModule('mercado')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Globe size={15} style={{ color: activeModule === 'mercado' ? 'var(--primary-light)' : '#94A3B8' }} />
-              <strong style={{ fontSize: '0.78rem', color: activeModule === 'mercado' ? 'white' : '#94A3B8', fontWeight: 'bold' }}>⚙ MERCADO</strong>
+      {/* Navigation Tab Bar */}
+      <div style={{
+        display: 'flex',
+        gap: '0.35rem',
+        overflowX: 'auto',
+        paddingBottom: '4px',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+      }} className="modules-scrollbar">
+        {navTabs.map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                background: isActive ? 'rgba(139, 92, 246, 0.18)' : 'rgba(255, 255, 255, 0.02)',
+                border: isActive ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid rgba(255, 255, 255, 0.04)',
+                color: isActive ? 'white' : '#94A3B8',
+                borderRadius: '8px',
+                padding: '6px 10px',
+                fontSize: '0.72rem',
+                fontWeight: isActive ? '800' : '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.2s ease',
+                position: 'relative'
+              }}
+            >
+              <Icon size={14} style={{ color: isActive ? 'var(--primary-light)' : '#94A3B8' }} />
+              {tab.label}
+              {tab.badge && (
+                <span style={{
+                  fontSize: '0.52rem',
+                  fontWeight: '800',
+                  background: tab.badge === 'NOVO' ? '#10B981' : '#3B82F6',
+                  color: 'white',
+                  padding: '1px 4px',
+                  borderRadius: '4px',
+                  lineHeight: 1
+                }}>
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Main Tab Content View */}
+      <div style={{ flex: 1, overflowY: 'auto', paddingRight: '2px' }} className="modules-scrollbar">
+
+        {/* TAB 1: MERCADO */}
+        {activeTab === 'mercado' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="glass-panel" style={{ padding: '1rem', borderRadius: '12px', background: 'rgba(255,255,255,0.01)' }}>
+              <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '6px' }}>ATIVO DE TRADING</label>
+              <select name="symbol" value={settings.symbol} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.82rem', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: '100%' }}>
+                {assets.map((asset) => (
+                  <option key={asset.symbol} value={asset.symbol}>
+                    {asset.name} ({asset.symbol})
+                  </option>
+                ))}
+              </select>
             </div>
-            {activeModule !== 'mercado' && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold', background: 'rgba(139, 92, 246, 0.1)', padding: '2px 8px', borderRadius: '12px' }}>
-                {getAssetLabel(settings.symbol)} | {settings.granularity === '60' ? 'M1' : settings.granularity === '300' ? 'M5' : 'M15'}
-              </span>
-            )}
-          </div>
-          
-          {activeModule === 'mercado' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <div>
-                <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>ATIVO DE TRADING</label>
-                <select name="symbol" value={settings.symbol} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                  {assets.map((asset) => (
-                    <option key={asset.symbol} value={asset.symbol}>
-                      {asset.name} ({asset.symbol})
-                    </option>
-                  ))}
-                </select>
+
+            <div className="glass-panel" style={{ padding: '1rem', borderRadius: '12px', background: 'rgba(255,255,255,0.01)' }}>
+              <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '6px' }}>TIMEFRAME (GRÁFICO)</label>
+              <select name="granularity" value={settings.granularity} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.82rem', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: '100%' }}>
+                <option value="60">1 Minuto (M1)</option>
+                <option value="300">5 Minutos (M5) - Recomendado</option>
+                <option value="900">15 Minutos (M15)</option>
+              </select>
+            </div>
+
+            {/* AUTO-BLACKLIST CONSOLIDAÇÃO */}
+            <div className="glass-panel" style={{ padding: '1rem', borderRadius: '12px', background: 'rgba(139, 92, 246, 0.05)', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '800', color: 'white' }}>🛡️ AUTO-BLACKLIST DE CONSOLIDAÇÃO</label>
+                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Bloqueia e troca ativos sem volatilidade (dojis seguidos)</span>
+                </div>
+                <Switch name="autoBlacklistConsolidation" checked={settings.autoBlacklistConsolidation ?? true} onChange={handleInputChange} disabled={isRunning} />
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>TIMEFRAME (VELA)</label>
-                <select name="granularity" value={settings.granularity} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                  <option value="60">1 Minuto (M1)</option>
-                  <option value="300">5 Minutos (M5)</option>
-                  <option value="900">15 Minutos (M15)</option>
-                </select>
-              </div>
+              {(settings.autoBlacklistConsolidation ?? true) && (
+                <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>LIMITE DE DOJIS/VELAS ESTREITAS</label>
+                  <select name="consolidationDojiLimit" value={settings.consolidationDojiLimit || '4'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.82rem', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: '100%' }}>
+                    <option value="3">3 Dojis em sequência (Super Sensível)</option>
+                    <option value="4">4 Dojis em sequência (Recomendado)</option>
+                    <option value="5">5 Dojis em sequência (Conservador)</option>
+                  </select>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-
-        {/* MODULE 2: IA */}
-        <div style={{
-          background: activeModule === 'ia' ? 'rgba(139, 92, 246, 0.06)' : 'rgba(255, 255, 255, 0.01)',
-          border: activeModule === 'ia' ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.03)',
-          borderRadius: '12px',
-          padding: '0.75rem',
-          transition: 'all 0.25s ease',
-          boxShadow: activeModule === 'ia' ? '0 4px 15px rgba(139, 92, 246, 0.1)' : 'none'
-        }}>
-          <div onClick={() => toggleModule('ia')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Cpu size={15} style={{ color: activeModule === 'ia' ? 'var(--primary-light)' : '#94A3B8' }} />
-              <strong style={{ fontSize: '0.78rem', color: activeModule === 'ia' ? 'white' : '#94A3B8', fontWeight: 'bold' }}>🤖 MOTOR IA</strong>
-            </div>
-            {activeModule !== 'ia' && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold', background: 'rgba(139, 92, 246, 0.1)', padding: '2px 8px', borderRadius: '12px' }}>
-                {settings.autoPilot ? 'Piloto: ON' : 'Manual'}
-              </span>
-            )}
           </div>
-          
-          {activeModule === 'ia' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        )}
+
+        {/* TAB 2: MOTOR IA */}
+        {activeTab === 'ia' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="glass-panel" style={{ padding: '1rem', borderRadius: '12px', background: 'rgba(255,255,255,0.01)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>PILOTO AUTOMÁTICO</label>
-                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Chaveia estratégias pela maior winrate</span>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '800', color: 'white' }}>🤖 PILOTO AUTOMÁTICO IA</label>
+                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Chaveia estratégias dinamicamente pela maior winrate</span>
                 </div>
                 <Switch name="autoPilot" checked={settings.autoPilot} onChange={handleInputChange} disabled={isRunning} />
               </div>
 
               {settings.autoPilot && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: '0.5rem', borderLeft: '2px solid var(--primary-light)' }}>
-                  <div>
-                    <label style={{ fontSize: '0.68rem', fontWeight: '800', color: 'white' }}>EXCLUIR PULLBACK/REVERSÃO</label>
-                    <span style={{ fontSize: '0.58rem', color: '#94A3B8', display: 'block' }}>Ignora análises lentas de suporte/resistência</span>
+                <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>EXCLUIR ANÁLISES LENTAS</label>
+                      <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Foca apenas em padrões rápidos de velas</span>
+                    </div>
+                    <Switch name="disableSlowStrategies" checked={settings.disableSlowStrategies || false} onChange={handleInputChange} disabled={isRunning} />
                   </div>
-                  <Switch name="disableSlowStrategies" checked={settings.disableSlowStrategies || false} onChange={handleInputChange} disabled={isRunning} />
+
+                  <div>
+                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>INTERVALO DE REAVALIAÇÃO DA IA</label>
+                    <select name="autoPilotInterval" value={settings.autoPilotInterval || '5'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.82rem', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: '100%' }}>
+                      <option value="1">A cada 1 Minuto</option>
+                      <option value="2">A cada 2 Minutos</option>
+                      <option value="5">A cada 5 Minutos (Recomendado)</option>
+                    </select>
+                  </div>
                 </div>
               )}
+            </div>
 
-              <div>
-                <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>INTERVALO DE REAVALIAÇÃO</label>
-                <select name="autoPilotInterval" value={settings.autoPilotInterval || '5'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                  <option value="1">A cada 1 Minuto</option>
-                  <option value="2">A cada 2 Minutos</option>
-                  <option value="5">A cada 5 Minutos (Recomendado)</option>
-                  <option value="10">A cada 10 Minutos</option>
+            {!settings.autoPilot && (
+              <div className="glass-panel" style={{ padding: '1rem', borderRadius: '12px', background: 'rgba(255,255,255,0.01)' }}>
+                <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '6px' }}>ESTRATÉGIA SELECIONADA</label>
+                <select name="selectedStrategy" value={settings.selectedStrategy} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.82rem', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: '100%' }}>
+                  <option value="mhi_minority">MHI 1 (Minoria - Vela 1)</option>
+                  <option value="mhi_majority">MHI 1 (Maioria - Vela 1)</option>
+                  <option value="mhi_2_minority">MHI 2 (Minoria - Vela 2)</option>
+                  <option value="twin_towers">Torres Gêmeas</option>
+                  <option value="padrao_23">Padrão 23</option>
+                  <option value="three_musketeers">Três Mosqueteiros</option>
+                  <option value="ma_crossover">Cruzamento de Médias (9/21)</option>
+                  <option value="pivot_123">Pivô de 1-2-3</option>
                 </select>
               </div>
-
-              {!settings.autoPilot && (
-                <div>
-                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>
-                    ESTRATÉGIA ATIVA MANUAL
-                  </label>
-                  <select name="selectedStrategy" value={settings.selectedStrategy} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                    <optgroup label="📊 FAMÍLIA MHI (MINORIA & MAIORIA)">
-                      <option value="mhi_minority">MHI 1 (Minoria - Vela 1)</option>
-                      <option value="mhi_majority">MHI 1 (Maioria - Vela 1)</option>
-                      <option value="mhi_2_minority">MHI 2 (Minoria - Vela 2)</option>
-                      <option value="mhi_2_majority">MHI 2 (Maioria - Vela 2)</option>
-                      <option value="mhi_3_minority">MHI 3 (Minoria - Vela 3)</option>
-                      <option value="mhi_3_majority">MHI 3 (Maioria - Vela 3)</option>
-                    </optgroup>
-                    <optgroup label="🕯️ ESTRATÉGIAS TRADICIONAIS (VELAS)">
-                      <option value="ma_crossover">Cruzamento de Médias (9/21)</option>
-                      <option value="twin_towers">Torres Gêmeas</option>
-                      <option value="three_musketeers">Três Mosqueteiros</option>
-                      <option value="padrao_23">Padrão 23</option>
-                      <option value="padrao_3x1">Padrão 3x1</option>
-                      <option value="padrao_impar">Padrão Ímpar</option>
-                      <option value="r7">Padrão R7</option>
-                      <option value="pullback">Pullback na Média (EMA 20)</option>
-                      <option value="reversal">Reversão (Hammer / Shooting)</option>
-                      <option value="pivot_123">Pivô de 1-2-3</option>
-                      <option value="ross_hook">123 de Ross</option>
-                      <option value="r10">Padrão R10</option>
-                      <option value="marubozu">Marubozu</option>
-                      <option value="bos_choch">BOS + ChoCH</option>
-                    </optgroup>
-                  </select>
-                </div>
-              )}
-
-              {settings.autoPilot && bestStrategy && (
-                <div style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', fontSize: '0.7rem' }}>
-                  <span style={{ color: '#94A3B8', display: 'block', fontSize: '0.58rem' }}>IA ESCOLHEU</span>
-                  <strong style={{ color: 'var(--success)' }}>{bestStrategy.name} ({bestStrategy.winRate.toFixed(1)}% WR)</strong>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* MODULE 3: GESTÃO */}
-        <div style={{
-          background: activeModule === 'gestao' ? 'rgba(139, 92, 246, 0.06)' : 'rgba(255, 255, 255, 0.01)',
-          border: activeModule === 'gestao' ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.03)',
-          borderRadius: '12px',
-          padding: '0.75rem',
-          transition: 'all 0.25s ease',
-          boxShadow: activeModule === 'gestao' ? '0 4px 15px rgba(139, 92, 246, 0.1)' : 'none'
-        }}>
-          <div onClick={() => toggleModule('gestao')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Coins size={15} style={{ color: activeModule === 'gestao' ? 'var(--primary-light)' : '#94A3B8' }} />
-              <strong style={{ fontSize: '0.78rem', color: activeModule === 'gestao' ? 'white' : '#94A3B8', fontWeight: 'bold' }}>💰 GESTÃO BANCA</strong>
-            </div>
-            {activeModule !== 'gestao' && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold', background: 'rgba(139, 92, 246, 0.1)', padding: '2px 8px', borderRadius: '12px' }}>
-                Entrada: ${settings.stakeValue}
-              </span>
             )}
           </div>
-          
-          {activeModule === 'gestao' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        )}
 
-
-              <div>
-                <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>TIPO DE ENTRADA</label>
-                <select name="stakeType" value={settings.stakeType} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                  <option value="fixed">Mão Fixa (Valor em USD)</option>
-                  <option value="percentage">Porcentagem da Banca (%)</option>
-                </select>
+        {/* TAB 3: SOROSGALE & GESTÃO DE BANCA */}
+        {activeTab === 'sorosgale' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="glass-panel" style={{ padding: '1rem', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(16, 185, 129, 0.05) 100%)', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem' }}>
+                <Rocket size={18} style={{ color: 'var(--primary-light)' }} />
+                <h3 style={{ fontSize: '0.88rem', fontWeight: '800', color: 'white', margin: 0 }}>SISTEMA FINANCEIRO DE TRADING</h3>
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>
-                  {settings.stakeType === 'fixed' ? 'VALOR DA ENTRADA ($)' : 'PORCENTAGEM DA ENTRADA (%)'}
-                </label>
-                <input
-                  type="number"
-                  name="stakeValue"
-                  value={settings.stakeValue}
-                  onChange={handleInputChange}
-                  min={settings.stakeType === 'fixed' ? '0.35' : '0.1'}
-                  step="0.01"
-                  disabled={isRunning}
-                  style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
-                />
-              </div>
+              <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>MODO DE GERENCIAMENTO</label>
+              <select
+                name="moneyManagement"
+                value={settings.moneyManagement || 'fixed'}
+                onChange={handleInputChange}
+                disabled={isRunning}
+                style={{ fontSize: '0.85rem', fontWeight: 'bold', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-active)', borderRadius: '8px', width: '100%' }}
+              >
+                <option value="sorosgale">🚀 Sorosgale (Crescimento Acelerado + Recovery - RECOMENDADO)</option>
+                <option value="soros">Ciclo de Soros Puro</option>
+                <option value="fixed">Mão Fixa (Sem Recuperação)</option>
+                <option value="martingale">Martingale Tradicional</option>
+                <option value="progressive_gale">Gale Progressivo</option>
+                <option value="reverse_gale">Gale Invertido (Anti-Martingale)</option>
+              </select>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+              {/* Sorosgale specific options */}
+              {(settings.moneyManagement === 'sorosgale' || settings.moneyManagement === 'soros') && (
+                <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>ESTÁGIOS DE COMPOUNDING</label>
+                      <select name="sorosgaleLevels" value={settings.sorosgaleLevels || '2'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
+                        <option value="2">2 Níveis (2 Wins consecutivos)</option>
+                        <option value="3">3 Níveis (3 Wins consecutivos)</option>
+                        <option value="4">4 Níveis (Alavancagem Máxima)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>REINVESTIMENTO DE LUCRO</label>
+                      <select name="sorosgaleCompounding" value={settings.sorosgaleCompounding || '100'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
+                        <option value="50">50% do Lucro (Conservador)</option>
+                        <option value="75">75% do Lucro (Moderado)</option>
+                        <option value="100">100% do Lucro (Padrão Soros)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {settings.moneyManagement === 'sorosgale' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '0.65rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>RECUPERAÇÃO GALE NO LOSS</label>
+                          <span style={{ fontSize: '0.58rem', color: '#94A3B8', display: 'block' }}>Executa tentativas de recuperação ao sofrer loss</span>
+                        </div>
+                        <Switch name="sorosgaleAllowGale" checked={settings.sorosgaleAllowGale !== false} onChange={handleInputChange} disabled={isRunning} />
+                      </div>
+
+                      {(settings.sorosgaleAllowGale !== false) && (
+                        <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>MÁXIMO DE GALES DE RECUPERAÇÃO (1 ATÉ 6)</label>
+                          <select
+                            name="sorosgaleMaxGale"
+                            value={settings.sorosgaleMaxGale || '2'}
+                            onChange={handleInputChange}
+                            disabled={isRunning}
+                            style={{ fontSize: '0.78rem', padding: '0.4rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
+                          >
+                            <option value="1">1 Gale (Conservador)</option>
+                            <option value="2">2 Gales (Padrão Recomendado)</option>
+                            <option value="3">3 Gales (Moderado)</option>
+                            <option value="4">4 Gales (Alavancado)</option>
+                            <option value="5">5 Gales (Agressivo)</option>
+                            <option value="6">6 Gales (Máximo Livre)</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Base Stake & Limits */}
+            <div className="glass-panel" style={{ padding: '1rem', borderRadius: '12px', background: 'rgba(255,255,255,0.01)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>STOP LOSS ($)</label>
+                  <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>VALOR DA ENTRADA ($)</label>
+                  <input
+                    type="number"
+                    name="stakeValue"
+                    value={settings.stakeValue}
+                    onChange={handleInputChange}
+                    min="0.35"
+                    step="0.5"
+                    disabled={isRunning}
+                    style={{ fontSize: '0.82rem', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: '100%' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>STOP LOSS ($)</label>
                   <input
                     type="number"
                     name="stopLoss"
@@ -468,578 +554,117 @@ export default function Settings({
                     min="1"
                     step="1"
                     disabled={isRunning}
-                    style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>TAKE PROFIT ($)</label>
-                  <input
-                    type="number"
-                    name="takeProfit"
-                    value={settings.takeProfit}
-                    onChange={handleInputChange}
-                    min="1"
-                    step="1"
-                    disabled={isRunning}
-                    style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
+                    style={{ fontSize: '0.82rem', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: '100%' }}
                   />
                 </div>
               </div>
             </div>
-          )}
-        </div>
-
-        {/* MODULE 4: ESTRATÉGIAS (GERENCIAMENTO FINANCEIRO) */}
-        <div style={{
-          background: activeModule === 'estrategias' ? 'rgba(139, 92, 246, 0.06)' : 'rgba(255, 255, 255, 0.01)',
-          border: activeModule === 'estrategias' ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.03)',
-          borderRadius: '12px',
-          padding: '0.75rem',
-          transition: 'all 0.25s ease',
-          boxShadow: activeModule === 'estrategias' ? '0 4px 15px rgba(139, 92, 246, 0.1)' : 'none'
-        }}>
-          <div onClick={() => toggleModule('estrategias')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Activity size={15} style={{ color: activeModule === 'estrategias' ? 'var(--primary-light)' : '#94A3B8' }} />
-              <strong style={{ fontSize: '0.78rem', color: activeModule === 'estrategias' ? 'white' : '#94A3B8', fontWeight: 'bold' }}>📈 RECUPERAÇÃO</strong>
-            </div>
-            {activeModule !== 'estrategias' && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold', background: 'rgba(139, 92, 246, 0.1)', padding: '2px 8px', borderRadius: '12px' }}>
-                {getMoneyManagementLabel(settings.moneyManagement)}
-              </span>
-            )}
           </div>
-          
-          {activeModule === 'estrategias' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <div>
-                <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>SISTEMA FINANCEIRO</label>
-                <select 
-                  name="moneyManagement" 
-                  value={settings.moneyManagement || (settings.martingaleEnabled ? 'martingale' : 'fixed')} 
-                  onChange={handleInputChange} 
-                  disabled={isRunning}
-                  style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
-                >
-                  <option value="fixed">Mão Fixa (Sem Recuperação)</option>
-                  <option value="martingale">Martingale Tradicional</option>
-                  <option value="progressive_gale">Gale Progressivo</option>
-                  <option value="reverse_gale">Gale Invertido (Anti-Martingale)</option>
-                  <option value="iron_hands">Mãos de Ferro</option>
-                  <option value="soros">Ciclo de Soros</option>
-                </select>
+        )}
+
+        {/* TAB 4: MICRO-METAS */}
+        {activeTab === 'micrometas' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="glass-panel" style={{ padding: '1rem', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '800', color: 'white' }}>⏰ ESTRATÉGIA DE MICRO-METAS FRACIONADAS</label>
+                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Divide a meta do dia em sessões curtas de rápida conclusão</span>
+                </div>
+                <Switch name="microMetaEnabled" checked={settings.microMetaEnabled || false} onChange={handleInputChange} disabled={isRunning} />
               </div>
 
-              {((settings.moneyManagement || (settings.martingaleEnabled ? 'martingale' : 'fixed')) !== 'fixed' && 
-                (settings.moneyManagement || (settings.martingaleEnabled ? 'martingale' : 'fixed')) !== 'iron_hands') && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {(settings.moneyManagement || (settings.martingaleEnabled ? 'martingale' : 'fixed')) !== 'soros' && (
-                    <div>
-                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>EXECUTAR GALE</label>
-                      <select name="martingaleMode" value={settings.martingaleMode} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                        <option value="next_candle">Na Próxima Vela (Imediato)</option>
-                        <option value="next_signal">No Próximo Sinal</option>
-                      </select>
-                    </div>
-                  )}
+              {(settings.microMetaEnabled || false) && (
+                <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>META POR SESSÃO ($)</label>
+                    <input
+                      type="number"
+                      name="microMetaTarget"
+                      value={settings.microMetaTarget || '5.00'}
+                      onChange={handleInputChange}
+                      min="1"
+                      step="0.5"
+                      disabled={isRunning}
+                      style={{ fontSize: '0.82rem', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: '100%' }}
+                    />
+                  </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                    <div>
-                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>
-                        {(settings.moneyManagement || (settings.martingaleEnabled ? 'martingale' : 'fixed')) === 'soros' ? 'RETORNO (%)' : 'MULTIPLICADOR'}
-                      </label>
-                      <input
-                        type="number"
-                        name="martingaleMultiplier"
-                        value={settings.martingaleMultiplier}
-                        onChange={handleInputChange}
-                        min="1.0"
-                        step="0.1"
-                        disabled={isRunning}
-                        style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>
-                        {(settings.moneyManagement || (settings.martingaleEnabled ? 'martingale' : 'fixed')) === 'soros' ? 'ESTÁGIOS' : 'NÍVEIS MÁX.'}
-                      </label>
-                      <input
-                        type="number"
-                        name="martingaleMaxLevels"
-                        value={settings.martingaleMaxLevels}
-                        onChange={handleInputChange}
-                        min="1"
-                        max="10"
-                        step="1"
-                        disabled={isRunning}
-                        style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
-                      />
-                    </div>
+                  <div>
+                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>SESSÕES POR DIA</label>
+                    <select name="maxSessionsPerDay" value={settings.maxSessionsPerDay || 4} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.82rem', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: '100%' }}>
+                      <option value={2}>2 Sessões</option>
+                      <option value={3}>3 Sessões</option>
+                      <option value={4}>4 Sessões (Recomendado)</option>
+                    </select>
                   </div>
                 </div>
               )}
             </div>
-          )}
-        </div>
-
-        {/* MODULE 5: AUTOMAÇÃO */}
-        <div style={{
-          background: activeModule === 'automacao' ? 'rgba(139, 92, 246, 0.06)' : 'rgba(255, 255, 255, 0.01)',
-          border: activeModule === 'automacao' ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.03)',
-          borderRadius: '12px',
-          padding: '0.75rem',
-          transition: 'all 0.25s ease',
-          boxShadow: activeModule === 'automacao' ? '0 4px 15px rgba(139, 92, 246, 0.1)' : 'none'
-        }}>
-          <div onClick={() => toggleModule('automacao')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Zap size={15} style={{ color: activeModule === 'automacao' ? 'var(--primary-light)' : '#94A3B8' }} />
-              <strong style={{ fontSize: '0.78rem', color: activeModule === 'automacao' ? 'white' : '#94A3B8', fontWeight: 'bold' }}>⚡ AUTOMAÇÃO</strong>
-            </div>
-            {activeModule !== 'automacao' && (
-              <span style={{ fontSize: '0.7rem', color: schedulerState ? 'var(--success)' : '#94A3B8', fontWeight: 'bold', background: schedulerState ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '12px' }}>
-                {schedulerState ? 'ATIVO' : 'DESATIVADO'}
-              </span>
-            )}
           </div>
-          
-          {activeModule === 'automacao' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        )}
+
+        {/* TAB 5: SEGURANÇA */}
+        {activeTab === 'seguranca' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="glass-panel" style={{ padding: '1rem', borderRadius: '12px', background: 'rgba(255,255,255,0.01)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>AGENDADOR DE CICLOS</label>
-                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Liga/Desliga robô em horários programados</span>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '800', color: 'white' }}>🛡️ STREAK SHIELD (TRAVA DE TENDÊNCIA)</label>
+                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Bloqueia ordens contra sequências longas de velas</span>
                 </div>
-                <Switch checked={schedulerState} onChange={(e) => onToggleScheduler(e.target.checked)} />
-              </div>
-              <div style={{ padding: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)', borderRadius: '6px', fontSize: '0.68rem', color: '#94A3B8', lineHeight: '1.4' }}>
-                ⚠️ Programe e adicione os múltiplos horários na aba <strong>Agendador & Ciclos (Automação)</strong> localizada no rodapé central.
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* MODULE 6: SEGURANÇA */}
-        <div style={{
-          background: activeModule === 'seguranca' ? 'rgba(139, 92, 246, 0.06)' : 'rgba(255, 255, 255, 0.01)',
-          border: activeModule === 'seguranca' ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.03)',
-          borderRadius: '12px',
-          padding: '0.75rem',
-          transition: 'all 0.25s ease',
-          boxShadow: activeModule === 'seguranca' ? '0 4px 15px rgba(139, 92, 246, 0.1)' : 'none'
-        }}>
-          <div onClick={() => toggleModule('seguranca')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShieldCheck size={15} style={{ color: activeModule === 'seguranca' ? 'var(--primary-light)' : '#94A3B8' }} />
-              <strong style={{ fontSize: '0.78rem', color: activeModule === 'seguranca' ? 'white' : '#94A3B8', fontWeight: 'bold' }}>🛡 SEGURANÇA</strong>
-            </div>
-            {activeModule !== 'seguranca' && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold', background: 'rgba(139, 92, 246, 0.1)', padding: '2px 8px', borderRadius: '12px' }}>
-                {settings.enableStreakShield ? `Streak Shield (${settings.maxStreakCandles || 4}V)` : (settings.enableMasterCandleSecondary ? 'Vela Mestra' : 'Normal')}
-              </span>
-            )}
-          </div>
-          
-          {activeModule === 'seguranca' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              {/* Streak Shield Toggle */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>TRAVA DE SEQUÊNCIA (STREAK SHIELD)</label>
-                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Bloqueia ordens contra tendências de 4+ velas da mesma cor</span>
-                </div>
-                <Switch name="enableStreakShield" checked={settings.enableStreakShield ?? true} onChange={handleInputChange} disabled={isRunning} style={{ flexShrink: 0 }} />
+                <Switch name="enableStreakShield" checked={settings.enableStreakShield ?? true} onChange={handleInputChange} disabled={isRunning} />
               </div>
 
               {(settings.enableStreakShield ?? true) && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', paddingLeft: '0.5rem', borderLeft: '2px solid #ef4444' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '0.5rem' }}>
-                    <div>
-                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>MÁX. VELAS SEGUIDAS</label>
-                      <input
-                        type="number"
-                        name="maxStreakCandles"
-                        value={settings.maxStreakCandles || 4}
-                        onChange={handleInputChange}
-                        min="3"
-                        max="10"
-                        step="1"
-                        disabled={isRunning}
-                        style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>AÇÃO AO DETECTAR</label>
-                      <select name="streakShieldAction" value={settings.streakShieldAction || 'block'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                        <option value="block">Bloquear Entrada</option>
-                        <option value="pause">Pausar Robô (5 min)</option>
-                      </select>
-                    </div>
+                <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>MÁX. VELAS SEGUIDAS</label>
+                    <input
+                      type="number"
+                      name="maxStreakCandles"
+                      value={settings.maxStreakCandles || 4}
+                      onChange={handleInputChange}
+                      min="3"
+                      max="10"
+                      disabled={isRunning}
+                      style={{ fontSize: '0.82rem', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: '100%' }}
+                    />
                   </div>
-                  <div style={{ fontSize: '0.62rem', color: '#cbd5e1', background: 'rgba(239, 68, 68, 0.08)', padding: '6px 8px', borderRadius: '6px', border: '1px dashed rgba(239, 68, 68, 0.3)' }}>
-                    🛡️ <strong>Proteção Anti-Quebra:</strong> Previne quebrar a banca no Gale 5 quando ocorrem 7 velas da mesma cor.
+
+                  <div>
+                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>AÇÃO</label>
+                    <select name="streakShieldAction" value={settings.streakShieldAction || 'block'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.82rem', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: '100%' }}>
+                      <option value="block">Bloquear Entrada</option>
+                      <option value="pause">Pausar Robô (5 min)</option>
+                    </select>
                   </div>
                 </div>
               )}
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '0.65rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>VELA MESTRA SECUNDÁRIA</label>
-                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Opera rompimentos de vela mestra de forma secundária</span>
-                </div>
-                <Switch name="enableMasterCandleSecondary" checked={settings.enableMasterCandleSecondary || false} onChange={handleInputChange} disabled={isRunning} style={{ flexShrink: 0 }} />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.4rem 0.6rem', background: 'rgba(56, 189, 248, 0.06)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '6px', fontSize: '0.68rem', color: '#38bdf8' }}>
-                <Activity size={14} /> Fator de proteção contra delay da corretora ativo por padrão.
-              </div>
             </div>
-          )}
-        </div>
-
-        {/* MODULE 7: SHADOW ACCOUNT & RECALL ENGINE */}
-        <div style={{
-          background: activeModule === 'recall' ? 'rgba(139, 92, 246, 0.06)' : 'rgba(255, 255, 255, 0.01)',
-          border: activeModule === 'recall' ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.03)',
-          borderRadius: '12px',
-          padding: '0.75rem',
-          transition: 'all 0.25s ease',
-          boxShadow: activeModule === 'recall' ? '0 4px 15px rgba(139, 92, 246, 0.1)' : 'none'
-        }}>
-          <div onClick={() => toggleModule('recall')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Users size={15} style={{ color: activeModule === 'recall' ? 'var(--primary-light)' : '#94A3B8' }} />
-              <strong style={{ fontSize: '0.78rem', color: activeModule === 'recall' ? 'white' : '#94A3B8', fontWeight: 'bold' }}>👥 SHADOW ACCOUNT & RECALL</strong>
-            </div>
-            {activeModule !== 'recall' && (
-              <span style={{ fontSize: '0.7rem', color: settings.recallEnabled ? 'var(--success)' : '#94A3B8', fontWeight: 'bold', background: settings.recallEnabled ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '12px' }}>
-                {settings.recallEnabled ? 'RECALL ON' : 'DESATIVADO'}
-              </span>
-            )}
           </div>
-          
-          {activeModule === 'recall' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              
-              {/* Toggle Recall */}
+        )}
+
+        {/* TAB 6: SHADOW ACCOUNT */}
+        {activeTab === 'recall' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="glass-panel" style={{ padding: '1rem', borderRadius: '12px', background: 'rgba(255,255,255,0.01)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>ACTIVAR RECALL ENGINE</label>
-                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Aciona a Shadow Account em momentos de perda</span>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '800', color: 'white' }}>👥 SHADOW ACCOUNT & RECALL ENGINE</label>
+                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Aciona conta paralela para recuperar prejuízos</span>
                 </div>
                 <Switch name="recallEnabled" checked={settings.recallEnabled || false} onChange={handleInputChange} disabled={isRunning} />
               </div>
-
-              {settings.recallEnabled && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '0.5rem', borderLeft: '2px solid var(--primary-light)' }}>
-                  
-                  {/* Target Account */}
-                  <div>
-                    <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>CONTA DE RECUPERAÇÃO</label>
-                    <select name="recallAccount" value={settings.recallAccount || 'real'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                      <option value="real">Conta Real 1 (Dispara no Saldo Real)</option>
-                      <option value="real2">Conta Real 2 (Shadow Account Secundária)</option>
-                      <option value="demo">Conta Demo (Treinamento / Simulação)</option>
-                    </select>
-                  </div>
-
-                  {/* Trigger Condition */}
-                  <div>
-                    <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>ACIONAR APÓS</label>
-                    <select name="recallTrigger" value={settings.recallTrigger || 'last_gale'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                      <option value="last_gale">Perda do Último Gale (Gale Máximo)</option>
-                      <option value="3_losses">3 Losses Seguidos</option>
-                      <option value="4_losses">4 Losses Seguidos</option>
-                      <option value="stop_loss">Ao Atingir Stop Loss Diário</option>
-                    </select>
-                  </div>
-
-                  {/* Recovery Mode */}
-                  <div>
-                    <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>MODO DE RECUPERAÇÃO</label>
-                    <select name="recallMode" value={settings.recallMode || 'neural_recovery'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                      <option value="neural_recovery">🧠 Neural Recovery (IA &gt; 90% Winrate)</option>
-                      <option value="burst">⚡ Burst Mode (Entrada Imediata Próx. Vela)</option>
-                      <option value="recall_signal">🎯 Sinal Confirmado (Aguardar Sinal)</option>
-                    </select>
-                  </div>
-
-                  {/* Attempt Rule & Cooldown */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                    <div>
-                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>TENTATIVAS</label>
-                      <select name="recallAttemptRule" value={settings.recallAttemptRule || 'single'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                        <option value="single">Apenas 1 tentativa</option>
-                        <option value="until_recovered">Até recuperar</option>
-                        <option value="full_session">Sessão completa</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>COOLDOWN</label>
-                      <select name="recallCooldown" value={settings.recallCooldown || '5min'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                        <option value="none">Sem Cooldown</option>
-                        <option value="5min">5 Minutos</option>
-                        <option value="15min">15 Minutos</option>
-                        <option value="next_cycle">Próximo Ciclo</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Entry Stake Mode */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                    <div>
-                      <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>TIPO DE ENTRADA</label>
-                      <select name="recallStakeMode" value={settings.recallStakeMode || 'same'} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}>
-                        <option value="same">Mesmo Valor do Loss</option>
-                        <option value="custom">Valor Personalizado</option>
-                      </select>
-                    </div>
-
-                    {settings.recallStakeMode === 'custom' && (
-                      <div>
-                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>VALOR ($)</label>
-                        <input
-                          type="number"
-                          name="recallCustomStake"
-                          value={settings.recallCustomStake || '2.00'}
-                          onChange={handleInputChange}
-                          min="0.35"
-                          step="0.1"
-                          disabled={isRunning}
-                          style={{ fontSize: '0.78rem', padding: '0.4rem 0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              )}
             </div>
-          )}
-        </div>
-
-        {/* MODULE 8: SONS */}
-        <div style={{
-          background: activeModule === 'sons' ? 'rgba(139, 92, 246, 0.06)' : 'rgba(255, 255, 255, 0.01)',
-          border: activeModule === 'sons' ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.03)',
-          borderRadius: '12px',
-          padding: '0.75rem',
-          transition: 'all 0.25s ease',
-          boxShadow: activeModule === 'sons' ? '0 4px 15px rgba(139, 92, 246, 0.1)' : 'none'
-        }}>
-          <div onClick={() => toggleModule('sons')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Volume2 size={15} style={{ color: activeModule === 'sons' ? 'var(--primary-light)' : '#94A3B8' }} />
-              <strong style={{ fontSize: '0.78rem', color: activeModule === 'sons' ? 'white' : '#94A3B8', fontWeight: 'bold' }}>🔊 ALERTA & SONS</strong>
-            </div>
-            {activeModule !== 'sons' && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--primary-light)', fontWeight: 'bold', background: 'rgba(139, 92, 246, 0.1)', padding: '2px 8px', borderRadius: '12px' }}>
-                {settings.soundEnabled !== false ? 'Ativos' : 'Mudos'}
-              </span>
-            )}
-          </div>
-          
-          {activeModule === 'sons' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>ALERTAS SONOROS</label>
-                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Habilitar avisos sonoros de WIN e LOSS</span>
-                </div>
-                <Switch 
-                  name="soundEnabled" 
-                  checked={settings.soundEnabled !== false} 
-                  onChange={handleInputChange} 
-                  style={{ flexShrink: 0 }}
-                />
-              </div>
-
-              {settings.soundEnabled !== false && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '0.65rem' }}>
-                  <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block' }}>TESTAR PREVIEW DE SONS</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={() => {
-                        playWinSound();
-                      }}
-                      style={{
-                        flex: 1,
-                        padding: '0.4rem 0.5rem',
-                        fontSize: '0.68rem',
-                        fontWeight: '800',
-                        color: '#10b981',
-                        background: 'rgba(16, 185, 129, 0.08)',
-                        border: '1px solid rgba(16, 185, 129, 0.3)',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      🔊 Testar Win
-                    </button>
-                    <button
-                      onClick={() => {
-                        playLossSound();
-                      }}
-                      style={{
-                        flex: 1,
-                        padding: '0.4rem 0.5rem',
-                        fontSize: '0.68rem',
-                        fontWeight: '800',
-                        color: '#ef4444',
-                        background: 'rgba(239, 68, 68, 0.08)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      🔊 Testar Loss
-                    </button>
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                      }}
-                      style={{
-                        flex: 1,
-                        padding: '0.4rem 0.5rem',
-                        fontSize: '0.68rem',
-                        fontWeight: '800',
-                        color: '#3b82f6',
-                        background: 'rgba(59, 130, 246, 0.08)',
-                        border: '1px solid rgba(59, 130, 246, 0.3)',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      🔊 Testar Click
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* MODULE 8: BETA EXPERIMENTAL */}
-        <div style={{
-          background: activeModule === 'beta' ? 'rgba(168, 85, 247, 0.06)' : 'rgba(255, 255, 255, 0.01)',
-          border: activeModule === 'beta' ? '1px solid rgba(168, 85, 247, 0.35)' : '1px solid rgba(255, 255, 255, 0.03)',
-          borderRadius: '12px',
-          padding: '0.75rem',
-          transition: 'all 0.25s ease',
-          boxShadow: activeModule === 'beta' ? '0 4px 15px rgba(168, 85, 247, 0.1)' : 'none'
-        }}>
-          <div onClick={() => toggleModule('beta')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShieldAlert size={15} style={{ color: activeModule === 'beta' ? '#a855f7' : '#94A3B8' }} />
-              <strong style={{ fontSize: '0.78rem', color: activeModule === 'beta' ? 'white' : '#94A3B8', fontWeight: 'bold' }}>🧪 EXPERIMENTAL (BETA)</strong>
-            </div>
-            {activeModule !== 'beta' && (
-              <span style={{ fontSize: '0.7rem', color: '#a855f7', fontWeight: 'bold', background: 'rgba(168, 85, 247, 0.1)', padding: '2px 8px', borderRadius: '12px' }}>
-                {showBetaFeatures ? 'Ativo' : 'Inativo'}
-              </span>
-            )}
-          </div>
-          
-          {activeModule === 'beta' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white' }}>MÓDULOS BETA</label>
-                  <span style={{ fontSize: '0.62rem', color: '#94A3B8', display: 'block' }}>Habilitar Feed da Comunidade e Rankings Sociais</span>
-                </div>
-                <Switch 
-                  checked={showBetaFeatures} 
-                  onChange={handleToggleBeta} 
-                  style={{ flexShrink: 0 }}
-                />
-              </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.4rem 0.6rem', background: 'rgba(168, 85, 247, 0.06)', border: '1px solid rgba(168, 85, 247, 0.2)', borderRadius: '6px', fontSize: '0.68rem', color: '#c084fc' }}>
-                <Users size={14} /> Ativar novos recursos experimentais de interação social do ASTROBOT.
-              </div>
-            </div>
-          )}
-        </div>
-
-      </div>
-
-      {/* Save Settings Button */}
-      <div style={{ marginTop: '0.5rem', marginBottom: '0.25rem' }}>
-        <button
-          onClick={handleSave}
-          disabled={isRunning}
-          style={{
-            width: '100%',
-            padding: '0.55rem',
-            fontWeight: 'bold',
-            fontSize: '0.78rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            background: saveSuccess ? 'rgba(34, 197, 94, 0.15)' : 'rgba(139, 92, 246, 0.12)',
-            border: saveSuccess ? '1px solid var(--success)' : '1px solid rgba(139, 92, 246, 0.4)',
-            color: saveSuccess ? 'var(--success)' : 'white',
-            borderRadius: '6px',
-            cursor: isRunning ? 'not-allowed' : 'pointer',
-            transition: 'all 0.25s ease',
-            boxShadow: saveSuccess ? '0 0 10px rgba(34, 197, 94, 0.2)' : 'none'
-          }}
-        >
-          {saveSuccess ? (
-            <>
-              <ShieldCheck size={14} /> CONFIGURAÇÕES SALVAS!
-            </>
-          ) : (
-            <>
-              <Save size={14} style={{ color: 'var(--primary-light)' }} /> SALVAR CONFIGURAÇÕES
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Control Buttons */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: 'auto', paddingTop: '0.5rem', borderTop: '1px solid var(--border-color)' }}>
-        {!isRunning ? (
-          <button
-            className="success"
-            onClick={onStart}
-            disabled={!connected || !authorized}
-            style={{ 
-              width: '100%', 
-              padding: '0.65rem', 
-              fontWeight: 'bold', 
-              fontSize: '0.85rem', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              gap: '6px', 
-              boxShadow: '0 0 10px rgba(34, 197, 94, 0.15)' 
-            }}
-          >
-            <Play size={15} fill="currentColor" /> INICIAR BOT
-          </button>
-        ) : (
-          <button
-            className="danger"
-            onClick={onStop}
-            style={{ width: '100%', padding: '0.65rem', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 0 10px rgba(239, 68, 68, 0.15)' }}
-          >
-            <Square size={15} fill="currentColor" /> PARAR OPERAÇÕES
-          </button>
-        )}
-
-        {(!connected || !authorized) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', justifyContent: 'center', color: 'var(--warning)' }}>
-            <AlertCircle size={12} />
-            <span style={{ fontSize: '0.68rem', fontWeight: 'bold' }}>Requer login na Deriv</span>
           </div>
         )}
+
+        {/* TAB 7: LABORATORIO DE ESTUDOS */}
+        {activeTab === 'laboratorio' && (
+          <SorosgaleSimulator trades={trades} />
+        )}
+
       </div>
     </div>
   );

@@ -18,8 +18,10 @@ import {
   formatRecallWinMessage,
   formatRecallLossMessage,
   formatRecallStatusReport,
+  formatMarketRiskReport,
   deleteTelegramMessages
 } from './utils/telegram.js';
+import { analyzeMarketConditions } from './utils/marketIntelligence.js';
 import { supabase, addCommunityPost, getUserProfile, saveUserBackup, loadUserBackup } from './supabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -54,6 +56,17 @@ const DEFAULT_SETTINGS = {
   enableStreakShield: true,
   maxStreakCandles: 4,
   streakShieldAction: 'block',
+  // Auto-Blacklist Consolidação
+  autoBlacklistConsolidation: true,
+  consolidationDojiLimit: 4,
+  // Sorosgale & Micro-Metas
+  sorosgaleLevels: '2',
+  sorosgaleCompounding: '100',
+  sorosgaleAllowGale: true,
+  sorosgaleMaxGale: '2',
+  microMetaEnabled: false,
+  microMetaTarget: '5.00',
+  maxSessionsPerDay: 4,
   telegramToken: '',
   telegramChatId: '',
   telegramEnabled: false,
@@ -649,7 +662,7 @@ export class UserSession {
     }
   }
 
-  // Telegram Notifications sender
+  // Telegram Notifications sender with FIFO queue to guarantee sequential delivery
   async sendTelegramNotif(type, htmlText) {
     const OFFICIAL_BOT_TOKEN = '8422393109:AAFVC0lgcHyKoDKlamkKe6ZAQ2oANLxRV5E';
     const token = this.settings.telegramToken || OFFICIAL_BOT_TOKEN;
@@ -660,11 +673,29 @@ export class UserSession {
     if (type === 'loss' && !this.settings.telegramNotifLoss) return;
     if (type === 'daily_summary' && !this.settings.telegramNotifDailySummary) return;
 
-    try {
-      await sendTelegramMessage(token, this.settings.telegramChatId, htmlText, true);
-    } catch (e) {
-      console.error('Error sending Telegram notification:', e);
+    if (!this.telegramQueue) {
+      this.telegramQueue = [];
+      this.isProcessingTelegramQueue = false;
     }
+
+    this.telegramQueue.push({ token, chatId: this.settings.telegramChatId, htmlText });
+    this.processTelegramQueue();
+  }
+
+  async processTelegramQueue() {
+    if (this.isProcessingTelegramQueue) return;
+    this.isProcessingTelegramQueue = true;
+
+    while (this.telegramQueue && this.telegramQueue.length > 0) {
+      const item = this.telegramQueue.shift();
+      try {
+        await sendTelegramMessage(item.token, item.chatId, item.htmlText, true);
+      } catch (e) {
+        console.error('Error sending Telegram notification:', e);
+      }
+    }
+
+    this.isProcessingTelegramQueue = false;
   }
 
   startBot() {
@@ -678,7 +709,7 @@ export class UserSession {
     this.candles = []; // Clear candles for a fresh analysis start
     this.addLog({ message: 'INICIANDO OPERAÇÕES AUTOMÁTICAS', type: 'success' });
     
-    this.sendTelegramNotif('bot_started', `🤖 <b>ASTROBOT OPERANDO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ativo:</b> <code>${this.settings.symbol}</code>\n<b>Estratégia:</b> <code>${this.settings.selectedStrategy}</code>\n<b>Stake Inicial:</b> <code>$${this.settings.stakeValue}</code>\n<b>Saldo Inicial:</b> <code>$${this.balance}</code>`);
+    this.sendTelegramNotif('bot_started', `🤖 <b>ASTROBOT OPERANDO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ativo:</b> <code>${this.settings.symbol}</code>\n<b>Estratégia:</b> <code>${this.settings.selectedStrategy}</code>\n<b>Stake Inicial:</b> <code>$${this.settings.stakeValue}</code>\n<b>Saldo Inicial:</b> <code>$${parseFloat(this.balance).toFixed(2)}</code>`);
     
     // Ensure we are connected and authorized, or force resubscribe if already connected
     if (this.settings.token) {
@@ -701,7 +732,7 @@ export class UserSession {
     this.isRunning = false;
     this.addLog({ message: 'OPERAÇÕES AUTOMÁTICAS PARALISADAS', type: 'warning' });
     
-    this.sendTelegramNotif('bot_stopped', `🛑 <b>ASTROBOT PARADO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Saldo Final:</b> <code>$${this.balance}</code>\n<b>Resultado:</b> <code>$${(this.balance - this.initialBalance).toFixed(2)}</code>`);
+    this.sendTelegramNotif('bot_stopped', `🛑 <b>ASTROBOT PARADO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Saldo Final:</b> <code>$${parseFloat(this.balance).toFixed(2)}</code>\n<b>Resultado:</b> <code>$${(this.balance - this.initialBalance).toFixed(2)}</code>`);
 
     // Record active cycle result before stopping
     if (this.activeCycleId) {
@@ -1435,7 +1466,7 @@ export class UserSession {
         }
 
         const finishStatus = profit > 0 ? 'Meta Batida' : profit < 0 ? 'Stop Atingido' : 'Finalizado';
-        this.sendTelegramNotif('bot_stopped', `🛑 <b>CICLO ENCERRADO PELO AGENDADOR</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ciclo:</b> <code>${this.cycles.find(c => c.id === currentActiveId)?.name || 'N/A'}</code>\n<b>Saldo Final:</b> <code>$${this.balance}</code>\n<b>Resultado:</b> <code>$${profit.toFixed(2)}</code>`);
+        this.sendTelegramNotif('bot_stopped', `🛑 <b>CICLO ENCERRADO PELO AGENDADOR</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ciclo:</b> <code>${this.cycles.find(c => c.id === currentActiveId)?.name || 'N/A'}</code>\n<b>Saldo Final:</b> <code>$${parseFloat(this.balance).toFixed(2)}</code>\n<b>Resultado:</b> <code>$${profit.toFixed(2)}</code>`);
         
         // Mark the previous cycle with its status and profit
         this.cycles = this.cycles.map(c => c.id === currentActiveId ? { ...c, status: finishStatus, finalProfit: profit } : c);
@@ -1448,6 +1479,32 @@ export class UserSession {
   handleCandleClosed(activeCandles) {
     const closedCandles = activeCandles.slice(0, -1);
     if (closedCandles.length < 5) return;
+
+    // Auto-Blacklist check for Consolidated / Sideways market
+    if (this.settings.autoBlacklistConsolidation !== false && closedCandles.length >= 5) {
+      const limit = parseInt(this.settings.consolidationDojiLimit || '4');
+      const recent = closedCandles.slice(-limit);
+      let dojiCount = 0;
+      for (const c of recent) {
+        const body = Math.abs(c.close - c.open);
+        const range = c.high - c.low;
+        if (range > 0 && (body / range) < 0.25) {
+          dojiCount++;
+        }
+      }
+      if (dojiCount >= limit && this.settings.symbol && !this.isAssetBlacklisted(this.settings.symbol)) {
+        this.addLog({
+          message: `🛡️ [Auto-Blacklist] Detectada forte consolidação no ativo ${this.settings.symbol} (${dojiCount} dojis/velas estreitas em sequência). Adicionando à blacklist e alternando mercado...`,
+          type: 'warning'
+        });
+        this.addAssetToBlacklist(this.settings.symbol, 1, 'Mercado Lateral / Consolidado');
+        const altAssets = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_50', '1HZ50V', 'R_25', '1HZ25V', 'R_10', '1HZ10V'];
+        const safeAlt = altAssets.find(s => !this.isAssetBlacklisted(s)) || 'R_100';
+        this.settings.symbol = safeAlt;
+        this.derivAPI.changeSymbol(safeAlt, parseInt(this.settings.granularity));
+        this.syncSettingsToFirestore();
+      }
+    }
 
     const maxGale = this.settings.martingaleEnabled ? parseInt(this.settings.martingaleMaxLevels) : 0;
     this.strategiesStats = analyzeStrategies(closedCandles, maxGale);
@@ -1463,7 +1520,11 @@ export class UserSession {
         filteredStats = filteredStats.filter(s => s.id !== 'ma_crossover');
       }
     }
-    const sorted = [...filteredStats].sort((a, b) => b.winRate - a.winRate);
+    const sorted = [...filteredStats].sort((a, b) => {
+      const scoreA = a.weightedWinRate ?? (a.totalTrades >= 3 ? a.winRate : a.winRate * (a.totalTrades / 3));
+      const scoreB = b.weightedWinRate ?? (b.totalTrades >= 3 ? b.winRate : b.winRate * (b.totalTrades / 3));
+      return scoreB - scoreA;
+    });
     const bestStrategy = sorted.length > 0 && sorted[0].winRate > 0 ? sorted[0] : null;
 
     if (bestStrategy) {
@@ -1645,11 +1706,14 @@ export class UserSession {
       const stake = this.calculateCurrentStake(false);
       this.addLog({ message: `Sinal identificado na estratégia [${strategyUsed}] para operar ${signal.direction}.`, type: 'info' });
       
+      const stratObj = this.strategiesStats.find(s => s.id === strategyUsed);
+      const effectiveWinRate = stratObj ? (stratObj.weightedWinRate ?? stratObj.winRate) : 0;
+
       this.sendTelegramNotif('opportunity', formatOpportunityFound(
         this.settings.symbol,
-        this.strategiesStats.find(s => s.id === strategyUsed)?.name || strategyUsed,
+        stratObj?.name || strategyUsed,
         signal.direction,
-        this.strategiesStats.find(s => s.id === strategyUsed)?.winRate || 0,
+        effectiveWinRate,
         stake,
         new Date().toLocaleTimeString()
       ));
@@ -1674,7 +1738,7 @@ export class UserSession {
     const level = this.galeLevel;
     const multiplier = parseFloat(this.settings.martingaleMultiplier);
 
-    if (mode === 'soros') {
+    if (mode === 'soros' || mode === 'sorosgale') {
       if (this.currentSorosStake && this.currentSorosStake > 0) {
         return this.currentSorosStake;
       }
@@ -1865,38 +1929,57 @@ export class UserSession {
         this.waitingForGaleNextCandle = false;
       } 
       
-      else if (mode === 'soros') {
+      else if (mode === 'soros' || mode === 'sorosgale') {
         if (isWin) {
           const nextLevel = this.galeLevel + 1;
-          const maxLevels = parseInt(this.settings.martingaleMaxLevels || '2');
+          const maxLevels = parseInt(mode === 'sorosgale' ? (this.settings.sorosgaleLevels || '2') : (this.settings.martingaleMaxLevels || '2'));
           
           if (nextLevel < maxLevels) {
             this.galeLevel = nextLevel;
-            const compoundingRatio = Math.min(1.0, parseFloat(this.settings.martingaleMultiplier || '1.0') >= 10 ? parseFloat(this.settings.martingaleMultiplier) / 100 : parseFloat(this.settings.martingaleMultiplier));
+            const compoundingRatio = mode === 'sorosgale'
+              ? (parseFloat(this.settings.sorosgaleCompounding || '100') / 100)
+              : Math.min(1.0, parseFloat(this.settings.martingaleMultiplier || '1.0') >= 10 ? parseFloat(this.settings.martingaleMultiplier) / 100 : parseFloat(this.settings.martingaleMultiplier));
             const prevSorosStake = this.currentSorosStake || details.stake;
             const nextSorosStake = prevSorosStake + (profit * compoundingRatio);
             this.currentSorosStake = parseFloat(nextSorosStake.toFixed(2));
             
             this.addLog({
-              message: `[Soros] Vitória! Avançando para Estágio ${nextLevel + 1}/${maxLevels}. Próxima entrada: $${this.currentSorosStake}`,
+              message: `🚀 [${mode === 'sorosgale' ? 'Sorosgale' : 'Soros'}] Vitória! Avançando para Nível ${nextLevel + 1}/${maxLevels}. Próxima entrada: $${this.currentSorosStake}`,
               type: 'success'
             });
           } else {
             this.galeLevel = 0;
             this.currentSorosStake = 0;
             this.addLog({
-              message: '[Soros] Ciclo de Soros Concluído com Sucesso! Resetando para a entrada inicial.',
+              message: `🏆 [${mode === 'sorosgale' ? 'Sorosgale' : 'Soros'}] Ciclo Concluído com Sucesso! Resetando para a entrada inicial.`,
               type: 'success'
             });
           }
         } else {
-          this.galeLevel = 0;
-          this.currentSorosStake = 0;
-          this.waitingForGaleNextCandle = false;
-          this.addLog({
-            message: '[Soros] Loss detectado. Ciclo interrompido. Resetando para a entrada inicial.',
-            type: 'error'
-          });
+          const allowGale = mode === 'sorosgale' && (this.settings.sorosgaleAllowGale !== false);
+          const maxGalesAllowed = allowGale 
+            ? Math.min(6, Math.max(1, parseInt(this.settings.sorosgaleMaxGale || this.settings.martingaleMaxLevels || '2')))
+            : 0;
+
+          if (allowGale && this.galeLevel < maxGalesAllowed) {
+            const nextGale = this.galeLevel + 1;
+            this.galeLevel = nextGale;
+            const mult = parseFloat(this.settings.martingaleMultiplier || '2.0');
+            const baseStake = parseFloat(this.settings.stakeValue || '1.00');
+            this.currentSorosStake = parseFloat((baseStake * Math.pow(mult, nextGale)).toFixed(2));
+            this.addLog({
+              message: `⚠️ [Sorosgale] Loss detectado. Executando Nível de Recuperação Gale ${nextGale}/${maxGalesAllowed}: $${this.currentSorosStake}`,
+              type: 'warning'
+            });
+          } else {
+            this.galeLevel = 0;
+            this.currentSorosStake = 0;
+            this.waitingForGaleNextCandle = false;
+            this.addLog({
+              message: `🔴 [${mode === 'sorosgale' ? 'Sorosgale' : 'Soros'}] Loss no ciclo. Resetando para a entrada inicial.`,
+              type: 'error'
+            });
+          }
         }
       } 
       
@@ -2153,6 +2236,13 @@ export class UserSession {
       );
     } else if (cmd === '/recall' || cmd === '🛡️ shadow account' || cmd === '👥 recall engine') {
       reply(formatRecallStatusReport(this.settings, this.recallState));
+    } else if (['/risco', '🧠 status risco', 'status risco', '/risk', '/horarios', 'horarios', 'horário', '⚡ horários / risco', '🧠 risco & horários'].includes(cmd)) {
+      const marketInfo = analyzeMarketConditions({
+        dbTrades: this.trades || [],
+        candles: this.candles || [],
+        currentSymbol: this.settings.symbol || 'R_100'
+      });
+      reply(formatMarketRiskReport(marketInfo, this.settings.symbol || 'R_100'));
     } else if (cmd === '/scanner' || cmd === '📊 scanner') {
       const activeSigList = Object.entries(this.liveSignals || {}).map(([id, sig]) => {
         const name = this.strategiesStats.find(st => st.id === id)?.name || id;
@@ -2176,7 +2266,13 @@ export class UserSession {
       let execucaoCount = 0;
       let aguardandoCount = 0;
 
-      const cycleListText = this.cycles.map(c => {
+      const sortedCycles = [...(this.cycles || [])].sort((a, b) => {
+        const [ah, am] = (a.startTime || '00:00').split(':').map(Number);
+        const [bh, bm] = (b.startTime || '00:00').split(':').map(Number);
+        return (ah * 60 + am) - (bh * 60 + bm);
+      });
+
+      const cycleListText = sortedCycles.map((c, idx) => {
         let statusBadge = '';
         if (!c.active) {
           statusBadge = '⏸ <i>Desativado</i>';
@@ -2217,7 +2313,7 @@ export class UserSession {
           .replace(/^(Madrugada|Manhã|Tarde|Noite)\s*-\s*/gi, '')
           .replace(/\s*\(Auto\)$/gi, '');
 
-        return `<code>${c.startTime}</code> • <b>${cleanName}</b> ➔ ${statusBadge}`;
+        return `<code>[#${idx + 1}] ${c.startTime}</code> • <b>${cleanName}</b> ➔ ${statusBadge}`;
       }).join('\n');
 
       const summaryStats = [

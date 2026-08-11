@@ -56,6 +56,8 @@ import logoImg from './assets/newlogo.png';
 const ASSETS_LIST = [
   { symbol: 'R_100', name: 'Volatilidade 100' },
   { symbol: '1HZ100V', name: 'Volatilidade 100 (1s)' },
+  { symbol: '1HZ150V', name: 'Volatilidade 150 (1s)' },
+  { symbol: '1HZ200V', name: 'Volatilidade 200 (1s)' },
   { symbol: 'R_75', name: 'Volatilidade 75' },
   { symbol: '1HZ75V', name: 'Volatilidade 75 (1s)' },
   { symbol: 'R_50', name: 'Volatilidade 50' },
@@ -63,7 +65,10 @@ const ASSETS_LIST = [
   { symbol: 'R_25', name: 'Volatilidade 25' },
   { symbol: '1HZ25V', name: 'Volatilidade 25 (1s)' },
   { symbol: 'R_10', name: 'Volatilidade 10' },
-  { symbol: '1HZ10V', name: 'Volatilidade 10 (1s)' }
+  { symbol: '1HZ10V', name: 'Volatilidade 10 (1s)' },
+  { symbol: 'JD100', name: 'Jump 100 Index' },
+  { symbol: 'JD75', name: 'Jump 75 Index' },
+  { symbol: 'frxXAUUSD', name: 'Ouro (XAU/USD)' }
 ];
 
 const presetAvatars = [
@@ -4839,102 +4844,34 @@ export default function App() {
               <span>Automação</span>
             </button>
 
-            {/* DROPDOWN 1: Análise & Estratégias (Estratégias + Scanner) */}
-            <div style={{ position: 'relative' }}>
-              <button
-                onClick={() => {
-                  setIsAnalysisDropdownOpen(!isAnalysisDropdownOpen);
-                  setIsManagementDropdownOpen(false);
-                  setIsProfileDropdownOpen(false);
-                  setIsNotificationsOpen(false);
-                }}
-                style={{
-                  background: (activePage === 'strategies' || activePage === 'scanner') ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
-                  border: 'none',
-                  color: (activePage === 'strategies' || activePage === 'scanner') ? 'var(--primary-light)' : 'var(--text-secondary)',
-                  borderBottom: (activePage === 'strategies' || activePage === 'scanner') ? '2px solid var(--primary-light)' : '2px solid transparent',
-                  padding: '0.5rem 0.6rem',
-                  fontSize: '0.8rem',
-                  fontWeight: (activePage === 'strategies' || activePage === 'scanner') ? '700' : '500',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  borderRadius: '6px 6px 0 0',
-                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                }}
-              >
-                <Sparkles size={13} />
-                <span>Análise & Estratégias</span>
-                <ChevronDown size={12} style={{ transform: isAnalysisDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
-              </button>
-
-              {isAnalysisDropdownOpen && (
-                <div className="glass-panel" style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  width: '185px',
-                  zIndex: 1100,
-                  padding: '0.4rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.25rem',
-                  background: 'rgba(14, 11, 24, 0.95)',
-                  border: '1px solid rgba(139, 92, 246, 0.25)',
-                  borderRadius: '8px',
-                  boxShadow: '0 10px 40px rgba(0, 0, 0, 0.6)'
-                }}>
-                  <button
-                    onClick={() => {
-                      setActivePage('strategies');
-                      setIsAnalysisDropdownOpen(false);
-                    }}
-                    style={{
-                      background: activePage === 'strategies' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
-                      border: 'none',
-                      color: activePage === 'strategies' ? 'var(--primary-light)' : 'white',
-                      padding: '8px 10px',
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <Sparkles size={13} style={{ color: 'var(--primary-light)' }} />
-                    <span>Estratégias</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setActivePage('scanner');
-                      setIsAnalysisDropdownOpen(false);
-                    }}
-                    style={{
-                      background: activePage === 'scanner' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
-                      border: 'none',
-                      color: activePage === 'scanner' ? 'var(--primary-light)' : 'white',
-                      padding: '8px 10px',
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <Cpu size={13} style={{ color: '#38bdf8' }} />
-                    <span>Scanner IA</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* Estratégias */}
+            <button
+              onClick={() => {
+                setActivePage('strategies');
+                setIsAnalysisDropdownOpen(false);
+                setIsManagementDropdownOpen(false);
+                setIsProfileDropdownOpen(false);
+                setIsNotificationsOpen(false);
+              }}
+              style={{
+                background: activePage === 'strategies' ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
+                border: 'none',
+                color: activePage === 'strategies' ? 'var(--primary-light)' : 'var(--text-secondary)',
+                borderBottom: activePage === 'strategies' ? '2px solid var(--primary-light)' : '2px solid transparent',
+                padding: '0.5rem 0.6rem',
+                fontSize: '0.8rem',
+                fontWeight: activePage === 'strategies' ? '700' : '500',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: '6px 6px 0 0',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+              }}
+            >
+              <Sparkles size={13} />
+              <span>Estratégias</span>
+            </button>
 
             {/* DROPDOWN 2: Gerenciamento & Relatórios (Planejamento + Relatórios + Telegram) */}
             <div style={{ position: 'relative' }}>
@@ -5663,6 +5600,17 @@ export default function App() {
       <div key={activePage} className="page-transition-container">
       {(() => {
         if (activePage === 'dashboard') {
+          const bestStrategy = (() => {
+            if (!strategiesStats || strategiesStats.length === 0) return null;
+            const filtered = strategiesStats.filter(s => s.id !== 'master_candle');
+            const sorted = [...filtered].sort((a, b) => {
+              const scoreA = a.weightedWinRate ?? (a.totalTrades >= 3 ? a.winRate : a.winRate * (a.totalTrades / 3));
+              const scoreB = b.weightedWinRate ?? (b.totalTrades >= 3 ? b.winRate : b.winRate * (b.totalTrades / 3));
+              return scoreB - scoreA;
+            });
+            return sorted.length > 0 && sorted[0].winRate > 0 ? sorted[0] : null;
+          })();
+
           // ── AI Copilot messages ────────────────────────────────────────
           const copilotMessages = (() => {
             if (!isRunning) return "Aguardando início. Volatilidade estável detectada.";
@@ -6330,18 +6278,7 @@ export default function App() {
 
 
 
-        if (activePage === 'scanner') {
-          return (
-            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
-              <Scanner
-                settings={settings}
-                onChange={handleSettingsChange}
-                connected={connected}
-                isRunning={isRunning}
-              />
-            </main>
-          );
-        }
+
 
         if (activePage === 'strategies') {
           return (
@@ -6522,6 +6459,7 @@ export default function App() {
                   schedulerState={schedulerState}
                   onToggleScheduler={setSchedulerState}
                   onSaveSettings={handleSaveSettings}
+                  trades={dbTrades && dbTrades.length > 0 ? dbTrades : trades}
                 />
               </div>
             </main>
