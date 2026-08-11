@@ -1060,6 +1060,10 @@ export class UserSession {
     if (cycle.disableMaCrossover !== undefined) this.settings.disableMaCrossover = cycle.disableMaCrossover;
     if (cycle.enableMasterCandleSecondary !== undefined) this.settings.enableMasterCandleSecondary = cycle.enableMasterCandleSecondary;
     if (cycle.martingaleMultiplier !== undefined) this.settings.martingaleMultiplier = cycle.martingaleMultiplier.toString();
+    if (cycle.sorosgaleLevels !== undefined) this.settings.sorosgaleLevels = cycle.sorosgaleLevels.toString();
+    if (cycle.sorosgaleMaxGale !== undefined) this.settings.sorosgaleMaxGale = cycle.sorosgaleMaxGale.toString();
+    if (cycle.sorosgaleCompounding !== undefined) this.settings.sorosgaleCompounding = cycle.sorosgaleCompounding.toString();
+    if (cycle.sorosgaleAllowGale !== undefined) this.settings.sorosgaleAllowGale = cycle.sorosgaleAllowGale;
 
 
 

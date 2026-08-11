@@ -16,57 +16,63 @@ const FILES_TO_UPLOAD = [
 
 console.log('Connecting to VPS...');
 conn.on('ready', () => {
-  console.log('SSH Connection Ready. Creating backup of VPS backend...');
-  conn.exec('mkdir -p /root/backups && tar -czf /root/backups/astrobot-backend-backup-$(date +%Y%m%d_%H%M%S).tar.gz -C /root astrobot-backend', (errBackup, streamBackup) => {
+  console.log('SSH Connection Ready. Creating backup directory...');
+  conn.exec('mkdir -p /root/backups && cp /root/astrobot-backend/UserSession.js /root/backups/UserSession.js.bak', (errBackup, streamBackup) => {
     if (errBackup) console.error('Backup error:', errBackup);
-    streamBackup.on('close', () => {
-      console.log('VPS Backup created successfully in /root/backups/');
-      console.log('Ensuring target directories exist...');
-      conn.exec('mkdir -p /root/astrobot-backend/admin-panel /root/astrobot-backend/deriv /root/astrobot-backend/strategies /root/astrobot-backend/utils', (errDir) => {
-        if (errDir) throw errDir;
-        
-        console.log('Directories ensured. Opening SFTP...');
-        conn.sftp((err, sftp) => {
-          if (err) throw err;
-        
-          let uploadedCount = 0;
-          
-          function uploadNext() {
-            if (uploadedCount === FILES_TO_UPLOAD.length) {
-              console.log('All files uploaded successfully. Running npm install...');
-              conn.exec('cd /root/astrobot-backend && npm install', (errInstall, streamInstall) => {
-                if (errInstall) throw errInstall;
-                streamInstall.on('close', () => {
-                  console.log('Dependencies installed. Restarting PM2 process...');
-                  conn.exec('pm2 restart astrobot-backend --update-env', (err2, stream2) => {
-                    if (err2) throw err2;
-                    stream2.on('close', () => {
-                      console.log('PM2 process restarted successfully!');
+    if (streamBackup) {
+      streamBackup.resume();
+      streamBackup.on('close', () => {
+        console.log('VPS Backup step complete.');
+        console.log('Ensuring remote directories exist...');
+        conn.exec('mkdir -p /root/astrobot-backend/admin-panel /root/astrobot-backend/deriv /root/astrobot-backend/strategies /root/astrobot-backend/utils', (errDir, streamDir) => {
+          if (errDir) throw errDir;
+          if (streamDir) {
+            streamDir.resume();
+            streamDir.on('close', () => {
+              console.log('Remote directories ensured. Starting SFTP upload...');
+              conn.sftp((err, sftp) => {
+                if (err) throw err;
+
+                let uploadedCount = 0;
+
+                function uploadNext() {
+                  if (uploadedCount === FILES_TO_UPLOAD.length) {
+                    console.log('All files uploaded successfully via SFTP. Restarting PM2 process...');
+                    conn.exec('pm2 restart astrobot-backend --update-env', (err2, stream2) => {
+                      if (err2) throw err2;
+                      if (stream2) {
+                        stream2.on('data', (d) => process.stdout.write(d));
+                        stream2.on('close', () => {
+                          console.log('PM2 process restarted successfully!');
+                          conn.end();
+                          process.exit(0);
+                        });
+                      }
+                    });
+                    return;
+                  }
+
+                  const file = FILES_TO_UPLOAD[uploadedCount];
+                  console.log(`Uploading [${uploadedCount + 1}/${FILES_TO_UPLOAD.length}] ${file.local} -> ${file.remote}...`);
+                  sftp.fastPut(file.local, file.remote, (err3) => {
+                    if (err3) {
+                      console.error(`Error uploading ${file.local}:`, err3);
                       conn.end();
-                    }).on('data', (d) => process.stdout.write(d));
+                      process.exit(1);
+                      return;
+                    }
+                    uploadedCount++;
+                    uploadNext();
                   });
-                }).on('data', (d) => process.stdout.write(d));
+                }
+
+                uploadNext();
               });
-              return;
-            }
-            
-            const file = FILES_TO_UPLOAD[uploadedCount];
-            console.log(`Uploading ${file.local} -> ${file.remote}...`);
-            sftp.fastPut(file.local, file.remote, (err3) => {
-              if (err3) {
-                console.error(`Error uploading ${file.local}:`, err3);
-                conn.end();
-                return;
-              }
-              uploadedCount++;
-              uploadNext();
             });
           }
-          
-          uploadNext();
         });
       });
-    });
+    }
   });
 }).connect({
   host: '187.127.40.228',

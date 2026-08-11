@@ -154,9 +154,13 @@ export default function Scheduler({
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
   const [generatorData, setGeneratorData] = useState({
     stakeValue: 1.0,
-    takeProfit: 10.0,
-    stopLoss: 20.0,
-    moneyManagement: 'martingale',
+    takeProfit: 5.0,
+    stopLoss: 15.0,
+    moneyManagement: 'sorosgale',
+    sorosgaleLevels: 2,
+    sorosgaleMaxGale: 2,
+    sorosgaleCompounding: 100,
+    sorosgaleAllowGale: true,
     martingaleLevels: 2,
     martingaleMultiplier: 2.0,
     periods: {
@@ -171,7 +175,7 @@ export default function Scheduler({
     enableMasterCandleSecondary: false,
     disableSlowStrategies: true,
     disableMaCrossover: false,
-    useSmartHours: false
+    useSmartHours: true
   });
 
   // ─── Smart Hours Engine ───────────────────────────────────────────────────
@@ -363,6 +367,10 @@ export default function Scheduler({
             takeProfit: tp,
             stopLoss: sl,
             moneyManagement: moneyMgmt,
+            sorosgaleLevels: parseInt(generatorData.sorosgaleLevels) || 2,
+            sorosgaleMaxGale: parseInt(generatorData.sorosgaleMaxGale) || 2,
+            sorosgaleCompounding: parseFloat(generatorData.sorosgaleCompounding) || 100,
+            sorosgaleAllowGale: generatorData.sorosgaleAllowGale !== false,
             martingaleLevels: galeLevels,
             martingaleMultiplier: galeMult,
             enableStreakShield: generatorData.enableStreakShield ?? true,
