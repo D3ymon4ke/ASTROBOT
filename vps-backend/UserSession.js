@@ -2312,8 +2312,8 @@ export class UserSession {
         `${sigText}`
       );
     } else if (cmd === '/ciclos' || cmd === '📅 ciclos') {
-      const schedulerStatusText = this.schedulerState ? '🟢 Automação Online' : '🔴 Automação Offline';
-      
+      const schedulerStatusText = this.schedulerState ? '🟢 Automação Online & Monitorando' : '🔴 Automação Pausada';
+
       let concluidosCount = 0;
       let metaBatidaCount = 0;
       let stopLossCount = 0;
@@ -2331,7 +2331,8 @@ export class UserSession {
         if (!c.active) {
           statusBadge = '⏸ <i>Desativado</i>';
         } else if (c.id === this.activeCycleId && this.isRunning) {
-          statusBadge = '⚡ <b>Executando...</b>';
+          const mgmt = this.settings.moneyManagement === 'sorosgale' ? '🚀 Sorosgale' : 'Martingale';
+          statusBadge = `⚡ <b>Executando... (${mgmt})</b>`;
           execucaoCount++;
         } else if (c.status === 'Meta Batida') {
           metaBatidaCount++;
@@ -2363,25 +2364,35 @@ export class UserSession {
           aguardandoCount++;
         }
 
-        const cleanName = c.name
-          .replace(/^(Madrugada|Manhã|Tarde|Noite)\s*-\s*/gi, '')
-          .replace(/\s*\(Auto\)$/gi, '');
+        // Clean up cycle name for clean display
+        let title = c.name || 'Missão Agendada';
+        title = title.replace(/\s*\(Auto\)$/gi, '').trim();
+        // Extract winrate if present
+        const winrateMatch = title.match(/(\d+(?:\.\d+)?%)/);
+        const wrText = winrateMatch ? ` (${winrateMatch[1]} WR)` : '';
+        // Extract period prefix or icon
+        let periodPrefix = '';
+        if (title.toLowerCase().startsWith('madrugada')) periodPrefix = '🌙 Madrugada';
+        else if (title.toLowerCase().startsWith('manhã')) periodPrefix = '🌅 Manhã';
+        else if (title.toLowerCase().startsWith('tarde')) periodPrefix = '🌇 Tarde';
+        else if (title.toLowerCase().startsWith('noite')) periodPrefix = '🌌 Noite';
+        else periodPrefix = `${c.icon || '🎯'} ${title.split(' ')[0]}`;
 
-        return `<code>[#${idx + 1}] ${c.startTime}</code> • <b>${cleanName}</b> ➔ ${statusBadge}`;
-      }).join('\n');
+        const itemHeader = `${periodPrefix}${wrText}`;
 
-      const summaryStats = [
-        `<b>${schedulerStatusText}</b>`,
-        `🏆 <b>${metaBatidaCount}</b> meta${metaBatidaCount !== 1 ? 's' : ''} batida${metaBatidaCount !== 1 ? 's' : ''}`,
-        stopLossCount > 0 ? `🛑 <b>${stopLossCount}</b> Stop Loss` : null,
-        `▶ <b>${execucaoCount}</b> em execução`,
-        `⏳ <b>${aguardandoCount}</b> aguardando`
-      ].filter(Boolean).join('\n');
+        return `<code>[#${idx + 1}] ${c.startTime}</code> ${c.icon || '🎯'} <b>${itemHeader}</b>\n└ Status: ${statusBadge}`;
+      }).join('\n\n');
 
-      const message = 
-        `🚀 <b>ASTROBOT • CICLOS AUTOMÁTICOS</b>\n\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `${summaryStats}\n\n` +
+      const message =
+        `🚀 <b>ASTROBOT • CRONOGRAMA DE MISSÕES</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `<b>${schedulerStatusText}</b>\n\n` +
+        `📊 <b>RESUMO DO DIA</b>\n` +
+        `🏆 <b>${metaBatidaCount}</b> Meta${metaBatidaCount !== 1 ? 's' : ''} Batida${metaBatidaCount !== 1 ? 's' : ''}\n` +
+        (stopLossCount > 0 ? `🛑 <b>${stopLossCount}</b> Stop Loss\n` : '') +
+        `▶️ <b>${execucaoCount}</b> Em Execução\n` +
+        `⏳ <b>${aguardandoCount}</b> Aguardando Horário\n\n` +
+        `📋 <b>LISTA DE CICLOS AGENDADOS</b>\n` +
         `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
         `${cycleListText || '<i>Nenhum ciclo cadastrado.</i>'}`;
 
