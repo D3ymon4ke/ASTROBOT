@@ -104,7 +104,9 @@ export default function Scheduler({
       let finalProfit = c.finalProfit;
       let status = c.status;
 
-      if ((finalProfit === undefined || parseFloat(finalProfit) === 0) && historicalTrades && historicalTrades.length > 0) {
+      if (c.status === 'Aguardando') {
+        finalProfit = undefined;
+      } else if ((finalProfit === undefined || parseFloat(finalProfit) === 0) && historicalTrades && historicalTrades.length > 0) {
         const now = new Date();
         const [sh, sm] = (c.startTime || '00:00').split(':').map(Number);
         const cycleStartTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm, 0).getTime();
@@ -127,9 +129,7 @@ export default function Scheduler({
           const calcProfit = matchingTrades.reduce((acc, t) => acc + (parseFloat(t.profit) || 0), 0);
           if (calcProfit !== 0) {
             finalProfit = calcProfit;
-            if (status !== 'Ativo' && status !== 'Aguardando') {
-              status = calcProfit > 0 ? 'Meta Batida' : 'Stop Atingido';
-            }
+            status = calcProfit > 0 ? 'Meta Batida' : 'Stop Atingido';
           }
         }
       }
@@ -883,11 +883,13 @@ export default function Scheduler({
                 const statusInfo = getStatusDisplay(c.status);
                 const isRunning = activeCycleId === c.id;
 
-                const isWinStatus = c.status === 'Meta Batida' || (c.finalProfit !== undefined && parseFloat(c.finalProfit) > 0);
-                const isLossStatus = c.status === 'Stop Atingido' || (c.finalProfit !== undefined && parseFloat(c.finalProfit) < 0);
-                const isFinalizedStatus = c.status === 'Finalizado' || c.status === 'SEM OP' || c.status === 'Sem Operação' || c.status === 'Interrompido';
+                const isAguardando = c.status === 'Aguardando';
 
-                const isFinished = (isWinStatus || isLossStatus || isFinalizedStatus || (c.finalProfit !== undefined && parseFloat(c.finalProfit) !== 0)) && !isRunning;
+                const isWinStatus = !isAguardando && (c.status === 'Meta Batida' || (c.finalProfit !== undefined && parseFloat(c.finalProfit) > 0));
+                const isLossStatus = !isAguardando && (c.status === 'Stop Atingido' || (c.finalProfit !== undefined && parseFloat(c.finalProfit) < 0));
+                const isFinalizedStatus = !isAguardando && (c.status === 'Finalizado' || c.status === 'SEM OP' || c.status === 'Sem Operação' || c.status === 'Interrompido');
+
+                const isFinished = !isAguardando && !isRunning && (isWinStatus || isLossStatus || isFinalizedStatus || (c.finalProfit !== undefined && parseFloat(c.finalProfit) !== 0));
 
                 let outcomeType = 'SEM_OP';
                 if (c.finalProfit !== undefined && parseFloat(c.finalProfit) !== 0) {

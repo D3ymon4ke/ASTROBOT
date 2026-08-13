@@ -1618,6 +1618,8 @@ export default function App() {
 
 
   // Scheduler / Automation States
+  const isSyncingCyclesFromBackendRef = useRef(false);
+
   const [schedulerState, setSchedulerState] = useState(() => {
     return localStorage.getItem('astrobot_scheduler_active') === 'true';
   });
@@ -1639,36 +1641,9 @@ export default function App() {
     }
     // Default seeded cycles
     return [
-      {
-        id: 'cycle-morning',
-        name: 'Ciclo Manhã',
-        startTime: '09:00',
-        takeProfit: 30.0,
-        stopLoss: 30.0,
-        stakeValue: 1.0,
-        symbol: 'R_100',
-        selectedStrategy: 'autopilot',
-        enableMasterCandleSecondary: false,
-        disableSlowStrategies: false,
-        active: true,
-        status: 'Aguardando',
-        lastRun: null
-      },
-      {
-        id: 'cycle-night',
-        name: 'Ciclo Noite',
-        startTime: '21:00',
-        takeProfit: 30.0,
-        stopLoss: 30.0,
-        stakeValue: 1.0,
-        symbol: 'R_100',
-        selectedStrategy: 'autopilot',
-        enableMasterCandleSecondary: false,
-        disableSlowStrategies: false,
-        active: true,
-        status: 'Aguardando',
-        lastRun: null
-      }
+      { id: 'c1', name: 'Manhã (MHI)', startTime: '09:00', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], timezone: 'GMT-3', symbol: 'R_100', granularity: '60', selectedStrategy: 'autopilot', stakeValue: 1.0, takeProfit: 5.0, stopLoss: 15.0, moneyManagement: 'sorosgale', sorosgaleLevels: 2, sorosgaleCompounding: 100, sorosgaleAllowGale: true, sorosgaleMaxGale: 2, martingaleLevels: 2, martingaleMultiplier: 2.0, active: true, status: 'Aguardando', icon: '🌅', color: '#f59e0b' },
+      { id: 'c2', name: 'Tarde (Scalper)', startTime: '14:00', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], timezone: 'GMT-3', symbol: '1HZ100V', granularity: '60', selectedStrategy: 'autopilot', stakeValue: 1.0, takeProfit: 5.0, stopLoss: 15.0, moneyManagement: 'sorosgale', sorosgaleLevels: 2, sorosgaleCompounding: 100, sorosgaleAllowGale: true, sorosgaleMaxGale: 2, martingaleLevels: 2, martingaleMultiplier: 2.0, active: true, status: 'Aguardando', icon: '🌇', color: '#06b6d4' },
+      { id: 'c3', name: 'Noite (Corretora)', startTime: '20:00', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], timezone: 'GMT-3', symbol: 'R_75', granularity: '60', selectedStrategy: 'autopilot', stakeValue: 1.0, takeProfit: 5.0, stopLoss: 15.0, moneyManagement: 'sorosgale', sorosgaleLevels: 2, sorosgaleCompounding: 100, sorosgaleAllowGale: true, sorosgaleMaxGale: 2, martingaleLevels: 2, martingaleMultiplier: 2.0, active: true, status: 'Aguardando', icon: '🌙', color: '#8b5cf6' }
     ];
   });
 
@@ -1688,7 +1663,7 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('astrobot_scheduler_cycles', JSON.stringify(cycles));
-    if (userEmail) {
+    if (userEmail && !isSyncingCyclesFromBackendRef.current) {
       syncSettingsToDb({ cycles });
     }
   }, [cycles, userEmail]);
@@ -2133,7 +2108,14 @@ export default function App() {
       setActiveCycleId(sync.activeCycleId);
       stateRef.current.activeCycleId = sync.activeCycleId;
 
-      if (sync.cycles) setCycles(sync.cycles);
+      if (sync.cycles) {
+        isSyncingCyclesFromBackendRef.current = true;
+        setCycles(sync.cycles);
+        localStorage.setItem('astrobot_scheduler_cycles', JSON.stringify(sync.cycles));
+        setTimeout(() => {
+          isSyncingCyclesFromBackendRef.current = false;
+        }, 500);
+      }
       setSchedulerState(sync.schedulerState ?? true);
       setActiveTradeCountdown(sync.activeTradeCountdown);
 

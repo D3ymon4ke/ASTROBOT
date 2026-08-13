@@ -2532,7 +2532,7 @@ export class UserSession {
       message: `[Blacklist System] Ativo ${symbol} foi colocado na lista negra por ${days} dias (${reason}).`,
       type: 'warning'
     });
-    this.saveSettings();
+    this.saveToFile();
   }
 
   isAssetBlacklisted(symbol) {
