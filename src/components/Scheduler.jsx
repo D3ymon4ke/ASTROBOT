@@ -175,18 +175,28 @@ export default function Scheduler({
     enableMasterCandleSecondary: false,
     disableSlowStrategies: true,
     disableMaCrossover: false,
-    useSmartHours: true
+    useSmartHours: true,
+    onlyMhiR100: false,
+    mhiVariant: 'mhi_minority'
   });
 
   // ─── Smart Hours Engine ───────────────────────────────────────────────────
   // Analyses historicalTrades and returns the top performing hours
   // "Best hours" = hours with highest win rate where wins resolved in G0-G3
-  const computeBestHoursFromHistory = (trades, minTrades = 3, topN = 8) => {
+  const computeBestHoursFromHistory = (trades, minTrades = 3, topN = 8, filterSymbol = null) => {
     if (!trades || trades.length === 0) return [];
+
+    let targetTrades = trades;
+    if (filterSymbol) {
+      const symMatches = trades.filter(t => t.symbol === filterSymbol);
+      if (symMatches.length >= 1) {
+        targetTrades = symMatches;
+      }
+    }
 
     const hourStats = {}; // hour (0-23) => { wins, losses, totalG3Wins, total }
 
-    trades.forEach(trade => {
+    targetTrades.forEach(trade => {
       let hour = null;
       // Try to get hour from trade timestamp
       if (trade.timestamp) {
@@ -234,7 +244,7 @@ export default function Scheduler({
     return scored;
   };
 
-  const smartHours = computeBestHoursFromHistory(historicalTrades);
+  const smartHours = computeBestHoursFromHistory(historicalTrades, 3, 8, generatorData.onlyMhiR100 ? 'R_100' : null);
 
   const getPeriodForHour = (hour) => {
     if (hour >= 0 && hour < 6) return 'dawn';
@@ -268,6 +278,10 @@ export default function Scheduler({
     const galeLevels = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' ? 0 : (parseInt(generatorData.martingaleLevels) ?? 2);
     const galeMult = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' || galeLevels === 0 ? 1.0 : (parseFloat(generatorData.martingaleMultiplier) || 2.0);
     
+    const isOnlyMhiR100 = !!generatorData.onlyMhiR100;
+    const selectedMhiVariant = generatorData.mhiVariant || 'mhi_minority';
+    const strategyToUse = isOnlyMhiR100 ? selectedMhiVariant : 'autopilot';
+
     const defaultPeriodConfigs = {
       dawn: [
         { time: '01:25', name: 'Madrugada', icon: '🌙', color: '#8b5cf6' },
@@ -297,7 +311,6 @@ export default function Scheduler({
     if (generatorData.useSmartHours && smartHours.length > 0) {
       const smartConfigs = { dawn: [], morning: [], afternoon: [], night: [] };
       const periodNames = { dawn: 'Madrugada', morning: 'Manhã', afternoon: 'Tarde', night: 'Noite' };
-      const smartStrategies = ['autopilot', 'mhi_minority', 'mhi_majority', 'reversal', 'pullback', 'three_musketeers'];
 
       smartHours.forEach((h, idx) => {
         const periodKey = getPeriodForHour(h.hour);
@@ -308,7 +321,7 @@ export default function Scheduler({
         const periodName = periodNames[periodKey];
         const icon = getPeriodIcon(h.hour);
         const color = getPeriodColor(h.hour);
-        // Always autopilot — scan will pick the best strategy at runtime
+        
         smartConfigs[periodKey].push({
           time: timeStr,
           name: `${periodName} - ${h.winRate}% (${h.total} ops)`,
@@ -339,20 +352,33 @@ export default function Scheduler({
       console.error('Error reading blacklisted assets in Scheduler generator:', e);
     }
 
-    const defaultTargetAssets = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_50', '1HZ50V'];
+    const defaultTargetAssets = isOnlyMhiR100 
+      ? ['R_100'] 
+      : ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_50', '1HZ50V'];
+
     const filteredTargetAssets = defaultTargetAssets.filter(s => !activeBlacklistedSymbols.includes(s));
     const targetAssets = filteredTargetAssets.length > 0 ? filteredTargetAssets : ['R_100'];
     let generatedCount = 0;
+
+    const mhiVariantLabels = {
+      mhi_minority: 'MHI Minoria',
+      mhi_majority: 'MHI Maioria',
+      mhi_2_minority: 'MHI 2 Minoria',
+      mhi_2_majority: 'MHI 2 Maioria',
+      mhi_3_minority: 'MHI 3 Minoria',
+      mhi_3_majority: 'MHI 3 Maioria',
+      padrao_21: 'MHI 15m'
+    };
     
     Object.keys(periodConfigs).forEach(periodKey => {
       if (periodsSelected[periodKey]) {
         periodConfigs[periodKey].forEach(cfg => {
           const assetIndex = generatedCount % targetAssets.length;
-          const symbol = targetAssets[assetIndex];
+          const symbol = isOnlyMhiR100 ? 'R_100' : targetAssets[assetIndex];
+          const backupSymbol = isOnlyMhiR100 ? 'R_100' : (generatorData.backupSymbol || '1HZ100V');
           
-          // Always use autopilot — the bot will scan and pick the best strategy
-          // a few minutes before the cycle starts
-          const name = `${cfg.name} ${cfg.time}`;
+          const labelSuffix = isOnlyMhiR100 ? ` (${mhiVariantLabels[selectedMhiVariant] || 'MHI'})` : '';
+          const name = `${cfg.name}${labelSuffix} ${cfg.time}`;
           
           newCycles.push({
             id: 'cycle_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
@@ -361,8 +387,9 @@ export default function Scheduler({
             days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
             timezone: 'GMT-3',
             symbol: symbol,
+            backupSymbol: backupSymbol,
             granularity: '60',
-            selectedStrategy: 'autopilot',
+            selectedStrategy: strategyToUse,
             stakeValue: stake,
             takeProfit: tp,
             stopLoss: sl,
@@ -380,8 +407,8 @@ export default function Scheduler({
             disableSlowStrategies: !!generatorData.disableSlowStrategies,
             disableMaCrossover: !!generatorData.disableMaCrossover,
             minProbability: 92,
-            icon: cfg.icon,
-            color: cfg.color,
+            icon: isOnlyMhiR100 ? '🎯' : cfg.icon,
+            color: isOnlyMhiR100 ? '#8b5cf6' : cfg.color,
             active: true,
             status: 'Aguardando'
           });
@@ -1939,6 +1966,108 @@ export default function Scheduler({
                 
                 {/* LEFT COLUMN: Financial & Martingale Parameters */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {/* Card MHI Volatility 100 Exclusivo */}
+                  <div style={{
+                    background: generatorData.onlyMhiR100 
+                      ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.16) 0%, rgba(59, 130, 246, 0.16) 100%)' 
+                      : 'rgba(255,255,255,0.02)',
+                    border: generatorData.onlyMhiR100 
+                      ? '1px solid rgba(139, 92, 246, 0.45)' 
+                      : '1px solid rgba(255,255,255,0.06)',
+                    boxShadow: generatorData.onlyMhiR100
+                      ? '0 0 20px rgba(139, 92, 246, 0.15)'
+                      : 'none',
+                    borderRadius: '16px',
+                    padding: '1.1rem',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '36px', height: '36px', borderRadius: '10px',
+                          background: generatorData.onlyMhiR100 ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.05)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '1.2rem', transition: 'all 0.3s ease'
+                        }}>🎯</div>
+                        <div>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: generatorData.onlyMhiR100 ? '#c084fc' : 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>Modo MHI Volatility 100 Index</span>
+                            {generatorData.onlyMhiR100 && (
+                              <span style={{ fontSize: '0.58rem', background: 'rgba(139, 92, 246, 0.3)', border: '1px solid rgba(167, 139, 250, 0.4)', padding: '1px 6px', borderRadius: '4px', color: '#e9d5ff', fontWeight: '800' }}>
+                                ATIVO ESTÁVEL
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.62rem', color: '#94a3b8', marginTop: '2px' }}>
+                            Operar somente MHI no Volatility 100 Index (R_100), o ativo mais estável
+                          </div>
+                        </div>
+                      </div>
+                      <Switch
+                        showStatus={false}
+                        scale={0.9}
+                        checked={generatorData.onlyMhiR100}
+                        onChange={(e) => setGeneratorData(prev => ({ ...prev, onlyMhiR100: e.target.checked }))}
+                      />
+                    </div>
+
+                    {generatorData.onlyMhiR100 && (
+                      <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(139, 92, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '10px' }}>
+                          <div>
+                            <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>
+                              VARIAÇÃO DA ESTRATÉGIA MHI
+                            </label>
+                            <select
+                              value={generatorData.mhiVariant || 'mhi_minority'}
+                              onChange={(e) => setGeneratorData(prev => ({ ...prev, mhiVariant: e.target.value }))}
+                              style={{
+                                fontSize: '0.78rem',
+                                padding: '0.5rem',
+                                background: '#09090f',
+                                color: 'white',
+                                border: '1px solid rgba(139, 92, 246, 0.3)',
+                                borderRadius: '8px',
+                                width: '100%',
+                                outline: 'none'
+                              }}
+                            >
+                              <option value="mhi_minority">MHI 1 (Minoria - Recomendado)</option>
+                              <option value="mhi_majority">MHI 1 (Maioria)</option>
+                              <option value="mhi_2_minority">MHI 2 (Minoria)</option>
+                              <option value="mhi_2_majority">MHI 2 (Maioria)</option>
+                              <option value="mhi_3_minority">MHI 3 (Minoria)</option>
+                              <option value="mhi_3_majority">MHI 3 (Maioria)</option>
+                              <option value="padrao_21">Padrão 21 (MHI 15m)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>
+                              ATIVO EXCLUSIVO
+                            </label>
+                            <div style={{
+                              fontSize: '0.78rem',
+                              padding: '0.5rem 0.6rem',
+                              background: 'rgba(16, 185, 129, 0.1)',
+                              color: '#34d399',
+                              border: '1px solid rgba(16, 185, 129, 0.3)',
+                              borderRadius: '8px',
+                              fontWeight: 'bold',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}>
+                              <span>🛡️ R_100 (Vol 100)</span>
+                            </div>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '0.6rem', color: '#a78bfa', opacity: 0.9 }}>
+                          ⚡ Todas as missões serão agendadas no ativo <strong>Volatility 100 Index</strong> focando 100% no padrão MHI.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Card 1: Metas Financeiras */}
                   <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem' }}>
                     <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '12px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>

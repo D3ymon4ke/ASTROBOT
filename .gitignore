@@ -43,3 +43,5 @@ scratch/
 !package.json
 !package-lock.json
 !.oxlintrc.json
+
+.vercel
