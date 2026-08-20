@@ -144,11 +144,43 @@ export default function Scheduler({
 
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
   const [selectedCycleId, setSelectedCycleId] = useState(null);
+  const [timelineSearch, setTimelineSearch] = useState('');
+  const [timelineFilter, setTimelineFilter] = useState('all');
+  const [logSearch, setLogSearch] = useState('');
+  const [logFilter, setLogFilter] = useState('all');
   
   // Wizard (Modal) States
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [wizardData, setWizardData] = useState(defaultCycle);
+
+  // Consolidated KPI Metrics for Today's Automation
+  const timelineMetrics = useMemo(() => {
+    const total = sanitizedCycles.length;
+    const active = sanitizedCycles.filter(c => c.active).length;
+    const completed = sanitizedCycles.filter(c => c.status === 'Meta Batida' || c.status === 'Stop Atingido' || c.status === 'Finalizado');
+    const wins = sanitizedCycles.filter(c => c.status === 'Meta Batida' || (c.finalProfit !== undefined && parseFloat(c.finalProfit) > 0)).length;
+    const losses = sanitizedCycles.filter(c => c.status === 'Stop Atingido' || (c.finalProfit !== undefined && parseFloat(c.finalProfit) < 0)).length;
+    
+    let totalProfit = 0;
+    sanitizedCycles.forEach(c => {
+      if (c.finalProfit !== undefined) {
+        totalProfit += parseFloat(c.finalProfit) || 0;
+      }
+    });
+
+    const winRate = completed.length > 0 ? ((wins / completed.length) * 100).toFixed(1) : (total > 0 ? '100.0' : '0.0');
+    
+    return {
+      total,
+      active,
+      completed: completed.length,
+      wins,
+      losses,
+      totalProfit: totalProfit.toFixed(2),
+      winRate
+    };
+  }, [sanitizedCycles]);
 
   // Scheduling Generator Modal States
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
@@ -524,10 +556,6 @@ export default function Scheduler({
     setIsGeneratorOpen(false);
   };
 
-  // Filter States for Logs
-  const [logSearch, setLogSearch] = useState('');
-  const [logFilter, setLogFilter] = useState('all'); // 'all' | 'today' | 'yesterday'
-
   // Countdown timer for next scheduled cycle
   const [nextCycleCountdown, setNextCycleCountdown] = useState('--:--:--');
 
@@ -833,18 +861,64 @@ export default function Scheduler({
   const nextStep = () => setWizardStep(prev => Math.min(prev + 1, 5));
   const prevStep = () => setWizardStep(prev => Math.max(prev - 1, 1));
 
-  // Filter logs logic
-  const filteredLogs = schedulerLogs.filter(log => {
-    const matchesSearch = log.message.toLowerCase().includes(logSearch.toLowerCase());
-    
-    // Filter by date
-    if (logFilter === 'today') {
-      const todayStr = new Date().toLocaleDateString();
-      // Since logs just show HH:MM:SS, let's assume they are today if added this session
-      return matchesSearch;
-    }
-    return matchesSearch;
-  });
+  // Filtered timeline cycles based on search and period/status filters
+  const filteredTimelineCycles = useMemo(() => {
+    return sanitizedCycles.filter(c => {
+      const search = (timelineSearch || '').toLowerCase().trim();
+      const matchesSearch = !search || 
+        c.name.toLowerCase().includes(search) || 
+        c.symbol.toLowerCase().includes(search) || 
+        c.startTime.includes(search) ||
+        (c.selectedStrategy && c.selectedStrategy.toLowerCase().includes(search));
+      
+      if (!matchesSearch) return false;
+
+      if (timelineFilter === 'all') return true;
+      if (timelineFilter === 'active') return c.active;
+      if (timelineFilter === 'waiting') return c.status === 'Aguardando';
+      if (timelineFilter === 'finished') {
+        return c.status === 'Meta Batida' || c.status === 'Stop Atingido' || c.status === 'Finalizado';
+      }
+      if (timelineFilter === 'dawn') {
+        const h = parseInt((c.startTime || '00:00').split(':')[0]);
+        return h >= 0 && h < 6;
+      }
+      if (timelineFilter === 'morning') {
+        const h = parseInt((c.startTime || '00:00').split(':')[0]);
+        return h >= 6 && h < 12;
+      }
+      if (timelineFilter === 'afternoon') {
+        const h = parseInt((c.startTime || '00:00').split(':')[0]);
+        return h >= 12 && h < 18;
+      }
+      if (timelineFilter === 'night') {
+        const h = parseInt((c.startTime || '00:00').split(':')[0]);
+        return h >= 18 && h <= 23;
+      }
+      return true;
+    });
+  }, [sanitizedCycles, timelineSearch, timelineFilter]);
+
+  // Filter logs logic with categories
+  const filteredLogs = useMemo(() => {
+    return (schedulerLogs || []).filter(log => {
+      const search = (logSearch || '').toLowerCase().trim();
+      const matchesSearch = !search || log.message.toLowerCase().includes(search);
+      if (!matchesSearch) return false;
+      
+      if (logFilter === 'all') return true;
+      if (logFilter === 'ia') {
+        return log.message.includes('IA') || log.message.includes('MHI') || log.message.includes('Estudo') || log.message.includes('Scanner');
+      }
+      if (logFilter === 'trades') {
+        return log.message.includes('Ordem') || log.message.includes('Trade') || log.message.includes('Win') || log.message.includes('Loss') || log.message.includes('Stake');
+      }
+      if (logFilter === 'errors') {
+        return log.type === 'error' || log.type === 'warning' || log.message.includes('Erro') || log.message.includes('Stop');
+      }
+      return true;
+    });
+  }, [schedulerLogs, logSearch, logFilter]);
 
   const selectedCycle = sanitizedCycles.find(c => c.id === selectedCycleId);
   const nextCycle = getNextCycle();
@@ -895,53 +969,157 @@ export default function Scheduler({
       color: 'var(--text-primary)'
     }}>
 
-      {/* TOPO: CENTRAL DE AUTOMAÇÃO */}
+      {/* TOPO: CENTRAL DE AUTOMAÇÃO (METRIC HUD & CONTROLS) */}
       <div className="glass-panel" style={{
-        padding: '1.25rem 1.75rem',
+        padding: '1.15rem 1.5rem',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: 'rgba(15, 11, 28, 0.75)',
-        border: '1px solid rgba(139, 92, 246, 0.2)',
-        borderRadius: '16px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+        background: 'linear-gradient(135deg, rgba(15, 11, 28, 0.88) 0%, rgba(20, 15, 38, 0.75) 100%)',
+        border: '1px solid rgba(139, 92, 246, 0.25)',
+        borderRadius: '18px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+        gap: '1.25rem',
+        flexWrap: 'wrap'
       }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Cpu size={20} style={{ color: 'var(--primary-light)' }} className="pulse-primary" />
-            <h2 style={{ fontSize: '1.3rem', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
-              Central de Automação de Missões
-            </h2>
+        {/* Left: Brand / Title / Engine Status */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(59, 130, 246, 0.2) 100%)',
+            border: '1px solid rgba(139, 92, 246, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 0 15px rgba(139, 92, 246, 0.25)'
+          }}>
+            <Cpu size={22} style={{ color: '#c084fc' }} className="pulse-primary" />
           </div>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-            Hora Local: <strong style={{ fontFamily: 'var(--font-mono)' }}>{currentTime}</strong> | Missões Ativas: <strong>{sanitizedCycles.filter(c => c.active).length}</strong>
-          </span>
-        </div>
-
-        {/* Top Quick Stats Grid */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          {/* Next Cycle Widget */}
-          {nextCycle && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', borderRight: '1px solid rgba(255,255,255,0.06)', paddingRight: '1.5rem' }}>
-              <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Próxima Missão</span>
-              <strong style={{ fontSize: '0.88rem', color: 'white', display: 'flex', alignItems: 'center', gap: '5px', marginTop: '1px' }}>
-                {nextCycle.icon} {nextCycle.name} <span style={{ color: 'var(--primary-light)', fontSize: '0.75rem' }}>({nextCycle.startTime})</span>
-              </strong>
-              <span style={{ fontSize: '0.7rem', color: '#10b981', fontFamily: 'var(--font-mono)', marginTop: '2px', fontWeight: 'bold' }}>
-                T-minus {nextCycleCountdown}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: '900', margin: 0, letterSpacing: '-0.5px', color: 'white' }}>
+                Central de Automação de Missões
+              </h2>
+              <span style={{
+                fontSize: '0.6rem',
+                fontWeight: '800',
+                padding: '2px 7px',
+                borderRadius: '5px',
+                background: schedulerState ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                color: schedulerState ? '#34d399' : '#f87171',
+                border: `1px solid ${schedulerState ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: schedulerState ? '#10b981' : '#ef4444' }} className={schedulerState ? 'pulse-dot-green' : ''} />
+                {schedulerState ? 'ENGINE ONLINE' : 'ENGINE PAUSADO'}
               </span>
             </div>
-          )}
-
-          {/* Motor Status Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-              <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Motor IA</span>
-              <strong style={{ fontSize: '0.8rem', color: schedulerState ? '#10b981' : '#ef4444', marginTop: '1px' }}>
-                {schedulerState ? 'ONLINE & MONITORANDO' : 'DESACTIVADO'}
-              </strong>
+            <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span>🕒 Local: <strong style={{ fontFamily: 'var(--font-mono)', color: 'white' }}>{currentTime}</strong></span>
+              <span>•</span>
+              <span>🌐 Servidor: <strong style={{ fontFamily: 'var(--font-mono)', color: '#a78bfa' }}>GMT-3</strong></span>
             </div>
-            <Switch showStatus={false} checked={schedulerState} onChange={(e) => onToggleScheduler(e.target.checked)} />
+          </div>
+        </div>
+
+        {/* Center: Live Consolidated Automation KPIs */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Active Missions Card */}
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            borderRadius: '10px',
+            padding: '5px 10px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
+          }}>
+            <span style={{ fontSize: '0.55rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold' }}>Missões Ativas</span>
+            <strong style={{ fontSize: '0.85rem', color: '#c084fc', fontFamily: 'var(--font-mono)' }}>
+              {timelineMetrics.active} <span style={{ fontSize: '0.65rem', color: '#64748b' }}>/ {timelineMetrics.total}</span>
+            </strong>
+          </div>
+
+          {/* Win Rate KPI */}
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            borderRadius: '10px',
+            padding: '5px 10px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
+          }}>
+            <span style={{ fontSize: '0.55rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold' }}>Assertividade</span>
+            <strong style={{ fontSize: '0.85rem', color: parseFloat(timelineMetrics.winRate) >= 70 ? '#34d399' : '#fbbf24', fontFamily: 'var(--font-mono)' }}>
+              {timelineMetrics.winRate}%
+            </strong>
+          </div>
+
+          {/* Consolidated Profit */}
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            borderRadius: '10px',
+            padding: '5px 10px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
+          }}>
+            <span style={{ fontSize: '0.55rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold' }}>Resultado Diário</span>
+            <strong style={{
+              fontSize: '0.85rem',
+              color: parseFloat(timelineMetrics.totalProfit) >= 0 ? '#34d399' : '#f87171',
+              fontFamily: 'var(--font-mono)'
+            }}>
+              {parseFloat(timelineMetrics.totalProfit) >= 0 ? '+' : ''}${timelineMetrics.totalProfit}
+            </strong>
+          </div>
+
+          {/* Next Cycle Widget */}
+          {nextCycle && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(59, 130, 246, 0.12) 100%)',
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              borderRadius: '10px',
+              padding: '5px 10px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start'
+            }}>
+              <span style={{ fontSize: '0.55rem', color: '#a78bfa', textTransform: 'uppercase', fontWeight: '800' }}>
+                Próximo Disparo ({nextCycle.startTime})
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '1px' }}>
+                <span style={{ fontSize: '0.75rem' }}>{nextCycle.icon}</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#34d399', fontFamily: 'var(--font-mono)' }}>
+                  T-minus {nextCycleCountdown}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Master Controls & Generator */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Master Switch */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'rgba(0,0,0,0.25)',
+            padding: '5px 10px',
+            borderRadius: '10px',
+            border: '1px solid rgba(255,255,255,0.06)'
+          }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 'bold', color: schedulerState ? '#34d399' : '#94a3b8' }}>
+              {schedulerState ? 'Motor Ativo' : 'Motor Desativado'}
+            </span>
+            <Switch showStatus={false} scale={0.8} checked={schedulerState} onChange={(e) => onToggleScheduler(e.target.checked)} />
           </div>
 
           {/* Scheduling Generator Button */}
@@ -949,20 +1127,21 @@ export default function Scheduler({
             onClick={() => setIsGeneratorOpen(true)}
             className="action-button-glow"
             style={{
-              padding: '0.65rem 1.2rem',
+              padding: '0.65rem 1.15rem',
               borderRadius: '10px',
-              fontSize: '0.8rem',
-              fontWeight: 'bold',
+              fontSize: '0.78rem',
+              fontWeight: '800',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.18) 0%, rgba(59, 130, 246, 0.15) 100%)',
-              border: '1px solid rgba(139, 92, 246, 0.45)',
-              color: '#c084fc'
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.22) 0%, rgba(59, 130, 246, 0.2) 100%)',
+              border: '1px solid rgba(139, 92, 246, 0.5)',
+              color: '#e9d5ff',
+              boxShadow: '0 0 15px rgba(139, 92, 246, 0.2)'
             }}
           >
-            <Sliders size={16} /> Gerador de Linha do Tempo
+            <Sliders size={15} /> Gerador de Linha do Tempo
           </button>
 
           {/* Add New Mission Button */}
@@ -970,45 +1149,46 @@ export default function Scheduler({
             onClick={handleOpenNewWizard}
             className="primary"
             style={{
-              padding: '0.65rem 1.2rem',
+              padding: '0.65rem 1.15rem',
               borderRadius: '10px',
-              fontSize: '0.8rem',
-              fontWeight: 'bold',
+              fontSize: '0.78rem',
+              fontWeight: '800',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '6px'
             }}
           >
-            <Plus size={16} /> Nova Missão
+            <Plus size={15} /> Nova Missão
           </button>
         </div>
       </div>
 
-      {/* BOTTOM LAYOUT GRID */}
+      {/* BOTTOM LAYOUT GRID (3 COLUMNS: TIMELINE | COCKPIT | AUDIT TERMINAL) */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '290px 1fr 290px',
+        gridTemplateColumns: '310px 1fr 310px',
         gap: '1.25rem',
         flex: 1,
         overflow: 'hidden',
-        minHeight: '620px'
+        minHeight: '640px'
       }}>
 
         {/* LATERAL ESQUERDA: TIMELINE DOS CICLOS */}
         <div className="glass-panel" style={{
-          padding: '1.25rem',
+          padding: '1.15rem',
           display: 'flex',
           flexDirection: 'column',
-          gap: '0.85rem',
-          background: 'rgba(15, 11, 28, 0.4)',
-          border: '1px solid rgba(255,255,255,0.03)',
+          gap: '0.75rem',
+          background: 'rgba(15, 11, 28, 0.45)',
+          border: '1px solid rgba(255,255,255,0.04)',
           borderRadius: '16px',
-          overflowY: 'auto'
+          overflowY: 'hidden'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-            <h3 style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
-              Linha do Tempo ({sanitizedCycles.length})
+          {/* Header with Title & Batch Action Buttons */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.4rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <h3 style={{ fontSize: '0.78rem', fontWeight: '800', color: 'white', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>🕒</span> Linha do Tempo ({filteredTimelineCycles.length}/{sanitizedCycles.length})
             </h3>
             {sanitizedCycles.length > 0 && (
               <div style={{ display: 'flex', gap: '4px' }}>
@@ -1017,11 +1197,11 @@ export default function Scheduler({
                   title="Ativar todas as missões"
                   onClick={() => handleBatchToggleActive(true)}
                   style={{
-                    background: 'rgba(16, 185, 129, 0.1)',
-                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    background: 'rgba(16, 185, 129, 0.12)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
                     color: '#34d399',
                     borderRadius: '5px',
-                    padding: '2px 5px',
+                    padding: '2px 6px',
                     fontSize: '0.6rem',
                     cursor: 'pointer',
                     fontWeight: 'bold'
@@ -1034,11 +1214,11 @@ export default function Scheduler({
                   title="Pausar todas as missões"
                   onClick={() => handleBatchToggleActive(false)}
                   style={{
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
                     color: '#f87171',
                     borderRadius: '5px',
-                    padding: '2px 5px',
+                    padding: '2px 6px',
                     fontSize: '0.6rem',
                     cursor: 'pointer',
                     fontWeight: 'bold'
@@ -1055,7 +1235,7 @@ export default function Scheduler({
                     border: '1px solid rgba(255, 255, 255, 0.1)',
                     color: '#cbd5e1',
                     borderRadius: '5px',
-                    padding: '2px 5px',
+                    padding: '2px 6px',
                     fontSize: '0.6rem',
                     cursor: 'pointer',
                     fontWeight: 'bold'
@@ -1067,18 +1247,73 @@ export default function Scheduler({
             )}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1 }}>
-            {sanitizedCycles.length === 0 ? (
+          {/* Quick Search & Period Filter Tabs */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={timelineSearch}
+                onChange={(e) => setTimelineSearch(e.target.value)}
+                placeholder="Filtrar por nome, ativo, hora..."
+                style={{
+                  padding: '0.35rem 0.5rem 0.35rem 1.6rem',
+                  fontSize: '0.68rem',
+                  background: 'rgba(0, 0, 0, 0.3)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: '6px',
+                  color: 'white',
+                  width: '100%',
+                  outline: 'none'
+                }}
+              />
+              <Search size={11} style={{ position: 'absolute', left: '7px', color: 'var(--text-muted)' }} />
+            </div>
+
+            {/* Period Filter Chips */}
+            <div style={{ display: 'flex', gap: '3px', overflowX: 'auto', paddingBottom: '2px' }}>
+              {[
+                { key: 'all', label: 'Todos' },
+                { key: 'active', label: 'Ativos' },
+                { key: 'waiting', label: 'Aguard.' },
+                { key: 'finished', label: 'Concluídos' },
+                { key: 'dawn', label: '🌙 00-06h' },
+                { key: 'morning', label: '🌅 06-12h' },
+                { key: 'afternoon', label: '🌇 12-18h' },
+                { key: 'night', label: '🌌 18-00h' }
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setTimelineFilter(tab.key)}
+                  style={{
+                    padding: '2px 6px',
+                    fontSize: '0.56rem',
+                    fontWeight: 'bold',
+                    borderRadius: '4px',
+                    border: timelineFilter === tab.key ? '1px solid #a78bfa' : '1px solid rgba(255,255,255,0.05)',
+                    background: timelineFilter === tab.key ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.02)',
+                    color: timelineFilter === tab.key ? '#e9d5ff' : '#94a3b8',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Timeline Missions Scrollbox */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1, overflowY: 'auto', paddingRight: '2px' }}>
+            {filteredTimelineCycles.length === 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '0.5rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1rem' }}>
                 <Clock size={28} />
-                <span style={{ fontSize: '0.72rem' }}>Nenhuma missão programada.</span>
+                <span style={{ fontSize: '0.72rem' }}>Nenhuma missão encontrada para este filtro.</span>
               </div>
             ) : (
-              sanitizedCycles.map((c, idx) => {
+              filteredTimelineCycles.map((c, idx) => {
                 const isSelected = c.id === selectedCycleId;
                 const statusInfo = getStatusDisplay(c.status);
                 const isRunning = activeCycleId === c.id;
-
                 const isAguardando = c.status === 'Aguardando';
 
                 const isWinStatus = !isAguardando && (c.status === 'Meta Batida' || (c.finalProfit !== undefined && parseFloat(c.finalProfit) > 0));
@@ -1116,7 +1351,7 @@ export default function Scheduler({
                   const isPartial = c.finalProfit !== undefined && hasTarget && parseFloat(c.finalProfit) < (parseFloat(c.takeProfit) - 0.05);
 
                   overlayConfig = {
-                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 78, 59, 0.75) 100%)',
+                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 78, 59, 0.85) 100%)',
                     border: '1px solid rgba(16, 185, 129, 0.5)',
                     boxShadow: '0 0 15px rgba(16, 185, 129, 0.3)',
                     title: isPartial ? '🏆 LUCRO ALCANÇADO' : '🏆 META BATIDA',
@@ -1131,7 +1366,7 @@ export default function Scheduler({
                   const isPartialLoss = c.finalProfit !== undefined && hasStop && Math.abs(parseFloat(c.finalProfit)) < (parseFloat(c.stopLoss) - 0.05);
 
                   overlayConfig = {
-                    background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(127, 29, 29, 0.75) 100%)',
+                    background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(127, 29, 29, 0.85) 100%)',
                     border: '1px solid rgba(239, 68, 68, 0.5)',
                     boxShadow: '0 0 15px rgba(239, 68, 68, 0.3)',
                     title: isPartialLoss ? '🛑 ENCERRADO COM PERDA' : '🛑 STOP LOSS ATINGIDO',
@@ -1150,53 +1385,57 @@ export default function Scheduler({
                     style={{
                       position: 'relative',
                       overflow: 'hidden',
-                      padding: '0.85rem 1rem',
-                      background: isSelected ? 'rgba(139, 92, 246, 0.08)' : 'rgba(255,255,255,0.01)',
+                      padding: '0.8rem 0.95rem',
+                      background: isSelected 
+                        ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.1) 100%)' 
+                        : isRunning 
+                        ? 'rgba(16, 185, 129, 0.06)'
+                        : 'rgba(255,255,255,0.015)',
                       borderLeft: `3px solid ${c.color || 'var(--primary-light)'}`,
-                      borderTop: isSelected ? '1px solid rgba(139, 92, 246, 0.25)' : '1px solid rgba(255,255,255,0.02)',
-                      borderRight: isSelected ? '1px solid rgba(139, 92, 246, 0.25)' : '1px solid rgba(255,255,255,0.02)',
-                      borderBottom: isSelected ? '1px solid rgba(139, 92, 246, 0.25)' : '1px solid rgba(255,255,255,0.02)',
-                      borderRadius: '8px',
+                      borderTop: isSelected ? '1px solid rgba(167, 139, 250, 0.4)' : '1px solid rgba(255,255,255,0.03)',
+                      borderRight: isSelected ? '1px solid rgba(167, 139, 250, 0.4)' : '1px solid rgba(255,255,255,0.03)',
+                      borderBottom: isSelected ? '1px solid rgba(167, 139, 250, 0.4)' : '1px solid rgba(255,255,255,0.03)',
+                      borderRadius: '10px',
                       cursor: 'pointer',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '0.4rem',
-                      transition: 'all 0.2s',
-                      boxShadow: isSelected ? '0 4px 15px rgba(139, 92, 246, 0.1)' : 'none'
+                      gap: '0.35rem',
+                      transition: 'all 0.2s ease',
+                      boxShadow: isSelected ? '0 4px 18px rgba(139, 92, 246, 0.18)' : 'none'
                     }}
                   >
-                    {/* Inner Card Content (Blurred if Finished) */}
+                    {/* Inner Card Content */}
                     <div style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '0.4rem',
+                      gap: '0.35rem',
                       filter: isFinished ? 'blur(3.5px)' : 'none',
                       opacity: isFinished ? 0.3 : 1,
                       pointerEvents: isFinished ? 'none' : 'auto',
                       transition: 'all 0.3s ease'
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 'bold' }}>
-                          <span style={{ fontSize: '0.62rem', background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '1px 5px', borderRadius: '4px', color: '#a78bfa', fontFamily: 'var(--font-mono)' }}>#{idx + 1}</span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                          <span style={{ fontSize: '0.58rem', background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '1px 5px', borderRadius: '4px', color: '#a78bfa', fontFamily: 'var(--font-mono)' }}>#{idx + 1}</span>
                           <span>{c.icon}</span>
-                          <span style={{ color: c.active ? 'white' : 'var(--text-muted)' }}>{c.name}</span>
+                          <span style={{ color: c.active ? 'white' : 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>{c.name}</span>
                         </span>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 'bold', fontFamily: 'var(--font-mono)', color: 'var(--primary-light)' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 'bold', fontFamily: 'var(--font-mono)', color: isRunning ? '#34d399' : 'var(--primary-light)' }}>
                           {c.startTime}
                         </span>
                       </div>
 
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
-                        <span>{getCleanSymbolName(c.symbol)}</span>
-                        <span>Stake: ${c.stakeValue}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.64rem', color: 'var(--text-secondary)' }}>
+                        <span style={{ color: '#cbd5e1', fontWeight: '600' }}>🛡️ {getCleanSymbolName(c.symbol)}</span>
+                        <span>Stake: <strong>${c.stakeValue}</strong></span>
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '4px' }}>
-                        <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          {c.days.length === 7 ? 'Todos os dias' : `${c.days.length} dias`}
+                        <span style={{ fontSize: '0.6rem', color: '#34d399', fontWeight: 'bold' }}>
+                          Meta: +${c.takeProfit}
                         </span>
                         <span style={{
-                          fontSize: '0.65rem',
+                          fontSize: '0.62rem',
                           fontWeight: 'bold',
                           color: statusInfo.color,
                           display: 'flex',
@@ -1227,13 +1466,13 @@ export default function Scheduler({
                         justifyContent: 'center',
                         gap: '2px',
                         zIndex: 10,
-                        borderRadius: '8px',
+                        borderRadius: '10px',
                         border: overlayConfig.border,
                         boxShadow: overlayConfig.shadow,
                         pointerEvents: 'auto'
                       }}>
                         <div style={{
-                          fontSize: '0.62rem',
+                          fontSize: '0.6rem',
                           fontWeight: '800',
                           color: overlayConfig.titleColor,
                           textTransform: 'uppercase',
@@ -1264,102 +1503,144 @@ export default function Scheduler({
             )}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          {/* Bottom Batch Controls */}
+          <div style={{ display: 'flex', gap: '6px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
             <button
               onClick={handleResetAllCycles}
               style={{
+                flex: 1,
                 padding: '0.45rem',
-                fontSize: '0.68rem',
+                fontSize: '0.65rem',
                 borderRadius: '6px',
-                background: 'rgba(255,255,255,0.02)',
-                border: '1px solid rgba(255,255,255,0.05)',
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.08)',
                 color: 'var(--text-secondary)',
                 cursor: 'pointer',
                 fontWeight: 'bold'
               }}
             >
-              🔄 Resetar Status dos Ciclos
+              🔄 Resetar Status
             </button>
             <button
-              onClick={() => {
-                if (window.confirm(`Apagar todos os ${cycles.length} ciclos? Esta ação não pode ser desfeita.`)) {
-                  onSaveCycles([]);
-                  setSelectedCycleId(null);
-                }
-              }}
+              onClick={handleBatchClearAll}
               style={{
+                flex: 1,
                 padding: '0.45rem',
-                fontSize: '0.68rem',
+                fontSize: '0.65rem',
                 borderRadius: '6px',
-                background: 'rgba(239,68,68,0.06)',
-                border: '1px solid rgba(239,68,68,0.2)',
+                background: 'rgba(239,68,68,0.08)',
+                border: '1px solid rgba(239,68,68,0.25)',
                 color: '#ef4444',
                 cursor: 'pointer',
                 fontWeight: 'bold'
               }}
             >
-              🗑️ Limpar Todos os Ciclos
+              🗑️ Limpar Todos
             </button>
           </div>
         </div>
 
-        {/* ÁREA CENTRAL: DETALHES COMPLETOS DO CICLO */}
+        {/* ÁREA CENTRAL: COCKPIT DETALHADO DA MISSÃO */}
         <div className="glass-panel" style={{
-          padding: '1.5rem',
+          padding: '1.35rem 1.6rem',
           display: 'flex',
           flexDirection: 'column',
-          gap: '1.25rem',
-          background: 'rgba(15, 11, 28, 0.45)',
-          border: '1px solid rgba(255,255,255,0.04)',
-          borderRadius: '16px',
+          gap: '1.15rem',
+          background: 'rgba(15, 11, 28, 0.5)',
+          border: '1px solid rgba(255,255,255,0.05)',
+          borderRadius: '18px',
           overflowY: 'auto'
         }}>
           {!selectedCycle ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '0.5rem', color: 'var(--text-muted)' }}>
-              <Sliders size={40} style={{ strokeWidth: 1.2, color: 'var(--primary-light)' }} />
-              <strong style={{ fontSize: '0.9rem' }}>Nenhum ciclo selecionado</strong>
-              <span style={{ fontSize: '0.72rem' }}>Clique em um ciclo na barra lateral esquerda para gerenciar sua missão.</span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '20px',
+                background: 'rgba(139, 92, 246, 0.1)',
+                border: '1px solid rgba(139, 92, 246, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 25px rgba(139, 92, 246, 0.15)'
+              }}>
+                <Sliders size={32} style={{ color: '#a78bfa' }} />
+              </div>
+              <div>
+                <strong style={{ fontSize: '1rem', color: 'white', display: 'block' }}>Nenhuma missão selecionada</strong>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px', display: 'block', maxWidth: '340px' }}>
+                  Selecione uma missão na linha do tempo para inspecionar parâmetros operacionais, gatilhos MHI e gerenciar sua execução.
+                </span>
+              </div>
+              <button
+                onClick={() => setIsGeneratorOpen(true)}
+                style={{
+                  padding: '0.55rem 1.1rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+                  color: 'white',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: '0 0 12px rgba(139, 92, 246, 0.35)'
+                }}
+              >
+                Abrir Gerador de Linha do Tempo 🚀
+              </button>
             </div>
           ) : (
             <>
               {/* Mission Detail Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span style={{ fontSize: '1.75rem' }}>{selectedCycle.icon}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.85rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                  <div style={{
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '12px',
+                    background: 'rgba(139, 92, 246, 0.15)',
+                    border: '1px solid rgba(139, 92, 246, 0.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.6rem'
+                  }}>
+                    {selectedCycle.icon}
+                  </div>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0 }}>{selectedCycle.name}</h3>
+                      <h3 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: 'white' }}>{selectedCycle.name}</h3>
                       <span style={{
                         fontSize: '0.7rem',
                         fontWeight: 'bold',
-                        padding: '1px 6px',
-                        borderRadius: '4px',
-                        background: 'rgba(139,92,246,0.1)',
-                        color: 'var(--primary-light)',
+                        padding: '2px 7px',
+                        borderRadius: '6px',
+                        background: 'rgba(139,92,246,0.15)',
+                        border: '1px solid rgba(139, 92, 246, 0.35)',
+                        color: '#c084fc',
                         fontFamily: 'var(--font-mono)'
                       }}>
                         {selectedCycle.startTime} ({selectedCycle.timezone || 'GMT-3'})
                       </span>
                     </div>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'block', marginTop: '2px' }}>
-                      Ativo em: {selectedCycle.days.join(', ')}
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginTop: '2px' }}>
+                      Dias Ativos: <strong style={{ color: '#cbd5e1' }}>{selectedCycle.days.join(', ')}</strong>
                     </span>
                   </div>
                 </div>
 
-                {/* Switch Active & Action triggers */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '0.5rem' }}>
-                    <span style={{ fontSize: '0.72rem', color: selectedCycle.active ? '#10b981' : 'var(--text-muted)' }}>
-                      {selectedCycle.active ? 'Ativo' : 'Desativado'}
-                    </span>
-                    <Switch showStatus={false} scale={0.75} checked={selectedCycle.active} onChange={() => { if (activeCycleId === selectedCycle.id) { onStopBot(); } else { handleToggleCycleActive(selectedCycle.id, selectedCycle.active); } }} />
-                  </div>
+                {/* Switch Active */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.25)', padding: '5px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 'bold', color: selectedCycle.active ? '#34d399' : 'var(--text-muted)' }}>
+                    {selectedCycle.active ? 'Missão Ativa' : 'Pausada'}
+                  </span>
+                  <Switch showStatus={false} scale={0.75} checked={selectedCycle.active} onChange={() => { if (activeCycleId === selectedCycle.id) { onStopBot(); } else { handleToggleCycleActive(selectedCycle.id, selectedCycle.active); } }} />
                 </div>
               </div>
 
-              {/* Smart Hours IA & Sorosgale Highlight Banner */}
+              {/* Strategy & MHI AI Dynamic Study Highlight Banner */}
               {(() => {
+                const isMhiAuto = selectedCycle.selectedStrategy === 'mhi_auto';
                 const isSmartHours = selectedCycle.name.includes('%') || selectedCycle.name.includes('ops');
                 const winRateMatch = selectedCycle.name.match(/(\d+(?:\.\d+)?%)/);
                 const opsMatch = selectedCycle.name.match(/\((\d+\s*ops)\)/);
@@ -1368,50 +1649,53 @@ export default function Scheduler({
 
                 return (
                   <div style={{
-                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%)',
-                    border: '1px solid rgba(139, 92, 246, 0.3)',
-                    borderRadius: '12px',
-                    padding: '0.85rem 1rem',
+                    background: isMhiAuto
+                      ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(59, 130, 246, 0.15) 100%)'
+                      : 'linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%)',
+                    border: isMhiAuto ? '1.5px solid rgba(167, 139, 250, 0.55)' : '1px solid rgba(139, 92, 246, 0.3)',
+                    boxShadow: isMhiAuto ? '0 0 20px rgba(139, 92, 246, 0.15)' : 'none',
+                    borderRadius: '14px',
+                    padding: '0.85rem 1.15rem',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     flexWrap: 'wrap',
                     gap: '0.75rem'
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                       <div style={{
-                        background: 'rgba(139, 92, 246, 0.2)',
-                        border: '1px solid rgba(139, 92, 246, 0.4)',
-                        borderRadius: '8px',
-                        padding: '6px',
+                        background: 'rgba(139, 92, 246, 0.25)',
+                        border: '1px solid rgba(139, 92, 246, 0.45)',
+                        borderRadius: '10px',
+                        padding: '8px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: 'var(--primary-light)'
+                        fontSize: '1.2rem'
                       }}>
-                        <Award size={18} />
+                        {isMhiAuto ? '🧠' : '🏆'}
                       </div>
                       <div>
-                        <div style={{ fontSize: '0.78rem', fontWeight: '800', color: 'white', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>🧠 SMART HOURS ENGINE (IA ESTATÍSTICA)</span>
-                          {isSmartHours && (
-                            <span style={{ fontSize: '0.58rem', background: '#10B981', color: 'white', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>
-                              OTIMIZADO
-                            </span>
-                          )}
+                        <div style={{ fontSize: '0.8rem', fontWeight: '800', color: 'white', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>{isMhiAuto ? 'MODO MHI VOL 100 — AUTO-ESTUDO DINÂMICO IA' : 'SMART HOURS ENGINE (IA ESTATÍSTICA)'}</span>
+                          <span style={{ fontSize: '0.58rem', background: '#10B981', color: 'white', padding: '1px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                            {isMhiAuto ? 'SNIPER ATIVO' : 'OTIMIZADO'}
+                          </span>
                         </div>
-                        <span style={{ fontSize: '0.68rem', color: '#94A3B8', marginTop: '2px', display: 'block' }}>
-                          {isSmartHours
-                            ? `Horário de alta assertividade probabilística: ${winRateText ? winRateText + ' de acertos' : ''} ${opsText ? '(' + opsText + ' analisadas)' : ''}`
-                            : 'Missão otimizada com busca dinâmica de melhor estratégia pelo Piloto Automático.'}
+                        <span style={{ fontSize: '0.66rem', color: '#cbd5e1', marginTop: '2px', display: 'block' }}>
+                          {isMhiAuto
+                            ? 'O robô estuda continuamente o Volatility 100 Index e decide antes de operar o padrão líder (MHI 1 a 3 Minoria/Maioria).'
+                            : isSmartHours
+                            ? `Horário de alta assertividade: ${winRateText ? winRateText + ' winrate' : ''} ${opsText ? '(' + opsText + ')' : ''}`
+                            : 'Missão operando com busca dinâmica de oportunidades.'}
                         </span>
                       </div>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div style={{ background: 'rgba(255,255,255,0.03)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)', textAlign: 'right' }}>
-                        <span style={{ fontSize: '0.58rem', color: '#94A3B8', display: 'block' }}>GERENCIAMENTO</span>
-                        <strong style={{ fontSize: '0.72rem', color: 'var(--primary-light)' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.04)', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)', textAlign: 'right' }}>
+                        <span style={{ fontSize: '0.55rem', color: '#94A3B8', display: 'block', textTransform: 'uppercase', fontWeight: 'bold' }}>GERENCIAMENTO</span>
+                        <strong style={{ fontSize: '0.74rem', color: '#c084fc' }}>
                           {selectedCycle.moneyManagement === 'sorosgale' ? '🚀 Sorosgale' : selectedCycle.moneyManagement === 'soros' ? 'Soros' : 'Martingale'}
                         </strong>
                       </div>
@@ -1426,41 +1710,42 @@ export default function Scheduler({
                   <button
                     onClick={onStopBot}
                     style={{
-                      background: 'rgba(239, 68, 68, 0.15)',
-                      border: '1px solid rgba(239, 68, 68, 0.4)',
-                      color: '#ef4444',
-                      padding: '6px 12px',
+                      background: 'rgba(239, 68, 68, 0.2)',
+                      border: '1px solid rgba(239, 68, 68, 0.5)',
+                      color: '#f87171',
+                      padding: '7px 14px',
                       borderRadius: '8px',
                       fontSize: '0.75rem',
-                      fontWeight: 'bold',
+                      fontWeight: '800',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px',
-                      boxShadow: '0 0 10px rgba(239,68,68,0.2)'
+                      gap: '5px',
+                      boxShadow: '0 0 12px rgba(239,68,68,0.3)'
                     }}
                   >
-                    <Power size={12} /> Parar Execução
+                    <Power size={13} /> Parar Execução
                   </button>
                 ) : (
                   <button
                     onClick={() => onTriggerCycleManually(selectedCycle.id)}
                     disabled={!schedulerState}
                     style={{
-                      background: 'rgba(16, 185, 129, 0.08)',
-                      border: '1px solid rgba(16, 185, 129, 0.25)',
-                      color: '#10b981',
-                      padding: '6px 12px',
+                      background: 'rgba(16, 185, 129, 0.12)',
+                      border: '1px solid rgba(16, 185, 129, 0.35)',
+                      color: '#34d399',
+                      padding: '7px 14px',
                       borderRadius: '8px',
                       fontSize: '0.75rem',
-                      fontWeight: 'bold',
+                      fontWeight: '800',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      gap: '5px',
+                      boxShadow: '0 0 12px rgba(16,185,129,0.2)'
                     }}
                   >
-                    <Play size={12} fill="currentColor" /> Executar Agora
+                    <Play size={13} fill="currentColor" /> Executar Agora
                   </button>
                 )}
 
@@ -1469,38 +1754,38 @@ export default function Scheduler({
                   disabled={activeCycleId === selectedCycle.id}
                   style={{
                     background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.1)',
                     color: 'white',
-                    padding: '6px 12px',
+                    padding: '7px 14px',
                     borderRadius: '8px',
                     fontSize: '0.75rem',
                     fontWeight: 'bold',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px'
+                    gap: '5px'
                   }}
                 >
-                  <Settings size={12} /> Editar
+                  <Settings size={13} /> Editar
                 </button>
 
                 <button
                   onClick={() => handleDuplicateClick(selectedCycle)}
                   style={{
                     background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.1)',
                     color: 'white',
-                    padding: '6px 12px',
+                    padding: '7px 14px',
                     borderRadius: '8px',
                     fontSize: '0.75rem',
                     fontWeight: 'bold',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px'
+                    gap: '5px'
                   }}
                 >
-                  <Layers size={12} /> Duplicar
+                  <Layers size={13} /> Duplicar
                 </button>
 
                 {selectedCycle.status !== 'Aguardando' && (
@@ -1508,19 +1793,19 @@ export default function Scheduler({
                     onClick={() => handleResetCycleStatus(selectedCycle.id)}
                     style={{
                       background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid rgba(255,255,255,0.08)',
+                      border: '1px solid rgba(255,255,255,0.1)',
                       color: 'var(--text-secondary)',
-                      padding: '6px 12px',
+                      padding: '7px 14px',
                       borderRadius: '8px',
                       fontSize: '0.75rem',
                       fontWeight: 'bold',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      gap: '5px'
                     }}
                   >
-                    <RefreshCw size={12} /> Resetar Status
+                    <RefreshCw size={13} /> Resetar Status
                   </button>
                 )}
 
@@ -1531,44 +1816,43 @@ export default function Scheduler({
                     background: 'rgba(239, 68, 68, 0.08)',
                     border: '1px solid rgba(239, 68, 68, 0.25)',
                     color: '#ef4444',
-                    padding: '6px 12px',
+                    padding: '7px 14px',
                     borderRadius: '8px',
                     fontSize: '0.75rem',
                     fontWeight: 'bold',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px'
+                    gap: '5px'
                   }}
                 >
-                  <Trash2 size={12} /> Excluir
+                  <Trash2 size={13} /> Excluir
                 </button>
               </div>
 
-              {/* Grid of detail Cards */}
+              {/* Grid of 4 Detail Cards (2x2) */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr',
-                gap: '1rem',
-                marginTop: '0.5rem'
+                gap: '1rem'
               }}>
                 {/* Card 1: Mercado & Estratégia */}
                 <div style={{
                   background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.04)',
-                  borderRadius: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: '14px',
                   padding: '1rem',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '0.5rem'
+                  gap: '0.45rem'
                 }}>
-                  <strong style={{ fontSize: '0.75rem', color: 'var(--primary-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Configurações de Mercado
+                  <strong style={{ fontSize: '0.72rem', color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span>🎯</span> Configurações de Mercado
                   </strong>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.78rem', marginTop: '0.2rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Ativo:</span>
-                      <strong style={{ color: 'white' }}>{getCleanSymbolName(selectedCycle.symbol)} ({selectedCycle.symbol})</strong>
+                      <strong style={{ color: '#34d399' }}>{getCleanSymbolName(selectedCycle.symbol)} ({selectedCycle.symbol})</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Timeframe:</span>
@@ -1576,63 +1860,61 @@ export default function Scheduler({
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Estratégia:</span>
-                      <strong style={{ color: 'white' }}>{getCleanStrategyName(selectedCycle.selectedStrategy)}</strong>
+                      <strong style={{ color: '#c084fc' }}>{getCleanStrategyName(selectedCycle.selectedStrategy)}</strong>
                     </div>
                   </div>
                 </div>
 
-                {/* Card 2: Gestão de Risco */}
+                {/* Card 2: Gestão de Risco & Alvos */}
                 <div style={{
                   background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.04)',
-                  borderRadius: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: '14px',
                   padding: '1rem',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '0.5rem'
+                  gap: '0.45rem'
                 }}>
-                  <strong style={{ fontSize: '0.75rem', color: 'var(--primary-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Gestão de Risco & Micro-Metas
+                  <strong style={{ fontSize: '0.72rem', color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span>💰</span> Alvos Financeiros & Micro-Metas
                   </strong>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Modo Financeiro:</span>
-                      <strong style={{ color: 'var(--primary-light)' }}>
-                        {selectedCycle.moneyManagement === 'sorosgale' ? '🚀 Sorosgale' : selectedCycle.moneyManagement === 'soros' ? 'Soros' : selectedCycle.moneyManagement === 'martingale' ? 'Martingale' : 'Mão Fixa'}
-                      </strong>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '0.2rem' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '5px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                      <span style={{ fontSize: '0.55rem', color: '#94a3b8', textTransform: 'uppercase', display: 'block' }}>Entrada</span>
+                      <strong style={{ color: 'white', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>${selectedCycle.stakeValue.toFixed(2)}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Valor Entrada:</span>
-                      <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>${selectedCycle.stakeValue.toFixed(2)}</strong>
+                    <div style={{ background: 'rgba(16,185,129,0.06)', padding: '5px 8px', borderRadius: '8px', border: '1px solid rgba(16,185,129,0.2)' }}>
+                      <span style={{ fontSize: '0.55rem', color: '#34d399', textTransform: 'uppercase', display: 'block', fontWeight: 'bold' }}>Stop Win</span>
+                      <strong style={{ color: '#34d399', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>+${selectedCycle.takeProfit.toFixed(2)}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Micro-Meta da Sessão:</span>
-                      <strong style={{ color: '#10b981', fontFamily: 'var(--font-mono)' }}>${selectedCycle.takeProfit.toFixed(2)}</strong>
+                    <div style={{ background: 'rgba(239,68,68,0.06)', padding: '5px 8px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>
+                      <span style={{ fontSize: '0.55rem', color: '#f87171', textTransform: 'uppercase', display: 'block', fontWeight: 'bold' }}>Stop Loss</span>
+                      <strong style={{ color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>-${selectedCycle.stopLoss.toFixed(2)}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Stop Loss da Sessão:</span>
-                      <strong style={{ color: '#ef4444', fontFamily: 'var(--font-mono)' }}>${selectedCycle.stopLoss.toFixed(2)}</strong>
+                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '5px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                      <span style={{ fontSize: '0.55rem', color: '#94a3b8', textTransform: 'uppercase', display: 'block' }}>Modo</span>
+                      <strong style={{ color: '#c084fc', fontSize: '0.74rem' }}>{selectedCycle.moneyManagement}</strong>
                     </div>
                   </div>
                 </div>
 
-                {/* Card 3: Parâmetros */}
+                {/* Card 3: Scanner & Probabilidade */}
                 <div style={{
                   background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.04)',
-                  borderRadius: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: '14px',
                   padding: '1rem',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '0.5rem'
+                  gap: '0.45rem'
                 }}>
-                  <strong style={{ fontSize: '0.75rem', color: 'var(--primary-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Scanner & Probabilidade
+                  <strong style={{ fontSize: '0.72rem', color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span>📡</span> Scanner & Probabilidade
                   </strong>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.78rem', marginTop: '0.2rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Scanner Inteligente:</span>
-                      <strong style={{ color: '#10b981' }}>ATIVO</strong>
+                      <strong style={{ color: '#34d399' }}>ATIVO 🟢</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Probabilidade Mínima:</span>
@@ -1642,28 +1924,28 @@ export default function Scheduler({
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Filtro de Tendência:</span>
-                      <strong style={{ color: 'white' }}>Médias Móveis</strong>
+                      <strong style={{ color: 'white' }}>Médias Móveis & Streak</strong>
                     </div>
                   </div>
                 </div>
 
-                {/* Card 4: Gale & Autopiloto */}
+                {/* Card 4: Gale & Filtros de Proteção */}
                 <div style={{
                   background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.04)',
-                  borderRadius: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: '14px',
                   padding: '1rem',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '0.5rem'
+                  gap: '0.45rem'
                 }}>
-                  <strong style={{ fontSize: '0.75rem', color: 'var(--primary-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    {selectedCycle.moneyManagement === 'sorosgale' ? 'Sorosgale & Filtros' : 'Martingale & Filtros'}
+                  <strong style={{ fontSize: '0.72rem', color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span>🛡️</span> {selectedCycle.moneyManagement === 'sorosgale' ? 'Sorosgale & Filtros' : 'Martingale & Filtros'}
                   </strong>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.78rem', marginTop: '0.2rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>
-                        {selectedCycle.moneyManagement === 'sorosgale' ? 'Recuperação Gales (Loss):' : 'Níveis de Martingale:'}
+                        {selectedCycle.moneyManagement === 'sorosgale' ? 'Recuperação Gales:' : 'Níveis de Martingale:'}
                       </span>
                       <strong style={{ color: 'white' }}>
                         {selectedCycle.moneyManagement === 'sorosgale'
@@ -1676,43 +1958,41 @@ export default function Scheduler({
                       <strong style={{ color: 'white', fontFamily: 'var(--font-mono)' }}>{selectedCycle.martingaleMultiplier || 2.0}x</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Trava Streak Shield:</span>
-                      <strong style={{ color: selectedCycle.enableStreakShield ? '#10b981' : 'var(--text-muted)' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Streak Shield:</span>
+                      <strong style={{ color: selectedCycle.enableStreakShield ? '#34d399' : 'var(--text-muted)' }}>
                         {selectedCycle.enableStreakShield ? `ATIVO (${selectedCycle.maxStreakCandles || 4}V)` : 'DESATIVADO'}
-                      </strong>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Vela Mestra Secundária:</span>
-                      <strong style={{ color: selectedCycle.enableMasterCandleSecondary ? 'var(--primary-light)' : 'var(--text-muted)' }}>
-                        {selectedCycle.enableMasterCandleSecondary ? 'HABILITADA' : 'DESATIVADA'}
                       </strong>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* FLUXO VISUAL PIPELINE */}
+              {/* FLUXO VISUAL PIPELINE (7 INTERACTIVE STAGES) */}
               <div style={{
-                background: 'rgba(15, 11, 28, 0.3)',
-                border: '1px solid rgba(255, 255, 255, 0.02)',
-                borderRadius: '14px',
-                padding: '1.25rem',
-                marginTop: '0.5rem',
+                background: 'rgba(15, 11, 28, 0.4)',
+                border: '1px solid rgba(255, 255, 255, 0.04)',
+                borderRadius: '16px',
+                padding: '1.15rem',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '0.75rem'
+                gap: '0.65rem'
               }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                  Pipeline Visual da Automação (Missão)
-                </span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#a78bfa', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>⚡</span> Pipeline de Execução em Tempo Real
+                  </span>
+                  <span style={{ fontSize: '0.62rem', color: '#94a3b8' }}>
+                    Fase Atual: <strong style={{ color: 'white' }}>{selectedCycle.status}</strong>
+                  </span>
+                </div>
 
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   gap: '4px',
-                  marginTop: '0.5rem',
-                  padding: '0.5rem 0',
+                  marginTop: '0.25rem',
+                  padding: '0.4rem 0',
                   position: 'relative',
                   overflowX: 'auto'
                 }}>
@@ -1721,37 +2001,36 @@ export default function Scheduler({
                     
                     const pipelineSteps = [
                       { label: 'Agendado', info: selectedCycle.startTime },
-                      { label: 'Scanner IA', info: 'Buscando' },
-                      { label: 'Estratégia', info: getCleanStrategyName(selectedCycle.selectedStrategy).split(' ')[0] },
-                      { label: 'Filtro Prob', info: `>${selectedCycle.minProbability || 90}%` },
-                      { label: 'Executado', info: 'Spot' },
-                      { label: 'Gale/Soros', info: `${selectedCycle.martingaleLevels || 2} lvl` },
-                      { label: 'Meta/Stop', info: 'Concluído' }
+                      { label: 'Scanner Ativo', info: 'Buscando' },
+                      { label: 'Estudo IA', info: selectedCycle.selectedStrategy === 'mhi_auto' ? 'MHI 1-3' : 'Analítico' },
+                      { label: 'Gatilho', info: `>${selectedCycle.minProbability || 90}%` },
+                      { label: 'Disparo Spot', info: 'Ordem' },
+                      { label: 'Gestão Gale', info: `${selectedCycle.martingaleLevels || 2} lvl` },
+                      { label: 'Conclusão', info: 'Resultado' }
                     ];
 
                     return pipelineSteps.map((step, idx) => {
                       const isCompleted = idx < activeStep;
                       const isCurrent = idx === activeStep;
-                      const isFuture = idx > activeStep;
 
                       let nodeBg = 'rgba(255,255,255,0.02)';
-                      let nodeBorder = 'rgba(255,255,255,0.05)';
+                      let nodeBorder = 'rgba(255,255,255,0.06)';
                       let textColor = 'var(--text-muted)';
                       let badgeColor = 'rgba(255,255,255,0.03)';
                       let badgeText = '#64748b';
 
                       if (isCompleted) {
-                        nodeBg = 'rgba(16, 185, 129, 0.06)';
-                        nodeBorder = 'rgba(16, 185, 129, 0.3)';
+                        nodeBg = 'rgba(16, 185, 129, 0.08)';
+                        nodeBorder = 'rgba(16, 185, 129, 0.35)';
                         textColor = '#cbd5e1';
-                        badgeColor = 'rgba(16, 185, 129, 0.15)';
-                        badgeText = '#10b981';
+                        badgeColor = 'rgba(16, 185, 129, 0.18)';
+                        badgeText = '#34d399';
                       } else if (isCurrent) {
-                        nodeBg = 'rgba(139, 92, 246, 0.12)';
-                        nodeBorder = 'var(--primary-light)';
+                        nodeBg = 'rgba(139, 92, 246, 0.18)';
+                        nodeBorder = '#a78bfa';
                         textColor = 'white';
-                        badgeColor = 'rgba(139, 92, 246, 0.2)';
-                        badgeText = 'var(--primary-light)';
+                        badgeColor = 'rgba(139, 92, 246, 0.3)';
+                        badgeText = '#c084fc';
                       }
 
                       return (
@@ -1760,17 +2039,17 @@ export default function Scheduler({
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
-                            gap: '6px',
-                            minWidth: '78px',
+                            gap: '4px',
+                            minWidth: '76px',
                             flex: 1,
                             padding: '6px',
                             borderRadius: '10px',
                             background: nodeBg,
                             border: `1px solid ${nodeBorder}`,
-                            boxShadow: isCurrent ? '0 0 15px rgba(139, 92, 246, 0.15)' : 'none',
-                            transition: 'all 0.3s'
+                            boxShadow: isCurrent ? '0 0 16px rgba(139, 92, 246, 0.25)' : 'none',
+                            transition: 'all 0.3s ease'
                           }}>
-                            <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: textColor, textAlign: 'center' }}>
+                            <span style={{ fontSize: '0.62rem', fontWeight: 'bold', color: textColor, textAlign: 'center' }}>
                               {step.label}
                             </span>
                             <span style={{
@@ -1788,7 +2067,7 @@ export default function Scheduler({
 
                           {idx < pipelineSteps.length - 1 && (
                             <div style={{
-                              width: '18px',
+                              width: '16px',
                               height: '2px',
                               background: isCompleted ? '#10b981' : 'rgba(255,255,255,0.06)',
                               flexShrink: 0,
@@ -1803,8 +2082,8 @@ export default function Scheduler({
                                   width: '6px',
                                   height: '6px',
                                   borderRadius: '50%',
-                                  background: 'var(--primary-light)',
-                                  boxShadow: '0 0 8px var(--primary-light)'
+                                  background: '#a78bfa',
+                                  boxShadow: '0 0 8px #a78bfa'
                                 }} />
                               )}
                             </div>
@@ -1819,39 +2098,39 @@ export default function Scheduler({
           )}
         </div>
 
-        {/* LATERAL DIREITA: PAINEL DE STATUS EM TEMPO REAL */}
+        {/* LATERAL DIREITA: AUDITORIA, MONITOR & LOGS */}
         <div className="glass-panel" style={{
-          padding: '1.25rem',
+          padding: '1.15rem',
           display: 'flex',
           flexDirection: 'column',
-          gap: '1rem',
-          background: 'rgba(15, 11, 28, 0.4)',
-          border: '1px solid rgba(255,255,255,0.03)',
+          gap: '0.85rem',
+          background: 'rgba(15, 11, 28, 0.45)',
+          border: '1px solid rgba(255,255,255,0.04)',
           borderRadius: '16px',
           overflow: 'hidden'
         }}>
           {/* Engine Real-Time Monitor */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-            <h3 style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0, paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              Monitor de Status
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <h3 style={{ fontSize: '0.75rem', fontWeight: '800', color: 'white', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0, paddingBottom: '0.4rem', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span>📡</span> Status do Terminal
             </h3>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '10px', padding: '0.75rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '10px', padding: '0.65rem 0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Motor de Ciclos:</span>
-                <strong style={{ color: schedulerState ? '#10b981' : '#ef4444' }}>
+                <strong style={{ color: schedulerState ? '#34d399' : '#f87171' }}>
                   {schedulerState ? '● OPERANDO' : 'OFFLINE'}
                 </strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', marginTop: '2px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Scanner Ativo:</span>
-                <strong style={{ color: activeCycleId ? 'var(--primary-light)' : 'var(--text-muted)' }}>
-                  {activeCycleId ? 'BUSCANDO' : 'STANDBY'}
+                <strong style={{ color: activeCycleId ? '#c084fc' : '#64748b' }}>
+                  {activeCycleId ? 'BUSCANDO SINAL' : 'STANDBY'}
                 </strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', marginTop: '2px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Conexão Deriv:</span>
-                <strong style={{ color: '#10b981' }}>SYNCED</strong>
+                <strong style={{ color: '#34d399' }}>SYNCED 🟢</strong>
               </div>
             </div>
           </div>
@@ -1860,36 +2139,34 @@ export default function Scheduler({
           <div style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '0.65rem',
-            background: 'rgba(139, 92, 246, 0.05)',
-            border: '1px solid rgba(139, 92, 246, 0.25)',
+            gap: '0.55rem',
+            background: 'rgba(139, 92, 246, 0.06)',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
             borderRadius: '12px',
-            padding: '0.85rem'
+            padding: '0.75rem'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--primary-light)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <RefreshCw size={14} className="pulse-primary" /> Reset & Renovação Diária
+              <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <RefreshCw size={13} className="pulse-primary" /> Renovação Diária
               </span>
               <span style={{
-                fontSize: '0.62rem',
+                fontSize: '0.58rem',
                 fontWeight: '800',
-                padding: '2px 6px',
+                padding: '2px 5px',
                 borderRadius: '4px',
                 background: autoReset.autoRenew ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                color: autoReset.autoRenew ? '#10b981' : '#ef4444'
+                color: autoReset.autoRenew ? '#34d399' : '#f87171'
               }}>
-                {autoReset.autoRenew ? 'RENOVAÇÃO ATIVA 🟢' : 'DESATIVADA 🔴'}
+                {autoReset.autoRenew ? 'AUTO 🟢' : 'OFF 🔴'}
               </span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', fontSize: '0.72rem', marginTop: '0.2rem' }}>
-              {/* Reset Enabled Switch */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.7rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Reset Automático:</span>
-                <Switch showStatus={false} scale={0.75} checked={!!autoReset.enabled} onChange={(e) => handleUpdateAutoReset({ enabled: e.target.checked })} />
+                <span style={{ color: 'var(--text-secondary)' }}>Reset Diário:</span>
+                <Switch showStatus={false} scale={0.7} checked={!!autoReset.enabled} onChange={(e) => handleUpdateAutoReset({ enabled: e.target.checked })} />
               </div>
 
-              {/* Reset Time Input */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Horário do Reset:</span>
                 <input
@@ -1900,28 +2177,20 @@ export default function Scheduler({
                     background: 'rgba(0,0,0,0.3)',
                     border: '1px solid rgba(255,255,255,0.1)',
                     color: 'white',
-                    borderRadius: '6px',
-                    padding: '2px 6px',
-                    fontSize: '0.72rem',
+                    borderRadius: '5px',
+                    padding: '2px 5px',
+                    fontSize: '0.7rem',
                     fontFamily: 'var(--font-mono)'
                   }}
                 />
               </div>
 
-              {/* Auto Renew Switch */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Renovação Automática:</span>
-                <Switch showStatus={false} scale={0.75} checked={!!autoReset.autoRenew} onChange={(e) => handleUpdateAutoReset({ autoRenew: e.target.checked })} />
-              </div>
-
-              {/* Telegram Notify Switch */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Relatório no Telegram:</span>
-                <Switch showStatus={false} scale={0.75} checked={!!autoReset.telegramNotify} onChange={(e) => handleUpdateAutoReset({ telegramNotify: e.target.checked })} />
+                <span style={{ color: 'var(--text-secondary)' }}>Relatório Telegram:</span>
+                <Switch showStatus={false} scale={0.7} checked={!!autoReset.telegramNotify} onChange={(e) => handleUpdateAutoReset({ telegramNotify: e.target.checked })} />
               </div>
             </div>
 
-            {/* Quick Manual Reset Button */}
             <button
               onClick={() => {
                 if (onTriggerAutoResetManual) {
@@ -1931,11 +2200,11 @@ export default function Scheduler({
                 }
               }}
               style={{
-                marginTop: '0.35rem',
-                padding: '0.45rem',
-                fontSize: '0.68rem',
+                marginTop: '0.2rem',
+                padding: '0.4rem',
+                fontSize: '0.64rem',
                 fontWeight: 'bold',
-                borderRadius: '8px',
+                borderRadius: '6px',
                 background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(59, 130, 246, 0.25) 100%)',
                 border: '1px solid rgba(139, 92, 246, 0.4)',
                 color: 'white',
@@ -1943,59 +2212,53 @@ export default function Scheduler({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '6px'
+                gap: '5px'
               }}
             >
-              <RefreshCw size={12} /> Resetar & Notificar Telegram Agora
+              <RefreshCw size={11} /> Resetar & Notificar Telegram
             </button>
           </div>
 
-          {/* Logs Timeline Widget */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1, overflow: 'hidden' }}>
+          {/* Logs Timeline Widget with Categories */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, overflow: 'hidden' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h4 style={{ fontSize: '0.72rem', fontWeight: '800', color: 'var(--text-secondary)' }}>LOGS DE MISSÃO</h4>
+              <h4 style={{ fontSize: '0.72rem', fontWeight: '800', color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span>📜</span> LOGS DO SISTEMA ({filteredLogs.length})
+              </h4>
               <button 
                 onClick={onClearSchedulerLogs}
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.6rem', cursor: 'pointer', padding: '2px' }}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '0.58rem', cursor: 'pointer', padding: '2px', fontWeight: 'bold' }}
               >
                 Limpar
               </button>
             </div>
 
-            {/* Log Filters */}
-            <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.02)', padding: '2px', borderRadius: '6px' }}>
-              <button
-                onClick={() => setLogFilter('all')}
-                style={{
-                  flex: 1,
-                  padding: '3px',
-                  fontSize: '0.58rem',
-                  fontWeight: 'bold',
-                  background: logFilter === 'all' ? 'var(--primary)' : 'transparent',
-                  border: 'none',
-                  color: 'white',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                Todos
-              </button>
-              <button
-                onClick={() => setLogFilter('today')}
-                style={{
-                  flex: 1,
-                  padding: '3px',
-                  fontSize: '0.58rem',
-                  fontWeight: 'bold',
-                  background: logFilter === 'today' ? 'var(--primary)' : 'transparent',
-                  border: 'none',
-                  color: 'white',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                Hoje
-              </button>
+            {/* Log Category Filter Tabs */}
+            <div style={{ display: 'flex', gap: '3px', background: 'rgba(0,0,0,0.25)', padding: '2px', borderRadius: '6px' }}>
+              {[
+                { key: 'all', label: 'Todos' },
+                { key: 'ia', label: '🧠 IA' },
+                { key: 'trades', label: '📈 Trades' },
+                { key: 'errors', label: '⚠️ Alertas' }
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setLogFilter(tab.key)}
+                  style={{
+                    flex: 1,
+                    padding: '2px 4px',
+                    fontSize: '0.56rem',
+                    fontWeight: 'bold',
+                    background: logFilter === tab.key ? 'var(--primary)' : 'transparent',
+                    border: 'none',
+                    color: logFilter === tab.key ? 'white' : '#94a3b8',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
             {/* Log Search input */}
@@ -2004,71 +2267,79 @@ export default function Scheduler({
                 type="text"
                 value={logSearch}
                 onChange={(e) => setLogSearch(e.target.value)}
-                placeholder="Buscar em logs..."
+                placeholder="Pesquisar registros..."
                 style={{
-                  padding: '0.4rem 0.5rem 0.4rem 1.6rem',
-                  fontSize: '0.68rem',
-                  background: 'rgba(15, 23, 42, 0.4)',
-                  border: '1px solid rgba(255,255,255,0.05)',
+                  padding: '0.35rem 0.5rem 0.35rem 1.5rem',
+                  fontSize: '0.66rem',
+                  background: 'rgba(0, 0, 0, 0.3)',
+                  border: '1px solid rgba(255,255,255,0.06)',
                   borderRadius: '6px',
                   color: 'white',
                   width: '100%',
                   outline: 'none'
                 }}
               />
-              <Search size={11} style={{ position: 'absolute', left: '8px', color: 'var(--text-muted)' }} />
+              <Search size={11} style={{ position: 'absolute', left: '6px', color: 'var(--text-muted)' }} />
             </div>
 
-            {/* Timeline scrollbox */}
+            {/* Logs Scrollbox */}
             <div style={{
               flex: 1,
-              background: 'rgba(0,0,0,0.15)',
-              border: '1px solid rgba(255,255,255,0.02)',
+              background: 'rgba(0,0,0,0.2)',
+              border: '1px solid rgba(255,255,255,0.03)',
               borderRadius: '8px',
-              padding: '0.5rem',
+              padding: '0.45rem',
               overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
-              gap: '0.5rem'
+              gap: '0.4rem'
             }}>
               {filteredLogs.length === 0 ? (
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.62rem', fontStyle: 'italic', textAlign: 'center', display: 'block', marginTop: '1rem' }}>
-                  Nenhum registro.
+                  Nenhum registro encontrado.
                 </span>
               ) : (
                 filteredLogs.map((log, idx) => {
-                  let badgeColor = 'rgba(255,255,255,0.05)';
+                  let badgeColor = 'rgba(255,255,255,0.03)';
                   let icon = '⚪';
+                  let borderColor = '#8b5cf6';
 
                   if (log.type === 'error') {
-                    badgeColor = 'rgba(239, 68, 68, 0.15)';
+                    badgeColor = 'rgba(239, 68, 68, 0.12)';
                     icon = '🔴';
+                    borderColor = '#ef4444';
                   } else if (log.type === 'success') {
-                    badgeColor = 'rgba(16, 185, 129, 0.15)';
+                    badgeColor = 'rgba(16, 185, 129, 0.12)';
                     icon = '🟢';
+                    borderColor = '#10b981';
                   } else if (log.type === 'warning') {
-                    badgeColor = 'rgba(245, 158, 11, 0.15)';
+                    badgeColor = 'rgba(245, 158, 11, 0.12)';
                     icon = '🟡';
+                    borderColor = '#f59e0b';
+                  } else if (log.message && (log.message.includes('IA') || log.message.includes('MHI'))) {
+                    badgeColor = 'rgba(139, 92, 246, 0.12)';
+                    icon = '🧠';
+                    borderColor = '#a78bfa';
                   }
 
                   return (
                     <div
                       key={idx}
                       style={{
-                        padding: '0.4rem',
+                        padding: '0.35rem 0.45rem',
                         background: badgeColor,
                         borderRadius: '6px',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '2px',
-                        borderLeft: `2px solid ${log.type === 'error' ? '#ef4444' : log.type === 'success' ? '#10b981' : '#8b5cf6'}`
+                        borderLeft: `2px solid ${borderColor}`
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.58rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                        <span>{icon} Evento</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.56rem', color: '#94a3b8', fontFamily: 'var(--font-mono)' }}>
+                        <span>{icon} {log.type ? log.type.toUpperCase() : 'EVENTO'}</span>
                         <span>{log.time}</span>
                       </div>
-                      <p style={{ fontSize: '0.65rem', color: '#e2e8f0', margin: 0, lineHeight: '1.3' }}>
+                      <p style={{ fontSize: '0.64rem', color: '#e2e8f0', margin: 0, lineHeight: '1.3' }}>
                         {log.message}
                       </p>
                     </div>
