@@ -1767,14 +1767,24 @@ export class UserSession {
       }
 
       const stake = this.calculateCurrentStake(false);
-      this.addLog({ message: `Sinal identificado na estratégia [${strategyUsed}] para operar ${signal.direction}.`, type: 'info' });
+      
+      let stratName = strategyUsed;
+      if (strategyUsed === 'mhi_auto' && signal.detectedMhiName) {
+        stratName = `Estudo MHI (${signal.detectedMhiName})`;
+        this.addLog({ 
+          message: `🧠 [MHI IA Adaptativo] Estudo concluído em ${this.settings.symbol}: Padrão [${signal.detectedMhiName}] selecionado com ${signal.detectedMhiWinRate?.toFixed(1) || '0.0'}% assertividade. Disparando ${signal.direction}.`, 
+          type: 'success' 
+        });
+      } else {
+        this.addLog({ message: `Sinal identificado na estratégia [${strategyUsed}] para operar ${signal.direction}.`, type: 'info' });
+      }
       
       const stratObj = this.strategiesStats.find(s => s.id === strategyUsed);
-      const effectiveWinRate = stratObj ? (stratObj.weightedWinRate ?? stratObj.winRate) : 0;
+      const effectiveWinRate = signal.detectedMhiWinRate ?? (stratObj ? (stratObj.weightedWinRate ?? stratObj.winRate) : 0);
 
       this.sendTelegramNotif('opportunity', formatOpportunityFound(
         this.settings.symbol,
-        stratObj?.name || strategyUsed,
+        stratName,
         signal.direction,
         effectiveWinRate,
         stake,

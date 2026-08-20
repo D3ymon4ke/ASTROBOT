@@ -172,12 +172,14 @@ export default function Scheduler({
     enableStreakShield: true,
     maxStreakCandles: 4,
     streakShieldAction: 'block',
+    enableTimeGuard: true,
+    enableStalemateFailover: true,
     enableMasterCandleSecondary: false,
     disableSlowStrategies: true,
     disableMaCrossover: false,
     useSmartHours: true,
-    onlyMhiR100: false,
-    mhiVariant: 'mhi_minority'
+    onlyMhiR100: true,
+    mhiVariant: 'mhi_auto'
   });
 
   // ─── Smart Hours Engine ───────────────────────────────────────────────────
@@ -267,19 +269,120 @@ export default function Scheduler({
     return '#10b981';
   };
 
+  const mhiVariantLabels = {
+    mhi_auto: 'Estudo MHI Dinâmico 🧠',
+    mhi_minority: 'MHI 1 Minoria',
+    mhi_majority: 'MHI 1 Maioria',
+    mhi_2_minority: 'MHI 2 Minoria',
+    mhi_2_majority: 'MHI 2 Maioria',
+    mhi_3_minority: 'MHI 3 Minoria',
+    mhi_3_majority: 'MHI 3 Maioria'
+  };
+
+  const applyGeneratorPreset = (presetType) => {
+    if (presetType === 'mhi_smart') {
+      setGeneratorData(prev => ({
+        ...prev,
+        onlyMhiR100: true,
+        mhiVariant: 'mhi_auto',
+        stakeValue: 1.0,
+        takeProfit: 5.0,
+        stopLoss: 15.0,
+        moneyManagement: 'sorosgale',
+        sorosgaleLevels: 2,
+        sorosgaleMaxGale: 2,
+        sorosgaleCompounding: 100,
+        useSmartHours: true,
+        enableStreakShield: true,
+        enableTimeGuard: true,
+        enableStalemateFailover: true,
+        periods: { dawn: true, morning: true, afternoon: true, night: true }
+      }));
+    } else if (presetType === 'sorosgale_turbo') {
+      setGeneratorData(prev => ({
+        ...prev,
+        onlyMhiR100: true,
+        mhiVariant: 'mhi_auto',
+        moneyManagement: 'sorosgale',
+        sorosgaleLevels: 3,
+        sorosgaleMaxGale: 2,
+        sorosgaleCompounding: 100,
+        stakeValue: 1.5,
+        takeProfit: 8.0,
+        stopLoss: 25.0,
+        useSmartHours: true,
+        enableStreakShield: true
+      }));
+    } else if (presetType === 'conservative') {
+      setGeneratorData(prev => ({
+        ...prev,
+        onlyMhiR100: true,
+        mhiVariant: 'mhi_auto',
+        moneyManagement: 'fixed',
+        martingaleLevels: 0,
+        stakeValue: 1.0,
+        takeProfit: 3.0,
+        stopLoss: 10.0,
+        enableStreakShield: true,
+        useSmartHours: true
+      }));
+    } else if (presetType === 'smart_hours_g3') {
+      setGeneratorData(prev => ({
+        ...prev,
+        useSmartHours: true,
+        enableStreakShield: true,
+        periods: { dawn: true, morning: true, afternoon: true, night: true }
+      }));
+    }
+  };
+
+  const previewSummary = useMemo(() => {
+    let count = 0;
+    const periodsSelected = generatorData.periods || {};
+    
+    const defaultPeriodCounts = { dawn: 3, morning: 3, afternoon: 3, night: 3 };
+    let periodCounts = defaultPeriodCounts;
+    
+    if (generatorData.useSmartHours && smartHours.length > 0) {
+      const smartCounts = { dawn: 0, morning: 0, afternoon: 0, night: 0 };
+      smartHours.forEach(h => {
+        const p = getPeriodForHour(h.hour);
+        if (periodsSelected[p]) smartCounts[p]++;
+      });
+      const hasSmart = Object.values(smartCounts).some(c => c > 0);
+      if (hasSmart) periodCounts = smartCounts;
+    }
+    
+    Object.keys(periodCounts).forEach(k => {
+      if (periodsSelected[k]) count += periodCounts[k];
+    });
+
+    const tp = parseFloat(generatorData.takeProfit) || 5.0;
+    const totalPotentialWin = (count * tp).toFixed(2);
+    
+    return {
+      missionCount: count,
+      strategyLabel: generatorData.onlyMhiR100 
+        ? (mhiVariantLabels[generatorData.mhiVariant || 'mhi_auto'] || 'MHI')
+        : 'Piloto Automático Diversificado',
+      symbolLabel: generatorData.onlyMhiR100 ? 'Volatility 100 Index (R_100)' : 'Multi-Ativos (R_100, 1HZ100V, R_75...)',
+      totalPotentialWin
+    };
+  }, [generatorData, smartHours]);
+
   const handleGenerateTimeline = () => {
     const newCycles = [];
     const periodsSelected = generatorData.periods;
     
     const stake = parseFloat(generatorData.stakeValue) || 1.0;
-    const tp = parseFloat(generatorData.takeProfit) || 10.0;
-    const sl = parseFloat(generatorData.stopLoss) || 20.0;
-    const moneyMgmt = generatorData.moneyManagement || 'martingale';
+    const tp = parseFloat(generatorData.takeProfit) || 5.0;
+    const sl = parseFloat(generatorData.stopLoss) || 15.0;
+    const moneyMgmt = generatorData.moneyManagement || 'sorosgale';
     const galeLevels = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' ? 0 : (parseInt(generatorData.martingaleLevels) ?? 2);
     const galeMult = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' || galeLevels === 0 ? 1.0 : (parseFloat(generatorData.martingaleMultiplier) || 2.0);
     
     const isOnlyMhiR100 = !!generatorData.onlyMhiR100;
-    const selectedMhiVariant = generatorData.mhiVariant || 'mhi_minority';
+    const selectedMhiVariant = generatorData.mhiVariant || 'mhi_auto';
     const strategyToUse = isOnlyMhiR100 ? selectedMhiVariant : 'autopilot';
 
     const defaultPeriodConfigs = {
@@ -359,16 +462,6 @@ export default function Scheduler({
     const filteredTargetAssets = defaultTargetAssets.filter(s => !activeBlacklistedSymbols.includes(s));
     const targetAssets = filteredTargetAssets.length > 0 ? filteredTargetAssets : ['R_100'];
     let generatedCount = 0;
-
-    const mhiVariantLabels = {
-      mhi_minority: 'MHI Minoria',
-      mhi_majority: 'MHI Maioria',
-      mhi_2_minority: 'MHI 2 Minoria',
-      mhi_2_majority: 'MHI 2 Maioria',
-      mhi_3_minority: 'MHI 3 Minoria',
-      mhi_3_majority: 'MHI 3 Maioria',
-      padrao_21: 'MHI 15m'
-    };
     
     Object.keys(periodConfigs).forEach(periodKey => {
       if (periodsSelected[periodKey]) {
@@ -475,15 +568,19 @@ export default function Scheduler({
 
   const strategies = [
     { id: 'autopilot', name: 'Piloto Automático 🤖' },
+    { id: 'mhi_auto', name: 'Estudo Dinâmico MHI (1 a 3) 🧠' },
+    { id: 'mhi_minority', name: 'MHI 1 (Minoria)' },
+    { id: 'mhi_majority', name: 'MHI 1 (Maioria)' },
+    { id: 'mhi_2_minority', name: 'MHI 2 (Minoria)' },
+    { id: 'mhi_2_majority', name: 'MHI 2 (Maioria)' },
+    { id: 'mhi_3_minority', name: 'MHI 3 (Minoria)' },
+    { id: 'mhi_3_majority', name: 'MHI 3 (Maioria)' },
     { id: 'ma_crossover', name: 'Cruzamento de Médias (9/21)' },
-    { id: 'mhi_minority', name: 'MHI Padrão (Minoria)' },
-    { id: 'mhi_majority', name: 'MHI Maioria' },
     { id: 'twin_towers', name: 'Torres Gêmeas' },
     { id: 'three_musketeers', name: 'Três Mosqueteiros' },
     { id: 'padrao_23', name: 'Padrão 23' },
     { id: 'padrao_3x1', name: 'Padrão 3x1' },
     { id: 'padrao_impar', name: 'Padrão Ímpar' },
-    { id: 'padrao_21', name: 'Padrão 21 (MHI 15m)' },
     { id: 'r7', name: 'Padrão R7' },
     { id: 'pullback', name: 'Pullback na Média (EMA 20)' },
     { id: 'reversal', name: 'Reversão (Hammer / Shooting)' },
@@ -695,6 +792,21 @@ export default function Scheduler({
     onSaveCycles(cycles.map(c => ({ ...c, status: 'Aguardando' })));
   };
 
+  const handleBatchToggleActive = (activate) => {
+    onSaveCycles(cycles.map(c => ({ ...c, active: activate })));
+  };
+
+  const handleBatchClearFinished = () => {
+    onSaveCycles(cycles.filter(c => c.status === 'Aguardando' || activeCycleId === c.id));
+  };
+
+  const handleBatchClearAll = () => {
+    if (window.confirm('Deseja realmente apagar todas as missões da linha do tempo?')) {
+      onSaveCycles([]);
+      setSelectedCycleId(null);
+    }
+  };
+
   const handleSaveWizard = (e) => {
     if (e) e.preventDefault();
     if (!wizardData.name.trim()) return;
@@ -845,12 +957,12 @@ export default function Scheduler({
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              background: 'rgba(139, 92, 246, 0.12)',
-              border: '1px solid rgba(139, 92, 246, 0.4)',
-              color: 'var(--primary-light)'
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.18) 0%, rgba(59, 130, 246, 0.15) 100%)',
+              border: '1px solid rgba(139, 92, 246, 0.45)',
+              color: '#c084fc'
             }}
           >
-            <Sliders size={16} /> Gerador de Agendamento
+            <Sliders size={16} /> Gerador de Linha do Tempo
           </button>
 
           {/* Add New Mission Button */}
@@ -888,15 +1000,72 @@ export default function Scheduler({
           padding: '1.25rem',
           display: 'flex',
           flexDirection: 'column',
-          gap: '1rem',
+          gap: '0.85rem',
           background: 'rgba(15, 11, 28, 0.4)',
           border: '1px solid rgba(255,255,255,0.03)',
           borderRadius: '16px',
           overflowY: 'auto'
         }}>
-          <h3 style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0, paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-            Linha do Tempo
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <h3 style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
+              Linha do Tempo ({sanitizedCycles.length})
+            </h3>
+            {sanitizedCycles.length > 0 && (
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button
+                  type="button"
+                  title="Ativar todas as missões"
+                  onClick={() => handleBatchToggleActive(true)}
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    color: '#34d399',
+                    borderRadius: '5px',
+                    padding: '2px 5px',
+                    fontSize: '0.6rem',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Ativar
+                </button>
+                <button
+                  type="button"
+                  title="Pausar todas as missões"
+                  onClick={() => handleBatchToggleActive(false)}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    color: '#f87171',
+                    borderRadius: '5px',
+                    padding: '2px 5px',
+                    fontSize: '0.6rem',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Pausar
+                </button>
+                <button
+                  type="button"
+                  title="Limpar missões finalizadas"
+                  onClick={handleBatchClearFinished}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    color: '#cbd5e1',
+                    borderRadius: '5px',
+                    padding: '2px 5px',
+                    fontSize: '0.6rem',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Limpar
+                </button>
+              </div>
+            )}
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1 }}>
             {sanitizedCycles.length === 0 ? (
@@ -1945,11 +2114,11 @@ export default function Scheduler({
             {/* Header */}
             <div style={{ padding: '1.25rem 1.75rem', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)' }}>
               <div>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <h3 style={{ fontSize: '1.18rem', fontWeight: '800', margin: 0, color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Sliders size={20} style={{ color: '#a78bfa' }} /> Gerador de Linha do Tempo
                 </h3>
                 <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
-                  Gere missões de alta precisão automaticamente em horários com maior probabilidade estatística.
+                  Programe missões automáticas de alta probabilidade com inteligência estatística e estudo dinâmico de padrões.
                 </span>
               </div>
               <button
@@ -1960,8 +2129,87 @@ export default function Scheduler({
               </button>
             </div>
 
+            {/* Quick Presets Bar */}
+            <div style={{ padding: '0.75rem 1.75rem', background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                ⚡ Presets:
+              </span>
+              <button
+                type="button"
+                onClick={() => applyGeneratorPreset('mhi_smart')}
+                style={{
+                  padding: '5px 11px',
+                  borderRadius: '8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 'bold',
+                  background: generatorData.onlyMhiR100 && generatorData.mhiVariant === 'mhi_auto' ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.04)',
+                  border: generatorData.onlyMhiR100 && generatorData.mhiVariant === 'mhi_auto' ? '1px solid #a78bfa' : '1px solid rgba(255,255,255,0.08)',
+                  color: generatorData.onlyMhiR100 && generatorData.mhiVariant === 'mhi_auto' ? '#c084fc' : '#cbd5e1',
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <span>🧠</span> MHI Vol 100 Inteligente (Sniper)
+              </button>
+              <button
+                type="button"
+                onClick={() => applyGeneratorPreset('sorosgale_turbo')}
+                style={{
+                  padding: '5px 11px',
+                  borderRadius: '8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 'bold',
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: '#cbd5e1',
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <span>🚀</span> Sorosgale Turbo
+              </button>
+              <button
+                type="button"
+                onClick={() => applyGeneratorPreset('conservative')}
+                style={{
+                  padding: '5px 11px',
+                  borderRadius: '8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 'bold',
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: '#cbd5e1',
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <span>🛡️</span> Conservador (Mão Fixa)
+              </button>
+              <button
+                type="button"
+                onClick={() => applyGeneratorPreset('smart_hours_g3')}
+                style={{
+                  padding: '5px 11px',
+                  borderRadius: '8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 'bold',
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: '#cbd5e1',
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <span>🏆</span> Smart Hours Pro (G3+)
+              </button>
+            </div>
+
             {/* Content Body - 2 Columns */}
-            <div style={{ padding: '1.5rem 1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
+            <div style={{ padding: '1.25rem 1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                 
                 {/* LEFT COLUMN: Financial & Martingale Parameters */}
@@ -1969,37 +2217,37 @@ export default function Scheduler({
                   {/* Card MHI Volatility 100 Exclusivo */}
                   <div style={{
                     background: generatorData.onlyMhiR100 
-                      ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.16) 0%, rgba(59, 130, 246, 0.16) 100%)' 
+                      ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(59, 130, 246, 0.16) 100%)' 
                       : 'rgba(255,255,255,0.02)',
                     border: generatorData.onlyMhiR100 
-                      ? '1px solid rgba(139, 92, 246, 0.45)' 
+                      ? '1.5px solid rgba(167, 139, 250, 0.55)' 
                       : '1px solid rgba(255,255,255,0.06)',
                     boxShadow: generatorData.onlyMhiR100
-                      ? '0 0 20px rgba(139, 92, 246, 0.15)'
+                      ? '0 0 25px rgba(139, 92, 246, 0.2)'
                       : 'none',
                     borderRadius: '16px',
-                    padding: '1.1rem',
+                    padding: '1.15rem',
                     transition: 'all 0.3s ease'
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{
-                          width: '36px', height: '36px', borderRadius: '10px',
-                          background: generatorData.onlyMhiR100 ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.05)',
+                          width: '38px', height: '38px', borderRadius: '10px',
+                          background: generatorData.onlyMhiR100 ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.05)',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '1.2rem', transition: 'all 0.3s ease'
+                          fontSize: '1.3rem', transition: 'all 0.3s ease'
                         }}>🎯</div>
                         <div>
-                          <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: generatorData.onlyMhiR100 ? '#c084fc' : 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ fontSize: '0.84rem', fontWeight: 'bold', color: generatorData.onlyMhiR100 ? '#c084fc' : 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span>Modo MHI Volatility 100 Index</span>
                             {generatorData.onlyMhiR100 && (
-                              <span style={{ fontSize: '0.58rem', background: 'rgba(139, 92, 246, 0.3)', border: '1px solid rgba(167, 139, 250, 0.4)', padding: '1px 6px', borderRadius: '4px', color: '#e9d5ff', fontWeight: '800' }}>
-                                ATIVO ESTÁVEL
+                              <span style={{ fontSize: '0.58rem', background: 'rgba(139, 92, 246, 0.35)', border: '1px solid rgba(167, 139, 250, 0.5)', padding: '2px 7px', borderRadius: '4px', color: '#e9d5ff', fontWeight: '800' }}>
+                                RECOMENDADO
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: '0.62rem', color: '#94a3b8', marginTop: '2px' }}>
-                            Operar somente MHI no Volatility 100 Index (R_100), o ativo mais estável
+                          <div style={{ fontSize: '0.64rem', color: '#94a3b8', marginTop: '2px' }}>
+                            Operar estratégias MHI no Volatility 100 Index (R_100), o ativo mais estável
                           </div>
                         </div>
                       </div>
@@ -2012,33 +2260,34 @@ export default function Scheduler({
                     </div>
 
                     {generatorData.onlyMhiR100 && (
-                      <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(139, 92, 246, 0.2)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '10px' }}>
+                      <div style={{ marginTop: '0.9rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(139, 92, 246, 0.25)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 0.7fr', gap: '10px' }}>
                           <div>
                             <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>
-                              VARIAÇÃO DA ESTRATÉGIA MHI
+                              SELEÇÃO DO PADRÃO MHI
                             </label>
                             <select
-                              value={generatorData.mhiVariant || 'mhi_minority'}
+                              value={generatorData.mhiVariant || 'mhi_auto'}
                               onChange={(e) => setGeneratorData(prev => ({ ...prev, mhiVariant: e.target.value }))}
                               style={{
                                 fontSize: '0.78rem',
-                                padding: '0.5rem',
+                                padding: '0.55rem',
                                 background: '#09090f',
                                 color: 'white',
-                                border: '1px solid rgba(139, 92, 246, 0.3)',
+                                border: '1px solid rgba(139, 92, 246, 0.4)',
                                 borderRadius: '8px',
                                 width: '100%',
-                                outline: 'none'
+                                outline: 'none',
+                                fontWeight: '600'
                               }}
                             >
-                              <option value="mhi_minority">MHI 1 (Minoria - Recomendado)</option>
-                              <option value="mhi_majority">MHI 1 (Maioria)</option>
-                              <option value="mhi_2_minority">MHI 2 (Minoria)</option>
-                              <option value="mhi_2_majority">MHI 2 (Maioria)</option>
-                              <option value="mhi_3_minority">MHI 3 (Minoria)</option>
-                              <option value="mhi_3_majority">MHI 3 (Maioria)</option>
-                              <option value="padrao_21">Padrão 21 (MHI 15m)</option>
+                              <option value="mhi_auto">🧠 Estudo Automático MHI (IA Decide MHI 1 a 3) [Recomendado]</option>
+                              <option value="mhi_minority">🎯 MHI 1 (Minoria)</option>
+                              <option value="mhi_majority">🎯 MHI 1 (Maioria)</option>
+                              <option value="mhi_2_minority">🎯 MHI 2 (Minoria)</option>
+                              <option value="mhi_2_majority">🎯 MHI 2 (Maioria)</option>
+                              <option value="mhi_3_minority">🎯 MHI 3 (Minoria)</option>
+                              <option value="mhi_3_majority">🎯 MHI 3 (Maioria)</option>
                             </select>
                           </div>
                           <div>
@@ -2047,10 +2296,10 @@ export default function Scheduler({
                             </label>
                             <div style={{
                               fontSize: '0.78rem',
-                              padding: '0.5rem 0.6rem',
-                              background: 'rgba(16, 185, 129, 0.1)',
+                              padding: '0.55rem 0.6rem',
+                              background: 'rgba(16, 185, 129, 0.12)',
                               color: '#34d399',
-                              border: '1px solid rgba(16, 185, 129, 0.3)',
+                              border: '1px solid rgba(16, 185, 129, 0.35)',
                               borderRadius: '8px',
                               fontWeight: 'bold',
                               display: 'flex',
@@ -2061,9 +2310,30 @@ export default function Scheduler({
                             </div>
                           </div>
                         </div>
-                        <span style={{ fontSize: '0.6rem', color: '#a78bfa', opacity: 0.9 }}>
-                          ⚡ Todas as missões serão agendadas no ativo <strong>Volatility 100 Index</strong> focando 100% no padrão MHI.
-                        </span>
+
+                        {/* Explanatory callout for MHI */}
+                        <div style={{
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          background: 'rgba(139, 92, 246, 0.1)',
+                          border: '1px solid rgba(139, 92, 246, 0.25)',
+                          fontSize: '0.64rem',
+                          color: '#e2e8f0',
+                          lineHeight: '1.4'
+                        }}>
+                          {(!generatorData.mhiVariant || generatorData.mhiVariant === 'mhi_auto') ? (
+                            <div>
+                              <strong style={{ color: '#c084fc' }}>🧠 Auto-Estudo Dinâmico:</strong> O robô estuda continuamente os ciclos de velas do <strong>Volatility 100 Index</strong> e decide antes/durante cada horário qual é o padrão mais assertivo do momento entre <strong>MHI 1 Minoria, MHI 1 Maioria, MHI 2 Minoria, MHI 2 Maioria, MHI 3 Minoria e MHI 3 Maioria</strong>.
+                              <div style={{ color: '#a78bfa', marginTop: '3px', fontSize: '0.58rem', fontWeight: 'bold' }}>
+                                ✓ Padrão 21 (MHI 15m) excluído para evitar atrasos operacionais.
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <strong style={{ color: '#c084fc' }}>🎯 Padrão Fixo:</strong> As missões operarão exclusivamente com <strong>{mhiVariantLabels[generatorData.mhiVariant]}</strong> no Volatility 100 Index.
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2213,51 +2483,51 @@ export default function Scheduler({
                     </div>
                   </div>
 
-                    {/* Card 3: Filtros de Proteção */}
-                    <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '2px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                        🛡️ Filtros & Proteção Avançada
-                      </span>
-                      
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                        <div>
-                          <strong style={{ color: '#34d399', display: 'block', fontSize: '0.75rem' }}>Streak Shield (Proteção de Tendência)</strong>
-                          <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Bloqueia ordens contra sequências de 4+ velas</span>
-                        </div>
-                        <Switch showStatus={false} scale={0.8} checked={generatorData.enableStreakShield ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStreakShield: e.target.checked }))} />
+                  {/* Card 3: Filtros de Proteção */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '2px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      🛡️ Filtros & Proteção Avançada
+                    </span>
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                      <div>
+                        <strong style={{ color: '#34d399', display: 'block', fontSize: '0.75rem' }}>Streak Shield (Proteção de Tendência)</strong>
+                        <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Bloqueia ordens contra sequências de 4+ velas</span>
                       </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                        <div>
-                          <strong style={{ color: '#60a5fa', display: 'block', fontSize: '0.75rem' }}>⏱️ Time Guard (Trava 30 Minutos)</strong>
-                          <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Garante lucro positivo acumulado e encerra missão se ultrapassar 30 min</span>
-                        </div>
-                        <Switch showStatus={false} scale={0.8} checked={generatorData.enableTimeGuard ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableTimeGuard: e.target.checked }))} />
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                        <div>
-                          <strong style={{ color: '#fbbf24', display: 'block', fontSize: '0.75rem' }}>🔄 Filtro Anti-Estagnação de Ativo</strong>
-                          <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Troca automaticamente de ativo se registrar 6+ ops sem sair do zero</span>
-                        </div>
-                        <Switch showStatus={false} scale={0.8} checked={generatorData.enableStalemateFailover ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStalemateFailover: e.target.checked }))} />
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                        <span style={{ color: '#cbd5e1' }}>Vela Master como secundária</span>
-                        <Switch showStatus={false} scale={0.8} checked={generatorData.enableMasterCandleSecondary} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableMasterCandleSecondary: e.target.checked }))} />
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                        <span style={{ color: '#cbd5e1' }}>Desativar estratégias lentas</span>
-                        <Switch showStatus={false} scale={0.8} checked={generatorData.disableSlowStrategies} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableSlowStrategies: e.target.checked }))} />
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                        <span style={{ color: '#cbd5e1' }}>Desativar cruzamento de médias</span>
-                        <Switch showStatus={false} scale={0.8} checked={generatorData.disableMaCrossover} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableMaCrossover: e.target.checked }))} />
-                      </div>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableStreakShield ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStreakShield: e.target.checked }))} />
                     </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                      <div>
+                        <strong style={{ color: '#60a5fa', display: 'block', fontSize: '0.75rem' }}>⏱️ Time Guard (Trava 30 Minutos)</strong>
+                        <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Garante lucro positivo acumulado e encerra missão se ultrapassar 30 min</span>
+                      </div>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableTimeGuard ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableTimeGuard: e.target.checked }))} />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                      <div>
+                        <strong style={{ color: '#fbbf24', display: 'block', fontSize: '0.75rem' }}>🔄 Filtro Anti-Estagnação de Ativo</strong>
+                        <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Troca automaticamente de ativo se registrar 6+ ops sem sair do zero</span>
+                      </div>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableStalemateFailover ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStalemateFailover: e.target.checked }))} />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                      <span style={{ color: '#cbd5e1' }}>Vela Master como secundária</span>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableMasterCandleSecondary} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableMasterCandleSecondary: e.target.checked }))} />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                      <span style={{ color: '#cbd5e1' }}>Desativar estratégias lentas</span>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.disableSlowStrategies} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableSlowStrategies: e.target.checked }))} />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                      <span style={{ color: '#cbd5e1' }}>Desativar cruzamento de médias</span>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.disableMaCrossover} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableMaCrossover: e.target.checked }))} />
+                    </div>
+                  </div>
                 </div>
 
                 {/* RIGHT COLUMN: Period Selectors & Smart Hours Engine */}
@@ -2428,6 +2698,44 @@ export default function Scheduler({
                   </div>
                 </div>
 
+              </div>
+
+              {/* Dynamic Live Preview Panel */}
+              <div style={{
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(139, 92, 246, 0.25)',
+                borderRadius: '16px',
+                padding: '0.9rem 1.25rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>📋</span> Prévia da Linha do Tempo Gerada
+                  </div>
+                  <span style={{ fontSize: '0.74rem', color: '#34d399', fontWeight: 'bold', background: 'rgba(52, 211, 153, 0.12)', padding: '2px 8px', borderRadius: '6px', border: '1px solid rgba(52, 211, 153, 0.25)' }}>
+                    {previewSummary.missionCount} Missões a Criar
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: '10px', fontSize: '0.72rem' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.58rem', color: '#94a3b8', textTransform: 'uppercase' }}>Estratégia</div>
+                    <div style={{ fontWeight: 'bold', color: '#c084fc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{previewSummary.strategyLabel}</div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.58rem', color: '#94a3b8', textTransform: 'uppercase' }}>Ativo Alvo</div>
+                    <div style={{ fontWeight: 'bold', color: '#34d399', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{previewSummary.symbolLabel}</div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.58rem', color: '#94a3b8', textTransform: 'uppercase' }}>Meta / Missão</div>
+                    <div style={{ fontWeight: 'bold', color: '#34d399' }}>+${parseFloat(generatorData.takeProfit || 5).toFixed(2)}</div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.58rem', color: '#94a3b8', textTransform: 'uppercase' }}>Potencial Diário</div>
+                    <div style={{ fontWeight: 'bold', color: '#fbbf24' }}>+${previewSummary.totalPotentialWin}</div>
+                  </div>
+                </div>
               </div>
             </div>
 

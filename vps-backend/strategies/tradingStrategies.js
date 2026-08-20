@@ -1000,6 +1000,63 @@ export function runPadrao21Backtest(candles, maxMartingale = 0) {
   return { winRate, totalTrades: total, wins, losses, signals };
 }
 
+/**
+ * Dynamic MHI Study Engine:
+ * Backtests all 6 official MHI patterns (MHI 1 to 3, Minority & Majority),
+ * strictly excluding Padrao 21.
+ * Returns the best ranked MHI strategy for the current market conditions.
+ */
+export function getBestMHIStrategy(candles, maxMartingale = 0) {
+  if (!candles || candles.length < 10) {
+    return {
+      id: 'mhi_minority',
+      name: 'MHI 1 (Minoria)',
+      winRate: 0,
+      totalTrades: 0,
+      wins: 0,
+      losses: 0,
+      weightedWinRate: 0
+    };
+  }
+
+  const variants = [
+    { id: 'mhi_minority', name: 'MHI 1 (Minoria)', res: runMHIBacktest(candles, maxMartingale, 'minority', 1) },
+    { id: 'mhi_majority', name: 'MHI 1 (Maioria)', res: runMHIBacktest(candles, maxMartingale, 'majority', 1) },
+    { id: 'mhi_2_minority', name: 'MHI 2 (Minoria)', res: runMHIBacktest(candles, maxMartingale, 'minority', 2) },
+    { id: 'mhi_2_majority', name: 'MHI 2 (Maioria)', res: runMHIBacktest(candles, maxMartingale, 'majority', 2) },
+    { id: 'mhi_3_minority', name: 'MHI 3 (Minoria)', res: runMHIBacktest(candles, maxMartingale, 'minority', 3) },
+    { id: 'mhi_3_majority', name: 'MHI 3 (Maioria)', res: runMHIBacktest(candles, maxMartingale, 'majority', 3) }
+  ];
+
+  const scored = variants.map(v => {
+    const total = v.res.totalTrades || 0;
+    const wr = v.res.winRate || 0;
+    const weighted = total >= 3 ? wr : wr * (total / 3);
+    return {
+      id: v.id,
+      name: v.name,
+      winRate: wr,
+      totalTrades: total,
+      wins: v.res.wins || 0,
+      losses: v.res.losses || 0,
+      weightedWinRate: weighted
+    };
+  }).sort((a, b) => (b.weightedWinRate || b.winRate) - (a.weightedWinRate || a.winRate));
+
+  return scored[0] || {
+    id: 'mhi_minority',
+    name: 'MHI 1 (Minoria)',
+    winRate: 0,
+    totalTrades: 0,
+    wins: 0,
+    losses: 0,
+    weightedWinRate: 0
+  };
+}
+
+/**
+ * Run backtests for all strategies and return their stats
+ */
 export function analyzeStrategies(candles, maxMartingale = 0) {
   const maResult = runMACrossoverBacktest(candles, maxMartingale);
   const mhiMinorityResult = runMHIBacktest(candles, maxMartingale, 'minority', 1);
@@ -1008,6 +1065,7 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
   const mhi2MajorityResult = runMHIBacktest(candles, maxMartingale, 'majority', 2);
   const mhi3MinorityResult = runMHIBacktest(candles, maxMartingale, 'minority', 3);
   const mhi3MajorityResult = runMHIBacktest(candles, maxMartingale, 'majority', 3);
+  const bestMHIStrategy = getBestMHIStrategy(candles, maxMartingale);
   const twinTowersResult = runTwinTowersBacktest(candles, maxMartingale);
   const threeMusketeersResult = runThreeMusketeersBacktest(candles, maxMartingale);
   const padrao23Result = runPadrao23Backtest(candles, maxMartingale);
@@ -1033,6 +1091,7 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
   };
   
   const rawList = [
+    { id: 'mhi_auto', name: 'Estudo Dinâmico MHI (1 a 3)', winRate: bestMHIStrategy.winRate, totalTrades: bestMHIStrategy.totalTrades, wins: bestMHIStrategy.wins, losses: bestMHIStrategy.losses, description: `Estuda e decide em tempo real o melhor padrão entre MHI 1 a 3 (Minoria/Maioria). Padrão líder atual: ${bestMHIStrategy.name}.` },
     { id: 'ma_crossover', name: 'Cruzamento de Médias (9/21)', winRate: maResult.winRate, totalTrades: maResult.totalTrades, wins: maResult.wins, losses: maResult.losses, description: 'Entrada baseada no cruzamento da Média Móvel Rápida (EMA 9) sobre a Média Móvel Lenta (EMA 21).' },
     { id: 'mhi_minority', name: 'MHI 1 (Minoria)', winRate: mhiMinorityResult.winRate, totalTrades: mhiMinorityResult.totalTrades, wins: mhiMinorityResult.wins, losses: mhiMinorityResult.losses, description: 'Analisa velas 3, 4 e 5 do ciclo de 5 min. Entra a favor da minoria na Vela 1 do próximo ciclo.' },
     { id: 'mhi_majority', name: 'MHI 1 (Maioria)', winRate: mhiMajorityResult.winRate, totalTrades: mhiMajorityResult.totalTrades, wins: mhiMajorityResult.wins, losses: mhiMajorityResult.losses, description: 'Analisa velas 3, 4 e 5 do ciclo de 5 min. Entra a favor da maioria na Vela 1 do próximo ciclo.' },
@@ -1180,6 +1239,20 @@ function computeRawLiveSignal(strategyId, candles) {
         return { direction, triggerTime: lastCandle.epoch + 60 };
       }
     }
+  }
+
+  if (strategyId === 'mhi_auto') {
+    const bestMHI = getBestMHIStrategy(candles, 0);
+    const signal = computeRawLiveSignal(bestMHI.id, candles);
+    if (signal) {
+      return {
+        ...signal,
+        detectedMhiPattern: bestMHI.id,
+        detectedMhiName: bestMHI.name,
+        detectedMhiWinRate: bestMHI.winRate
+      };
+    }
+    return null;
   }
 
   if (strategyId.startsWith('mhi_')) {
