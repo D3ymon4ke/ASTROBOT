@@ -2098,14 +2098,14 @@ export default function Scheduler({
           animation: 'fadeIn 0.2s ease-out'
         }}>
           <div style={{
-            background: 'rgba(12, 10, 24, 0.96)',
-            backdropFilter: 'blur(20px)',
+            background: 'rgba(12, 10, 24, 0.97)',
+            backdropFilter: 'blur(24px)',
             border: '1px solid rgba(139, 92, 246, 0.35)',
-            boxShadow: '0 0 60px rgba(139, 92, 246, 0.25)',
+            boxShadow: '0 0 70px rgba(139, 92, 246, 0.28)',
             borderRadius: '24px',
-            width: '740px',
-            maxWidth: '94vw',
-            maxHeight: '90vh',
+            width: '1120px',
+            maxWidth: '96vw',
+            maxHeight: '92vh',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -2114,7 +2114,7 @@ export default function Scheduler({
             {/* Header */}
             <div style={{ padding: '1.25rem 1.75rem', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)' }}>
               <div>
-                <h3 style={{ fontSize: '1.18rem', fontWeight: '800', margin: 0, color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Sliders size={20} style={{ color: '#a78bfa' }} /> Gerador de Linha do Tempo
                 </h3>
                 <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
@@ -2138,7 +2138,7 @@ export default function Scheduler({
                 type="button"
                 onClick={() => applyGeneratorPreset('mhi_smart')}
                 style={{
-                  padding: '5px 11px',
+                  padding: '5px 12px',
                   borderRadius: '8px',
                   fontSize: '0.72rem',
                   fontWeight: 'bold',
@@ -2156,7 +2156,7 @@ export default function Scheduler({
                 type="button"
                 onClick={() => applyGeneratorPreset('sorosgale_turbo')}
                 style={{
-                  padding: '5px 11px',
+                  padding: '5px 12px',
                   borderRadius: '8px',
                   fontSize: '0.72rem',
                   fontWeight: 'bold',
@@ -2174,7 +2174,7 @@ export default function Scheduler({
                 type="button"
                 onClick={() => applyGeneratorPreset('conservative')}
                 style={{
-                  padding: '5px 11px',
+                  padding: '5px 12px',
                   borderRadius: '8px',
                   fontSize: '0.72rem',
                   fontWeight: 'bold',
@@ -2192,7 +2192,7 @@ export default function Scheduler({
                 type="button"
                 onClick={() => applyGeneratorPreset('smart_hours_g3')}
                 style={{
-                  padding: '5px 11px',
+                  padding: '5px 12px',
                   borderRadius: '8px',
                   fontSize: '0.72rem',
                   fontWeight: 'bold',
@@ -2208,12 +2208,12 @@ export default function Scheduler({
               </button>
             </div>
 
-            {/* Content Body - 2 Columns */}
-            <div style={{ padding: '1.25rem 1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+            {/* Content Body - 3 Columns */}
+            <div style={{ padding: '1.25rem 1.75rem', display: 'flex', flexDirection: 'column', gap: '1.15rem', overflowY: 'auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1.05fr 1.05fr', gap: '1.15rem', alignItems: 'start' }}>
                 
-                {/* LEFT COLUMN: Financial & Martingale Parameters */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {/* COLUMN 1: Estratégia MHI & Filtros de Proteção */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
                   {/* Card MHI Volatility 100 Exclusivo */}
                   <div style={{
                     background: generatorData.onlyMhiR100 
@@ -2226,28 +2226,28 @@ export default function Scheduler({
                       ? '0 0 25px rgba(139, 92, 246, 0.2)'
                       : 'none',
                     borderRadius: '16px',
-                    padding: '1.15rem',
+                    padding: '1.1rem',
                     transition: 'all 0.3s ease'
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{
-                          width: '38px', height: '38px', borderRadius: '10px',
+                          width: '36px', height: '36px', borderRadius: '10px',
                           background: generatorData.onlyMhiR100 ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.05)',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '1.3rem', transition: 'all 0.3s ease'
+                          fontSize: '1.25rem', transition: 'all 0.3s ease'
                         }}>🎯</div>
                         <div>
-                          <div style={{ fontSize: '0.84rem', fontWeight: 'bold', color: generatorData.onlyMhiR100 ? '#c084fc' : 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span>Modo MHI Volatility 100 Index</span>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: generatorData.onlyMhiR100 ? '#c084fc' : 'white', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>Modo MHI Vol 100</span>
                             {generatorData.onlyMhiR100 && (
-                              <span style={{ fontSize: '0.58rem', background: 'rgba(139, 92, 246, 0.35)', border: '1px solid rgba(167, 139, 250, 0.5)', padding: '2px 7px', borderRadius: '4px', color: '#e9d5ff', fontWeight: '800' }}>
+                              <span style={{ fontSize: '0.55rem', background: 'rgba(139, 92, 246, 0.35)', border: '1px solid rgba(167, 139, 250, 0.5)', padding: '1px 6px', borderRadius: '4px', color: '#e9d5ff', fontWeight: '800' }}>
                                 RECOMENDADO
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: '0.64rem', color: '#94a3b8', marginTop: '2px' }}>
-                            Operar estratégias MHI no Volatility 100 Index (R_100), o ativo mais estável
+                          <div style={{ fontSize: '0.62rem', color: '#94a3b8', marginTop: '2px' }}>
+                            Operar estratégias MHI no Volatility 100 Index (R_100)
                           </div>
                         </div>
                       </div>
@@ -2260,18 +2260,18 @@ export default function Scheduler({
                     </div>
 
                     {generatorData.onlyMhiR100 && (
-                      <div style={{ marginTop: '0.9rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(139, 92, 246, 0.25)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 0.7fr', gap: '10px' }}>
+                      <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(139, 92, 246, 0.25)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '8px' }}>
                           <div>
-                            <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>
+                            <label style={{ fontSize: '0.6rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '3px', letterSpacing: '0.5px' }}>
                               SELEÇÃO DO PADRÃO MHI
                             </label>
                             <select
                               value={generatorData.mhiVariant || 'mhi_auto'}
                               onChange={(e) => setGeneratorData(prev => ({ ...prev, mhiVariant: e.target.value }))}
                               style={{
-                                fontSize: '0.78rem',
-                                padding: '0.55rem',
+                                fontSize: '0.75rem',
+                                padding: '0.5rem',
                                 background: '#09090f',
                                 color: 'white',
                                 border: '1px solid rgba(139, 92, 246, 0.4)',
@@ -2281,7 +2281,7 @@ export default function Scheduler({
                                 fontWeight: '600'
                               }}
                             >
-                              <option value="mhi_auto">🧠 Estudo Automático MHI (IA Decide MHI 1 a 3) [Recomendado]</option>
+                              <option value="mhi_auto">🧠 Estudo Automático MHI (IA)</option>
                               <option value="mhi_minority">🎯 MHI 1 (Minoria)</option>
                               <option value="mhi_majority">🎯 MHI 1 (Maioria)</option>
                               <option value="mhi_2_minority">🎯 MHI 2 (Minoria)</option>
@@ -2291,12 +2291,12 @@ export default function Scheduler({
                             </select>
                           </div>
                           <div>
-                            <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>
+                            <label style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '3px', letterSpacing: '0.5px' }}>
                               ATIVO EXCLUSIVO
                             </label>
                             <div style={{
-                              fontSize: '0.78rem',
-                              padding: '0.55rem 0.6rem',
+                              fontSize: '0.75rem',
+                              padding: '0.5rem 0.6rem',
                               background: 'rgba(16, 185, 129, 0.12)',
                               color: '#34d399',
                               border: '1px solid rgba(16, 185, 129, 0.35)',
@@ -2306,31 +2306,31 @@ export default function Scheduler({
                               alignItems: 'center',
                               gap: '4px'
                             }}>
-                              <span>🛡️ R_100 (Vol 100)</span>
+                              <span>🛡️ R_100</span>
                             </div>
                           </div>
                         </div>
 
                         {/* Explanatory callout for MHI */}
                         <div style={{
-                          padding: '8px 10px',
+                          padding: '7px 9px',
                           borderRadius: '8px',
                           background: 'rgba(139, 92, 246, 0.1)',
                           border: '1px solid rgba(139, 92, 246, 0.25)',
-                          fontSize: '0.64rem',
+                          fontSize: '0.62rem',
                           color: '#e2e8f0',
-                          lineHeight: '1.4'
+                          lineHeight: '1.35'
                         }}>
                           {(!generatorData.mhiVariant || generatorData.mhiVariant === 'mhi_auto') ? (
                             <div>
-                              <strong style={{ color: '#c084fc' }}>🧠 Auto-Estudo Dinâmico:</strong> O robô estuda continuamente os ciclos de velas do <strong>Volatility 100 Index</strong> e decide antes/durante cada horário qual é o padrão mais assertivo do momento entre <strong>MHI 1 Minoria, MHI 1 Maioria, MHI 2 Minoria, MHI 2 Maioria, MHI 3 Minoria e MHI 3 Maioria</strong>.
-                              <div style={{ color: '#a78bfa', marginTop: '3px', fontSize: '0.58rem', fontWeight: 'bold' }}>
-                                ✓ Padrão 21 (MHI 15m) excluído para evitar atrasos operacionais.
+                              <strong style={{ color: '#c084fc' }}>🧠 Auto-Estudo Dinâmico:</strong> O robô avalia os ciclos de velas e decide antes de cada horário o melhor padrão entre <strong>MHI 1 a 3 (Minoria/Maioria)</strong>.
+                              <div style={{ color: '#a78bfa', marginTop: '2px', fontSize: '0.56rem', fontWeight: 'bold' }}>
+                                ✓ Padrão 21 desativado para máxima velocidade.
                               </div>
                             </div>
                           ) : (
                             <div>
-                              <strong style={{ color: '#c084fc' }}>🎯 Padrão Fixo:</strong> As missões operarão exclusivamente com <strong>{mhiVariantLabels[generatorData.mhiVariant]}</strong> no Volatility 100 Index.
+                              <strong style={{ color: '#c084fc' }}>🎯 Padrão Fixo:</strong> As missões operarão com <strong>{mhiVariantLabels[generatorData.mhiVariant]}</strong> no Volatility 100 Index.
                             </div>
                           )}
                         </div>
@@ -2338,60 +2338,104 @@ export default function Scheduler({
                     )}
                   </div>
 
+                  {/* Card: Filtros de Proteção */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.05rem', display: 'flex', flexDirection: 'column', gap: '9px' }}>
+                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '2px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      🛡️ Filtros & Proteção Avançada
+                    </span>
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem' }}>
+                      <div>
+                        <strong style={{ color: '#34d399', display: 'block', fontSize: '0.74rem' }}>Streak Shield</strong>
+                        <span style={{ fontSize: '0.58rem', color: '#94a3b8' }}>Bloqueia contra tendências de 4+ velas</span>
+                      </div>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableStreakShield ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStreakShield: e.target.checked }))} />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem' }}>
+                      <div>
+                        <strong style={{ color: '#60a5fa', display: 'block', fontSize: '0.74rem' }}>⏱️ Time Guard (30 Min)</strong>
+                        <span style={{ fontSize: '0.58rem', color: '#94a3b8' }}>Trava lucro positivo se exceder 30 min</span>
+                      </div>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableTimeGuard ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableTimeGuard: e.target.checked }))} />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem' }}>
+                      <div>
+                        <strong style={{ color: '#fbbf24', display: 'block', fontSize: '0.74rem' }}>🔄 Anti-Estagnação</strong>
+                        <span style={{ fontSize: '0.58rem', color: '#94a3b8' }}>Troca se 6+ ops sem sair do zero</span>
+                      </div>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableStalemateFailover ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStalemateFailover: e.target.checked }))} />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem' }}>
+                      <span style={{ color: '#cbd5e1' }}>Vela Master secundária</span>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableMasterCandleSecondary} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableMasterCandleSecondary: e.target.checked }))} />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem' }}>
+                      <span style={{ color: '#cbd5e1' }}>Desativar estratégias lentas</span>
+                      <Switch showStatus={false} scale={0.8} checked={generatorData.disableSlowStrategies} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableSlowStrategies: e.target.checked }))} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* COLUMN 2: Parâmetros Financeiros & Gerenciamento */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
                   {/* Card 1: Metas Financeiras */}
                   <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem' }}>
-                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '12px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '10px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                       💰 Parâmetros Financeiros
                     </span>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                       <div>
-                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>ENTRADA ($)</label>
+                        <label style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '5px', letterSpacing: '0.5px' }}>ENTRADA ($)</label>
                         <input
                           type="number"
                           value={generatorData.stakeValue}
                           onChange={(e) => setGeneratorData(prev => ({ ...prev, stakeValue: e.target.value }))}
                           style={{
-                            fontSize: '0.82rem',
-                            padding: '0.6rem',
+                            fontSize: '0.8rem',
+                            padding: '0.55rem',
                             background: '#09090f',
                             color: 'white',
                             border: '1px solid rgba(255,255,255,0.12)',
-                            borderRadius: '10px',
+                            borderRadius: '8px',
                             width: '100%'
                           }}
                         />
                       </div>
                       <div>
-                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#34d399', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>STOP WIN ($)</label>
+                        <label style={{ fontSize: '0.6rem', fontWeight: '800', color: '#34d399', display: 'block', marginBottom: '5px', letterSpacing: '0.5px' }}>STOP WIN ($)</label>
                         <input
                           type="number"
                           value={generatorData.takeProfit}
                           onChange={(e) => setGeneratorData(prev => ({ ...prev, takeProfit: e.target.value }))}
                           style={{
-                            fontSize: '0.82rem',
-                            padding: '0.6rem',
+                            fontSize: '0.8rem',
+                            padding: '0.55rem',
                             background: '#09090f',
                             color: '#34d399',
                             border: '1px solid rgba(52, 211, 153, 0.3)',
-                            borderRadius: '10px',
+                            borderRadius: '8px',
                             width: '100%',
                             fontWeight: 'bold'
                           }}
                         />
                       </div>
                       <div>
-                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#f87171', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>STOP LOSS ($)</label>
+                        <label style={{ fontSize: '0.6rem', fontWeight: '800', color: '#f87171', display: 'block', marginBottom: '5px', letterSpacing: '0.5px' }}>STOP LOSS ($)</label>
                         <input
                           type="number"
                           value={generatorData.stopLoss}
                           onChange={(e) => setGeneratorData(prev => ({ ...prev, stopLoss: e.target.value }))}
                           style={{
-                            fontSize: '0.82rem',
-                            padding: '0.6rem',
+                            fontSize: '0.8rem',
+                            padding: '0.55rem',
                             background: '#09090f',
                             color: '#f87171',
                             border: '1px solid rgba(248, 113, 113, 0.3)',
-                            borderRadius: '10px',
+                            borderRadius: '8px',
                             width: '100%',
                             fontWeight: 'bold'
                           }}
@@ -2401,51 +2445,51 @@ export default function Scheduler({
                   </div>
 
                   {/* Card 2: Gerenciamento & Gale */}
-                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem' }}>
-                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '12px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '2px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                       📊 Gerenciamento & Martingale
                     </span>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.9fr 0.9fr', gap: '10px' }}>
+                    
+                    <div>
+                      <label style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>MODO DE GESTÃO</label>
+                      <select
+                        value={generatorData.moneyManagement || 'sorosgale'}
+                        onChange={(e) => setGeneratorData(prev => ({ ...prev, moneyManagement: e.target.value }))}
+                        style={{
+                          fontSize: '0.78rem',
+                          padding: '0.55rem',
+                          background: '#09090f',
+                          color: 'white',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                          borderRadius: '8px',
+                          width: '100%',
+                          outline: 'none'
+                        }}
+                      >
+                        <option value="sorosgale">🚀 Sorosgale (Recomendado)</option>
+                        <option value="fixed">Mão Fixa (Fixed)</option>
+                        <option value="martingale">Martingale Padrão</option>
+                        <option value="progressive_gale">Gale Progressivo</option>
+                        <option value="soros">Soros (Apenas Win)</option>
+                        <option value="iron_hands">Iron Hands</option>
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                       <div>
-                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>MODO</label>
-                        <select
-                          value={generatorData.moneyManagement || 'sorosgale'}
-                          onChange={(e) => setGeneratorData(prev => ({ ...prev, moneyManagement: e.target.value }))}
-                          style={{
-                            fontSize: '0.78rem',
-                            padding: '0.55rem',
-                            background: '#09090f',
-                            color: 'white',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            borderRadius: '10px',
-                            width: '100%',
-                            height: '38px',
-                            outline: 'none'
-                          }}
-                        >
-                          <option value="sorosgale">🚀 Sorosgale</option>
-                          <option value="fixed">Mão Fixa (Fixed)</option>
-                          <option value="martingale">Martingale</option>
-                          <option value="progressive_gale">Gale Progressivo</option>
-                          <option value="soros">Soros (Apenas Win)</option>
-                          <option value="iron_hands">Iron Hands</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>NÍVEIS GALE</label>
+                        <label style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>NÍVEIS GALE</label>
                         <select
                           value={generatorData.martingaleLevels ?? 2}
                           onChange={(e) => setGeneratorData(prev => ({ ...prev, martingaleLevels: parseInt(e.target.value) }))}
                           disabled={generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands'}
                           style={{
-                            fontSize: '0.78rem',
-                            padding: '0.55rem',
+                            fontSize: '0.75rem',
+                            padding: '0.5rem',
                             background: '#09090f',
                             color: 'white',
                             border: '1px solid rgba(255,255,255,0.12)',
-                            borderRadius: '10px',
+                            borderRadius: '8px',
                             width: '100%',
-                            height: '38px',
                             outline: 'none'
                           }}
                         >
@@ -2459,7 +2503,7 @@ export default function Scheduler({
                         </select>
                       </div>
                       <div>
-                        <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>MULTIPLICADOR</label>
+                        <label style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>MULTIPLICADOR</label>
                         <input
                           type="number"
                           value={generatorData.martingaleMultiplier ?? 2.0}
@@ -2469,80 +2513,33 @@ export default function Scheduler({
                           step="0.1"
                           disabled={generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' || generatorData.martingaleLevels === 0}
                           style={{
-                            fontSize: '0.78rem',
-                            padding: '0.55rem',
+                            fontSize: '0.75rem',
+                            padding: '0.5rem',
                             background: '#09090f',
                             color: 'white',
                             border: '1px solid rgba(255,255,255,0.12)',
-                            borderRadius: '10px',
-                            width: '100%',
-                            height: '38px'
+                            borderRadius: '8px',
+                            width: '100%'
                           }}
                         />
                       </div>
                     </div>
                   </div>
-
-                  {/* Card 3: Filtros de Proteção */}
-                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '2px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                      🛡️ Filtros & Proteção Avançada
-                    </span>
-                    
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                      <div>
-                        <strong style={{ color: '#34d399', display: 'block', fontSize: '0.75rem' }}>Streak Shield (Proteção de Tendência)</strong>
-                        <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Bloqueia ordens contra sequências de 4+ velas</span>
-                      </div>
-                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableStreakShield ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStreakShield: e.target.checked }))} />
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                      <div>
-                        <strong style={{ color: '#60a5fa', display: 'block', fontSize: '0.75rem' }}>⏱️ Time Guard (Trava 30 Minutos)</strong>
-                        <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Garante lucro positivo acumulado e encerra missão se ultrapassar 30 min</span>
-                      </div>
-                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableTimeGuard ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableTimeGuard: e.target.checked }))} />
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                      <div>
-                        <strong style={{ color: '#fbbf24', display: 'block', fontSize: '0.75rem' }}>🔄 Filtro Anti-Estagnação de Ativo</strong>
-                        <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>Troca automaticamente de ativo se registrar 6+ ops sem sair do zero</span>
-                      </div>
-                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableStalemateFailover ?? true} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableStalemateFailover: e.target.checked }))} />
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                      <span style={{ color: '#cbd5e1' }}>Vela Master como secundária</span>
-                      <Switch showStatus={false} scale={0.8} checked={generatorData.enableMasterCandleSecondary} onChange={(e) => setGeneratorData(prev => ({ ...prev, enableMasterCandleSecondary: e.target.checked }))} />
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                      <span style={{ color: '#cbd5e1' }}>Desativar estratégias lentas</span>
-                      <Switch showStatus={false} scale={0.8} checked={generatorData.disableSlowStrategies} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableSlowStrategies: e.target.checked }))} />
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                      <span style={{ color: '#cbd5e1' }}>Desativar cruzamento de médias</span>
-                      <Switch showStatus={false} scale={0.8} checked={generatorData.disableMaCrossover} onChange={(e) => setGeneratorData(prev => ({ ...prev, disableMaCrossover: e.target.checked }))} />
-                    </div>
-                  </div>
                 </div>
 
-                {/* RIGHT COLUMN: Period Selectors & Smart Hours Engine */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {/* COLUMN 3: Períodos & Smart Hours Engine */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
                   {/* Period Selectors */}
                   <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '1.1rem' }}>
                     <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', display: 'block', marginBottom: '10px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                       🕒 Períodos de Operação
                     </span>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                       {[
-                        { key: 'dawn', label: 'Madrugada', desc: '00:00 às 06:00', icon: '🌙' },
-                        { key: 'morning', label: 'Manhã', desc: '06:00 às 12:00', icon: '🌅' },
-                        { key: 'afternoon', label: 'Tarde', desc: '12:00 às 18:00', icon: '🌇' },
-                        { key: 'night', label: 'Noite', desc: '18:00 às 00:00', icon: '🌌' }
+                        { key: 'dawn', label: 'Madrugada', desc: '00h às 06h', icon: '🌙' },
+                        { key: 'morning', label: 'Manhã', desc: '06h às 12h', icon: '🌅' },
+                        { key: 'afternoon', label: 'Tarde', desc: '12h às 18h', icon: '🌇' },
+                        { key: 'night', label: 'Noite', desc: '18h às 00h', icon: '🌌' }
                       ].map(p => {
                         const isSelected = generatorData.periods[p.key];
                         return (
@@ -2553,21 +2550,21 @@ export default function Scheduler({
                               periods: { ...prev.periods, [p.key]: !prev.periods[p.key] }
                             }))}
                             style={{
-                              padding: '10px 12px',
+                              padding: '8px 10px',
                               background: isSelected ? 'rgba(139, 92, 246, 0.12)' : 'rgba(255, 255, 255, 0.02)',
                               border: isSelected ? '1px solid #a78bfa' : '1px solid rgba(255, 255, 255, 0.06)',
-                              borderRadius: '12px',
+                              borderRadius: '10px',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '10px',
+                              gap: '8px',
                               transition: 'all 0.2s ease'
                             }}
                           >
-                            <div style={{ fontSize: '1.3rem' }}>{p.icon}</div>
+                            <div style={{ fontSize: '1.2rem' }}>{p.icon}</div>
                             <div>
-                              <div style={{ fontSize: '0.78rem', fontWeight: 'bold', color: isSelected ? 'white' : '#cbd5e1' }}>{p.label}</div>
-                              <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>{p.desc}</div>
+                              <div style={{ fontSize: '0.74rem', fontWeight: 'bold', color: isSelected ? 'white' : '#cbd5e1' }}>{p.label}</div>
+                              <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>{p.desc}</div>
                             </div>
                           </div>
                         );
@@ -2589,24 +2586,24 @@ export default function Scheduler({
                   }}>
                     {/* Toggle Header */}
                     <div style={{
-                      padding: '1rem',
+                      padding: '0.85rem 1rem',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center'
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{
-                          width: '36px', height: '36px', borderRadius: '10px',
+                          width: '32px', height: '32px', borderRadius: '8px',
                           background: generatorData.useSmartHours ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '1.2rem', transition: 'all 0.3s ease'
+                          fontSize: '1.1rem', transition: 'all 0.3s ease'
                         }}>🧠</div>
                         <div>
-                          <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: generatorData.useSmartHours ? '#34d399' : 'white' }}>
+                          <div style={{ fontSize: '0.78rem', fontWeight: 'bold', color: generatorData.useSmartHours ? '#34d399' : 'white' }}>
                             Smart Hours Engine (G3+)
                           </div>
-                          <div style={{ fontSize: '0.62rem', color: '#94a3b8', marginTop: '1px' }}>
-                            Gera missões nos horários de maior assertividade estatística
+                          <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>
+                            Horários de maior assertividade estatística
                           </div>
                         </div>
                       </div>
@@ -2622,22 +2619,19 @@ export default function Scheduler({
 
                     {/* Smart Hours Preview */}
                     {generatorData.useSmartHours && (
-                      <div style={{ borderTop: '1px solid rgba(16, 185, 129, 0.15)', padding: '0.85rem 1rem' }}>
+                      <div style={{ borderTop: '1px solid rgba(16, 185, 129, 0.15)', padding: '0.75rem 0.9rem' }}>
                         {smartHours.length === 0 ? (
                           <div style={{
-                            textAlign: 'center', padding: '1rem',
-                            color: '#94a3b8', fontSize: '0.72rem',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px'
+                            textAlign: 'center', padding: '0.75rem',
+                            color: '#94a3b8', fontSize: '0.68rem',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px'
                           }}>
-                            <span style={{ fontSize: '1.5rem' }}>📊</span>
-                            <span>Nenhum histórico disponível no momento.</span>
-                            <span style={{ fontSize: '0.62rem', color: '#64748b' }}>
-                              O sistema detectará os melhores horários à medida que operar.
-                            </span>
+                            <span style={{ fontSize: '1.2rem' }}>📊</span>
+                            <span>Aguardando histórico para ranking estatístico.</span>
                           </div>
                         ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <div style={{ fontSize: '0.6rem', fontWeight: '800', color: '#10b981', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '4px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '170px', overflowY: 'auto' }}>
+                            <div style={{ fontSize: '0.58rem', fontWeight: '800', color: '#10b981', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '2px' }}>
                               🏆 Top {smartHours.length} Horários Detectados
                             </div>
                             {smartHours.map((h, idx) => {
@@ -2646,46 +2640,38 @@ export default function Scheduler({
                                 <div key={h.hour} style={{
                                   display: 'flex',
                                   alignItems: 'center',
-                                  gap: '8px',
-                                  padding: '6px 8px',
+                                  gap: '6px',
+                                  padding: '4px 6px',
                                   background: 'rgba(255,255,255,0.02)',
-                                  borderRadius: '8px',
+                                  borderRadius: '6px',
                                   border: `1px solid ${periodColor}22`
                                 }}>
                                   <div style={{
-                                    width: '22px', height: '22px',
-                                    borderRadius: '6px',
+                                    width: '18px', height: '18px',
+                                    borderRadius: '4px',
                                     background: `${periodColor}22`,
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontSize: '0.6rem', fontWeight: 'bold', color: periodColor
+                                    fontSize: '0.55rem', fontWeight: 'bold', color: periodColor
                                   }}>
                                     #{idx + 1}
                                   </div>
-                                  <div style={{ fontSize: '0.85rem' }}>{getPeriodIcon(h.hour)}</div>
+                                  <div style={{ fontSize: '0.75rem' }}>{getPeriodIcon(h.hour)}</div>
                                   <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                      <span style={{ fontSize: '0.78rem', fontWeight: 'bold', fontFamily: 'var(--font-mono)', color: 'white' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                      <span style={{ fontSize: '0.72rem', fontWeight: 'bold', fontFamily: 'var(--font-mono)', color: 'white' }}>
                                         {String(h.hour).padStart(2, '0')}:00h
                                       </span>
                                       <span style={{
-                                        fontSize: '0.6rem', fontWeight: 'bold',
+                                        fontSize: '0.55rem', fontWeight: 'bold',
                                         color: parseFloat(h.winRate) >= 70 ? '#34d399' : parseFloat(h.winRate) >= 55 ? '#f59e0b' : '#f87171',
                                         background: parseFloat(h.winRate) >= 70 ? 'rgba(52,211,153,0.1)' : parseFloat(h.winRate) >= 55 ? 'rgba(245,158,11,0.1)' : 'rgba(248,113,113,0.1)',
-                                        padding: '1px 5px', borderRadius: '4px'
+                                        padding: '1px 4px', borderRadius: '4px'
                                       }}>
                                         {h.winRate}%
                                       </span>
                                     </div>
-                                    <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '1px' }}>
-                                      {h.total} ops · G0:{h.g0Wins} G1:{h.g1Wins} G2:{h.g2Wins} G3:{h.g3Wins} · {h.losses} loss
-                                    </div>
-                                  </div>
-                                  <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontSize: '0.62rem', fontWeight: 'bold', color: '#34d399' }}>
-                                      {h.wins}W
-                                    </div>
-                                    <div style={{ fontSize: '0.58rem', color: '#f87171' }}>
-                                      {h.losses}L
+                                    <div style={{ fontSize: '0.54rem', color: '#64748b' }}>
+                                      {h.total} ops · {h.wins}W / {h.losses}L
                                     </div>
                                   </div>
                                 </div>
@@ -2705,33 +2691,33 @@ export default function Scheduler({
                 background: 'rgba(255,255,255,0.02)',
                 border: '1px solid rgba(139, 92, 246, 0.25)',
                 borderRadius: '16px',
-                padding: '0.9rem 1.25rem',
+                padding: '0.85rem 1.25rem',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '8px'
+                gap: '6px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#a78bfa', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span>📋</span> Prévia da Linha do Tempo Gerada
                   </div>
                   <span style={{ fontSize: '0.74rem', color: '#34d399', fontWeight: 'bold', background: 'rgba(52, 211, 153, 0.12)', padding: '2px 8px', borderRadius: '6px', border: '1px solid rgba(52, 211, 153, 0.25)' }}>
-                    {previewSummary.missionCount} Missões a Criar
+                    {previewSummary.missionCount} Missões Programadas
                   </span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: '10px', fontSize: '0.72rem' }}>
-                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
                     <div style={{ fontSize: '0.58rem', color: '#94a3b8', textTransform: 'uppercase' }}>Estratégia</div>
                     <div style={{ fontWeight: 'bold', color: '#c084fc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{previewSummary.strategyLabel}</div>
                   </div>
-                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
                     <div style={{ fontSize: '0.58rem', color: '#94a3b8', textTransform: 'uppercase' }}>Ativo Alvo</div>
                     <div style={{ fontWeight: 'bold', color: '#34d399', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{previewSummary.symbolLabel}</div>
                   </div>
-                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
                     <div style={{ fontSize: '0.58rem', color: '#94a3b8', textTransform: 'uppercase' }}>Meta / Missão</div>
                     <div style={{ fontWeight: 'bold', color: '#34d399' }}>+${parseFloat(generatorData.takeProfit || 5).toFixed(2)}</div>
                   </div>
-                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
                     <div style={{ fontSize: '0.58rem', color: '#94a3b8', textTransform: 'uppercase' }}>Potencial Diário</div>
                     <div style={{ fontWeight: 'bold', color: '#fbbf24' }}>+${previewSummary.totalPotentialWin}</div>
                   </div>
