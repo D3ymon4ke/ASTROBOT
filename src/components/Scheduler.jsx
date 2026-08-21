@@ -5,6 +5,7 @@ import {
   TrendingDown, Info, Sliders, Eye, Settings, Activity, FileText, Check, Search, Award 
 } from 'lucide-react';
 import Switch from './Switch';
+import DecisionTreeMapModal from './DecisionTreeMapModal';
 
 export default function Scheduler({
   schedulerState,
@@ -19,6 +20,7 @@ export default function Scheduler({
   autoResetConfig,
   onSaveAutoResetConfig,
   onTriggerAutoResetManual,
+  onSendDecisionTreeTelegram,
   historicalTrades = []
 }) {
   const defaultAutoReset = {
@@ -184,6 +186,7 @@ export default function Scheduler({
 
   // Scheduling Generator Modal States
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
+  const [isTreeMapModalOpen, setIsTreeMapModalOpen] = useState(false);
   const [generatorData, setGeneratorData] = useState({
     stakeValue: 1.0,
     takeProfit: 5.0,
@@ -1144,6 +1147,29 @@ export default function Scheduler({
             </span>
             <Switch showStatus={false} scale={0.8} checked={schedulerState} onChange={(e) => onToggleScheduler(e.target.checked)} />
           </div>
+
+          {/* Decision Tree Map Button */}
+          <button
+            type="button"
+            onClick={() => setIsTreeMapModalOpen(true)}
+            style={{
+              padding: '0.65rem 1.15rem',
+              borderRadius: '10px',
+              fontSize: '0.78rem',
+              fontWeight: '800',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.22) 0%, rgba(139, 92, 246, 0.22) 100%)',
+              border: '1px solid rgba(244, 114, 182, 0.45)',
+              color: '#fbcfe8',
+              boxShadow: '0 0 15px rgba(236, 72, 153, 0.2)',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <span>🌳</span> Árvore de Decisão
+          </button>
 
           {/* Scheduling Generator Button */}
           <button
@@ -3766,6 +3792,17 @@ export default function Scheduler({
           </div>
         </div>
       )}
+
+      {/* MODAL: ÁRVORE NEURAL DE DECISÃO & FLUXO DE ENTRADAS */}
+      <DecisionTreeMapModal
+        isOpen={isTreeMapModalOpen}
+        onClose={() => setIsTreeMapModalOpen(false)}
+        cycles={sanitizedCycles}
+        selectedCycleId={selectedCycleId}
+        activeCycleId={activeCycleId}
+        isRunning={schedulerState}
+        onSendTelegram={onSendDecisionTreeTelegram}
+      />
 
     </div>
   );

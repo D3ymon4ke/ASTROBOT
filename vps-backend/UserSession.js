@@ -19,6 +19,7 @@ import {
   formatRecallLossMessage,
   formatRecallStatusReport,
   formatMarketRiskReport,
+  formatDecisionTreeMap,
   deleteTelegramMessages
 } from './utils/telegram.js';
 import { analyzeMarketConditions } from './utils/marketIntelligence.js';
@@ -2564,6 +2565,10 @@ export class UserSession {
         `━━━━━━━━━━━━━━━━━━━━━━\n` +
         `🤖 <i>Análise estatística em tempo real via VPS.</i>`
       );
+    } else if (['/arvore', 'árvore', '/tree', 'tree', '/mapa', 'mapa', '🌳 árvore de decisão', '🌳 mapa de entradas'].includes(cmd)) {
+      const activeCycle = (this.cycles || []).find(c => c.id === this.activeCycleId) || (this.cycles || [])[0];
+      const statusText = this.isRunning ? (this.activeCycleId ? 'Monitorando / Em Operação 🟢' : 'Motor Ligado 🟢') : 'Aguardando Disparo ⏳';
+      reply(formatDecisionTreeMap(activeCycle, this.settings, statusText));
     } else if (cmd === '/config' || cmd === '⚙ configurações') {
       reply(
         `⚙️ <b>ASTROBOT • PAINEL DE CONFIGURAÇÕES</b>\n` +
@@ -2590,6 +2595,35 @@ export class UserSession {
       } else {
         reply('⚠️ <b>Não foi possível limpar o chat.</b> ID da mensagem ausente.');
       }
+    }
+  }
+
+  // Send Decision Tree Map directly from frontend request
+  sendDecisionTreeTelegram(cycleId = null) {
+    const cycle = (this.cycles || []).find(c => c.id === cycleId) || 
+                  (this.cycles || []).find(c => c.id === this.activeCycleId) || 
+                  (this.cycles || [])[0];
+    
+    const statusText = this.isRunning ? (this.activeCycleId ? 'Monitorando / Em Operação 🟢' : 'Motor Ligado 🟢') : 'Aguardando Disparo ⏳';
+    const treeMsg = formatDecisionTreeMap(cycle, this.settings, statusText);
+    
+    const tok = this.settings.telegramToken || '8422393109:AAFVC0lgcHyKoDKlamkKe6ZAQ2oANLxRV5E';
+    const cid = this.settings.telegramChatId;
+    
+    if (tok && cid) {
+      sendTelegramMessage(tok, cid, treeMsg, true).then(() => {
+        this.addLog({
+          message: `[Telegram] 🌳 Árvore de Decisão & Entradas enviada com sucesso para o Telegram.`,
+          type: 'success'
+        });
+      }).catch(err => {
+        console.error('Error sending decision tree to telegram:', err);
+      });
+    } else {
+      this.addLog({
+        message: `[Telegram] Falha ao enviar Árvore: Telegram Chat ID não configurado.`,
+        type: 'warning'
+      });
     }
   }
 

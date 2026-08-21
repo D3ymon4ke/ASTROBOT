@@ -535,6 +535,8 @@ wss.on('connection', (ws) => {
       } else if (type === 'get_cloud_backup') {
         const backup = await session.getCloudBackup(payload.isDemo !== false);
         ws.send(JSON.stringify({ type: 'get_cloud_backup_result', isDemo: payload.isDemo !== false, backup }));
+      } else if (type === 'send_decision_tree_telegram') {
+        session.sendDecisionTreeTelegram(payload.cycleId);
       }
       
     } catch (err) {

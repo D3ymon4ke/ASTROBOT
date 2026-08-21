@@ -186,6 +186,13 @@ export class DerivAPI {
     });
   }
 
+  sendDecisionTreeTelegram(cycleId) {
+    this.send({
+      type: 'send_decision_tree_telegram',
+      cycleId
+    });
+  }
+
   syncTrades(trades, isDemo = true) {
     this.send({
       type: 'sync_trades',

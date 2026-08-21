@@ -21,7 +21,7 @@ export const sendTelegramMessage = async (token, chatId, htmlText, useKeyboard =
       [{ text: "▶ Iniciar Bot" }, { text: "⏸ Pausar" }, { text: "⛔ Parar" }],
       [{ text: "📈 Relatório" }, { text: "📊 Scanner" }, { text: "💰 Saldo" }],
       [{ text: "🧠 Status Risco" }, { text: "🛡️ Recall Engine" }, { text: "📅 Ciclos" }],
-      [{ text: "⚙ Configurações" }]
+      [{ text: "🌳 Árvore de Decisão" }, { text: "⚙ Configurações" }]
     ],
     resize_keyboard: true,
     one_time_keyboard: false
@@ -315,6 +315,115 @@ export const formatMarketRiskReport = (marketInfo, symbol) => {
          `🤖 <i>Previsão gerada com base na volatilidade em tempo real e assertividade por horário.</i>`;
 };
 
+// Format Decision & Entry Tree Map for Telegram
+export const formatDecisionTreeMap = (cycle = null, settings = {}, activeStatus = 'Aguardando') => {
+  const isFakegale = cycle?.enableFakegale || cycle?.moneyManagement === 'fakegale' || cycle?.selectedStrategy === 'fakegale' || settings?.moneyManagement === 'fakegale';
+  const isSorosgale = (cycle?.moneyManagement || settings?.moneyManagement) === 'sorosgale';
+  const stratName = cycle?.selectedStrategy || settings?.selectedStrategy || 'mhi_auto';
+  const symbol = cycle?.symbol || settings?.symbol || 'R_100';
+  const stake = parseFloat(cycle?.stakeValue || settings?.stakeValue || 1.0).toFixed(2);
+  const tp = parseFloat(cycle?.takeProfit || settings?.takeProfit || 5.0).toFixed(2);
+  const sl = parseFloat(cycle?.stopLoss || settings?.stopLoss || 15.0).toFixed(2);
+  const galeLevels = parseInt(cycle?.martingaleLevels ?? settings?.martingaleLevels ?? 2);
+  const time = cycle?.startTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const cycleName = cycle?.name || 'Missão Ativa MHI Vol 100';
+
+  let treeDiagram = '';
+
+  if (isFakegale) {
+    treeDiagram = 
+`[🌌 RAÍZ] Início Ciclo (${time} • ${symbol})
+  │
+  ├── [🧠 ESTUDO IA] MHI Dinâmico (Vela 5)
+  ├── [🛡️ FILTRO] Streak Shield (Max 4V)
+  │     └── Se Tendência ──► 🛑 Bloqueio (0 Risco)
+  │
+  └── [🎯 GATILHO] Sinal Detectado (CALL/PUT)
+        │
+        ▼
+  [🧪 FAKEGALE] Vela 1: Teste Virtual (G0)
+        ├── (WIN Virtual) ──► 🛡️ Entrada Descartada
+        └── (LOSS Virtual) ─► 🚀 ENTRADA REAL (Vela 2)
+                                    │
+                     ┌──────────────┴──────────────┐
+                     ▼                             ▼
+              [🟢 WIN REAL]                 [🔴 LOSS REAL]
+                     │                             │
+              [🏆 META: +$${tp}]             [⚠️ GALE 1 REAL]
+                                                   │
+                                     ┌─────────────┴─────────────┐
+                                     ▼                           ▼
+                              [🟢 WIN G1]                 [🔴 LOSS G1]
+                                     │                           │
+                              [✔ RECUPERADO]              [⚠️ GALE 2 REAL]
+                                                                 │
+                                                   ┌─────────────┴─────────────┐
+                                                   ▼                           ▼
+                                            [🟢 WIN G2]                 [🛑 STOP: -$${sl}]`;
+  } else if (isSorosgale) {
+    treeDiagram = 
+`[🌌 RAÍZ] Início Ciclo (${time} • ${symbol})
+  │
+  ├── [🧠 ESTUDO IA] MHI Dinâmico / Padrão
+  ├── [🛡️ FILTRO] Streak Shield & Time Guard
+  │
+  └── [🎯 GATILHO] Ordem Spot Direta (Stake: $${stake})
+        │
+        ┌───────────────────────────┴───────────────────────────┐
+        ▼                                                       ▼
+ [🟢 WIN SPOT] (+$${(parseFloat(stake)*0.95).toFixed(2)})                         [🔴 LOSS SPOT] (-$${stake})
+        │                                                       │
+ [🚀 SOROS NÍVEL 1]                                      [⚠️ GALE RECOVERY 1]
+ (Stake Composta: $${(parseFloat(stake)*1.95).toFixed(2)})                                (Stake: $${(parseFloat(stake)*2.0).toFixed(2)})
+        │                                                       │
+ ┌──────┴──────┐                                         ┌──────┴──────┐
+ ▼             ▼                                         ▼             ▼
+[🟢 WIN 2]    [🔴 LOSS]                                 [🟢 WIN G1]   [🔴 LOSS G1]
+ │             │                                         │             │
+[🏆 META]     [🔄 RESET]                                [✔ RECOV]     [⚠️ GALE 2]
+(+$${tp})                                                              │
+                                                         ┌─────────────┴─────────────┐
+                                                         ▼                           ▼
+                                                  [🟢 WIN G2]                 [🛑 STOP: -$${sl}]`;
+  } else {
+    treeDiagram = 
+`[🌌 RAÍZ] Início Ciclo (${time} • ${symbol})
+  │
+  ├── [🧠 ESTUDO IA] Leitura de Padrões & Volatilidade
+  ├── [🛡️ FILTRO] Proteção Anti-Tendência
+  │
+  └── [🎯 GATILHO] Ordem Base (Stake: $${stake})
+        │
+        ┌───────────────────────────┴───────────────────────────┐
+        ▼                                                       ▼
+ [🟢 WIN REAL]                                           [🔴 LOSS REAL]
+        │                                                       │
+ [🏆 META: +$${tp}]                                       [⚠️ GALE NÍVEL 1 (${galeLevels >= 1 ? 'Ativo' : 'Off'})]
+                                                                │
+                                                  ┌─────────────┴─────────────┐
+                                                  ▼                           ▼
+                                           [🟢 WIN G1]                 [🔴 LOSS G1]
+                                                  │                           │
+                                           [✔ RECUPERADO]              [⚠️ GALE NÍVEL 2]
+                                                                              │
+                                                                ┌─────────────┴─────────────┐
+                                                                ▼                           ▼
+                                                         [🟢 WIN G2]                 [🛑 STOP: -$${sl}]`;
+  }
+
+  return `🌳 <b>ASTROBOT • ÁRVORE DE DECISÃO & FLUXO DE ENTRADAS</b>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `🎯 <b>Missão:</b> <code>${escapeHtml(cycleName)}</code>\n` +
+         `📈 <b>Ativo:</b> <code>${escapeHtml(symbol)}</code> | <b>Estratégia:</b> <code>${escapeHtml(stratName)}</code>\n` +
+         `🛡️ <b>Gestão:</b> <code>${isFakegale ? '🧪 Fakegale Sniper' : isSorosgale ? '🚀 Sorosgale Turbo' : 'Martingale Tradicional'}</code>\n` +
+         `💵 <b>Stake Base:</b> <code>$${stake}</code> | <b>Target:</b> <code>+$${tp}</code> / <code>-$${sl}</code>\n` +
+         `⚡ <b>Status Atual:</b> <code>${escapeHtml(activeStatus)}</code>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `<pre>${treeDiagram}</pre>\n` +
+         `━━━━━━━━━━━━━━━━━━━━━━\n` +
+         `🤖 <i>Acompanhe o caminho neural percorrido pelo robô em tempo real.</i>`;
+};
+
 // Delete a batch of messages
 export const deleteTelegramMessages = async (token, chatId, baseMessageId, count = 100) => {
   if (!token || !chatId || !baseMessageId) return;
@@ -334,3 +443,4 @@ export const deleteTelegramMessages = async (token, chatId, baseMessageId, count
   
   await Promise.allSettled(promises);
 };
+
