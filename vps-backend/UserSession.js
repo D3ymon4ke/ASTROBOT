@@ -619,7 +619,11 @@ export class UserSession {
 
               // Check for cycles updates
               if (data.cycles) {
-                this.cycles = data.cycles;
+                if (this.activeCycleId && this.isRunning) {
+                  this.cycles = data.cycles.map(c => c.id === this.activeCycleId ? { ...c, status: 'Ativo' } : c);
+                } else {
+                  this.cycles = data.cycles;
+                }
                 settingsChanged = true;
               }
 
@@ -1067,11 +1071,13 @@ export class UserSession {
 
 
 
-    // Reset gale levels and clear candles for fresh analysis
+    // Reset gale levels and session tracking
     this.galeLevel = 0;
     this.currentSorosStake = 0;
     this.waitingForGaleNextCandle = false;
-    this.candles = [];
+    if (prevSymbol !== this.settings.symbol || prevGranularity !== this.settings.granularity || !this.candles || this.candles.length < 5) {
+      this.candles = [];
+    }
     this.initialBalance = this.balance;
     this.sessionStartTime = Date.now();
     this.isRunning = true;
@@ -1088,7 +1094,7 @@ export class UserSession {
       if (!this.derivAPI.connected || !this.derivAPI.authorized) {
         console.log(`[Scheduler] Deriv not connected or not authorized for ${this.email} on cycle start. Reconnecting...`);
         this.derivAPI.connect(this.settings.token, this.settings.appId, this.settings.isDemo);
-      } else {
+      } else if (prevSymbol !== this.settings.symbol || prevGranularity !== this.settings.granularity || this.candles.length < 5) {
         console.log(`[Scheduler] Cycle starting for ${this.email}. Renewing Deriv subscription to ${this.settings.symbol} (${this.settings.granularity}s).`);
         this.derivAPI.changeSymbol(this.settings.symbol, parseInt(this.settings.granularity));
       }
@@ -1797,7 +1803,7 @@ export class UserSession {
 
   calculateCurrentStake(isMartingaleUpdate) {
     const mode = this.settings.moneyManagement || (this.settings.martingaleEnabled ? 'martingale' : 'fixed');
-    let baseStake = parseFloat(this.settings.stakeValue);
+    let baseStake = parseFloat(this.settings.stakeValue || '1.00');
 
     if (this.settings.stakeType === 'percentage') {
       baseStake = (this.balance * (baseStake / 100));
@@ -1809,7 +1815,7 @@ export class UserSession {
     }
 
     const level = this.galeLevel;
-    const multiplier = parseFloat(this.settings.martingaleMultiplier);
+    const multiplier = parseFloat(this.settings.martingaleMultiplier || '2.0');
 
     if (mode === 'soros' || mode === 'sorosgale') {
       if (this.currentSorosStake && this.currentSorosStake > 0) {
@@ -1826,14 +1832,14 @@ export class UserSession {
     }
 
     if (mode === 'progressive_gale') {
-      if (isMartingaleUpdate && level > 0) {
+      if (level > 0) {
         return baseStake * Math.pow(multiplier + level * 0.25, level);
       }
       return baseStake;
     }
 
     if (mode === 'martingale') {
-      if (isMartingaleUpdate && level > 0) {
+      if (level > 0) {
         return baseStake * Math.pow(multiplier, level);
       }
     }

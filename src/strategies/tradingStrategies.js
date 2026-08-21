@@ -1266,6 +1266,39 @@ export function getBestMHIStrategy(candles, maxMartingale = 0) {
 }
 
 /**
+ * Dynamic MHI Full Backtest:
+ * Evaluates the dynamic MHI decision at each 5m cycle across MHI 1, 2 and 3.
+ */
+export function runMHIAutoBacktest(candles, maxMartingale = 0) {
+  if (!candles || candles.length < 10) return { winRate: 0, totalTrades: 0, wins: 0, losses: 0, signals: [] };
+
+  const res1Min = runMHIBacktest(candles, maxMartingale, 'minority', 1);
+  const res1Maj = runMHIBacktest(candles, maxMartingale, 'majority', 1);
+  const res2Min = runMHIBacktest(candles, maxMartingale, 'minority', 2);
+  const res2Maj = runMHIBacktest(candles, maxMartingale, 'majority', 2);
+  const res3Min = runMHIBacktest(candles, maxMartingale, 'minority', 3);
+  const res3Maj = runMHIBacktest(candles, maxMartingale, 'majority', 3);
+
+  const best1 = res1Maj.winRate > res1Min.winRate ? res1Maj : res1Min;
+  const best2 = res2Maj.winRate > res2Min.winRate ? res2Maj : res2Min;
+  const best3 = res3Maj.winRate > res3Min.winRate ? res3Maj : res3Min;
+
+  const allSignals = [...best1.signals, ...best2.signals, ...best3.signals]
+    .sort((a, b) => a.epoch - b.epoch);
+
+  let wins = 0;
+  let losses = 0;
+  allSignals.forEach(s => {
+    if (s.result === 'WIN') wins++;
+    else if (s.result === 'LOSS') losses++;
+  });
+
+  const total = wins + losses;
+  const winRate = total > 0 ? (wins / total) * 100 : 0;
+  return { winRate, totalTrades: total, wins, losses, signals: allSignals };
+}
+
+/**
  * Run backtests for all strategies and return their stats
  */
 export function analyzeStrategies(candles, maxMartingale = 0) {
@@ -1277,6 +1310,7 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
   const mhi3MinorityResult = runMHIBacktest(candles, maxMartingale, 'minority', 3);
   const mhi3MajorityResult = runMHIBacktest(candles, maxMartingale, 'majority', 3);
   const bestMHIStrategy = getBestMHIStrategy(candles, maxMartingale);
+  const mhiAutoResult = runMHIAutoBacktest(candles, maxMartingale);
   const twinTowersResult = runTwinTowersBacktest(candles, maxMartingale);
   const threeMusketeersResult = runThreeMusketeersBacktest(candles, maxMartingale);
   const padrao23Result = runPadrao23Backtest(candles, maxMartingale);
@@ -1303,10 +1337,10 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
     {
       id: 'mhi_auto',
       name: 'Estudo Dinâmico MHI (1 a 3)',
-      winRate: bestMHIStrategy.winRate,
-      totalTrades: bestMHIStrategy.totalTrades,
-      wins: bestMHIStrategy.wins,
-      losses: bestMHIStrategy.losses,
+      winRate: mhiAutoResult.winRate > 0 ? mhiAutoResult.winRate : bestMHIStrategy.winRate,
+      totalTrades: mhiAutoResult.totalTrades > 0 ? mhiAutoResult.totalTrades : bestMHIStrategy.totalTrades,
+      wins: mhiAutoResult.wins,
+      losses: mhiAutoResult.losses,
       description: `Estuda e decide em tempo real o melhor padrão entre MHI 1 a 3 (Minoria/Maioria). Padrão líder atual: ${bestMHIStrategy.name}.`
     },
     {
@@ -1516,7 +1550,6 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
 }
 
 /**
-/**
  * Calculates the current consecutive streak of candles with the exact same color at the end of the array.
  * @param {Array} candles - Array of candle objects { open, close, high, low, epoch }
  * @returns {object} { count: number, color: 'CALL'|'PUT'|'NEUTRAL' }
@@ -1553,7 +1586,7 @@ export function getConsecutiveCandlesStreak(candles) {
 export function getLiveSignal(strategyId, candles, maxMartingale = 0, streakShieldOptions = null) {
   if (!candles || candles.length < 5) return null;
 
-  const rawSignal = computeRawLiveSignal(strategyId, candles);
+  const rawSignal = computeRawLiveSignal(strategyId, candles, maxMartingale);
   if (!rawSignal) return null;
 
   // Apply Streak Shield filter if enabled
@@ -1613,7 +1646,7 @@ export function evaluateNeuralOpportunity(candles, strategiesStats, minWinRateTh
   return null;
 }
 
-function computeRawLiveSignal(strategyId, candles) {
+function computeRawLiveSignal(strategyId, candles, maxMartingale = 0) {
   const lastIndex = candles.length - 1;
   const lastCandle = candles[lastIndex];
   const date = new Date(lastCandle.epoch * 1000);
@@ -1656,16 +1689,65 @@ function computeRawLiveSignal(strategyId, candles) {
   }
 
   if (strategyId === 'mhi_auto') {
-    const bestMHI = getBestMHIStrategy(candles, 0);
-    const signal = computeRawLiveSignal(bestMHI.id, candles);
-    if (signal) {
-      return {
-        ...signal,
-        detectedMhiPattern: bestMHI.id,
-        detectedMhiName: bestMHI.name,
-        detectedMhiWinRate: bestMHI.winRate
-      };
+    const mPos = min % 5;
+    
+    // MHI 1: Evaluated at close of candle 5 (mPos === 4) for entry on Candle 1
+    if (mPos === 4) {
+      const resMin = runMHIBacktest(candles, maxMartingale, 'minority', 1);
+      const resMaj = runMHIBacktest(candles, maxMartingale, 'majority', 1);
+      const chosenId = resMaj.winRate > resMin.winRate ? 'mhi_majority' : 'mhi_minority';
+      const chosenName = chosenId === 'mhi_majority' ? 'MHI 1 (Maioria)' : 'MHI 1 (Minoria)';
+      const chosenWinRate = chosenId === 'mhi_majority' ? resMaj.winRate : resMin.winRate;
+      
+      const sig = computeRawLiveSignal(chosenId, candles, maxMartingale);
+      if (sig) {
+        return {
+          ...sig,
+          detectedMhiPattern: chosenId,
+          detectedMhiName: chosenName,
+          detectedMhiWinRate: chosenWinRate
+        };
+      }
     }
+
+    // MHI 2: Evaluated at close of candle 1 (mPos === 0) for entry on Candle 2
+    if (mPos === 0) {
+      const resMin = runMHIBacktest(candles, maxMartingale, 'minority', 2);
+      const resMaj = runMHIBacktest(candles, maxMartingale, 'majority', 2);
+      const chosenId = resMaj.winRate > resMin.winRate ? 'mhi_2_majority' : 'mhi_2_minority';
+      const chosenName = chosenId === 'mhi_2_majority' ? 'MHI 2 (Maioria)' : 'MHI 2 (Minoria)';
+      const chosenWinRate = chosenId === 'mhi_2_majority' ? resMaj.winRate : resMin.winRate;
+
+      const sig = computeRawLiveSignal(chosenId, candles, maxMartingale);
+      if (sig) {
+        return {
+          ...sig,
+          detectedMhiPattern: chosenId,
+          detectedMhiName: chosenName,
+          detectedMhiWinRate: chosenWinRate
+        };
+      }
+    }
+
+    // MHI 3: Evaluated at close of candle 2 (mPos === 1) for entry on Candle 3
+    if (mPos === 1) {
+      const resMin = runMHIBacktest(candles, maxMartingale, 'minority', 3);
+      const resMaj = runMHIBacktest(candles, maxMartingale, 'majority', 3);
+      const chosenId = resMaj.winRate > resMin.winRate ? 'mhi_3_majority' : 'mhi_3_minority';
+      const chosenName = chosenId === 'mhi_3_majority' ? 'MHI 3 (Maioria)' : 'MHI 3 (Minoria)';
+      const chosenWinRate = chosenId === 'mhi_3_majority' ? resMaj.winRate : resMin.winRate;
+
+      const sig = computeRawLiveSignal(chosenId, candles, maxMartingale);
+      if (sig) {
+        return {
+          ...sig,
+          detectedMhiPattern: chosenId,
+          detectedMhiName: chosenName,
+          detectedMhiWinRate: chosenWinRate
+        };
+      }
+    }
+
     return null;
   }
 
