@@ -1097,7 +1097,10 @@ export class UserSession {
       type: 'success'
     });
 
-    this.sendTelegramNotif('cycle_started', `📅 <b>CICLO AGENDADO INICIADO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ciclo:</b> <code>${cycle.name}</code>\n<b>Estratégia:</b> <code>${strategyId}</code>\n<b>Stake:</b> <code>$${parseFloat(stake).toFixed(2)}</code>\n<b>Stop Loss:</b> <code>$${parseFloat(stopLoss).toFixed(2)}</code>\n<b>Take Profit:</b> <code>$${parseFloat(takeProfit).toFixed(2)}</code>`);
+    const isCycleFakegale = !!(this.settings.enableFakegale || management === 'fakegale' || strategyId === 'fakegale');
+    const mgmtDisplay = isCycleFakegale ? '🧪 Fakegale (G1 Sniper)' : management === 'sorosgale' ? '🚀 Sorosgale' : management === 'fixed' ? 'Mão Fixa' : 'Martingale';
+
+    this.sendTelegramNotif('cycle_started', `📅 <b>CICLO AGENDADO INICIADO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ciclo:</b> <code>${cycle.name}</code>\n<b>Estratégia:</b> <code>${strategyId}</code>\n<b>Gerenciamento:</b> <code>${mgmtDisplay}</code>\n<b>Stake:</b> <code>$${parseFloat(stake).toFixed(2)}</code>\n<b>Stop Loss:</b> <code>$${parseFloat(stopLoss).toFixed(2)}</code>\n<b>Take Profit:</b> <code>$${parseFloat(takeProfit).toFixed(2)}</code>`);
 
     // Ensure we are connected and authorized, or force resubscribe if already connected
     if (this.settings.token) {
@@ -2409,7 +2412,8 @@ export class UserSession {
 
       const takeProfit = parseFloat(this.settings.takeProfit || '5.00');
       const progressPct = takeProfit > 0 ? Math.min(100, Math.max(0, (profit / takeProfit) * 100)).toFixed(1) : '0.0';
-      const mgmtName = this.settings.moneyManagement === 'sorosgale' ? '🚀 Sorosgale' : this.settings.moneyManagement === 'soros' ? 'Soros' : 'Martingale';
+      const isFakegale = this.settings.enableFakegale || this.settings.moneyManagement === 'fakegale';
+      const mgmtName = isFakegale ? '🧪 Fakegale (G1 Sniper)' : this.settings.moneyManagement === 'sorosgale' ? '🚀 Sorosgale' : this.settings.moneyManagement === 'soros' ? 'Soros' : 'Martingale';
       const nextStake = this.calculateCurrentStake(false);
 
       reply(
@@ -2484,11 +2488,12 @@ export class UserSession {
 
       const cycleListText = sortedCycles.map((c, idx) => {
         let statusBadge = '';
+        const isCycleFakegale = !!(c.enableFakegale || c.moneyManagement === 'fakegale' || this.settings.enableFakegale);
+        const cycleMgmt = isCycleFakegale ? '🧪 Fakegale' : (c.moneyManagement === 'sorosgale' || this.settings.moneyManagement === 'sorosgale') ? '🚀 Sorosgale' : 'Martingale';
         if (!c.active) {
           statusBadge = '⏸ <i>Desativado</i>';
         } else if (c.id === this.activeCycleId && this.isRunning) {
-          const mgmt = this.settings.moneyManagement === 'sorosgale' ? '🚀 Sorosgale' : 'Martingale';
-          statusBadge = `⚡ <b>Executando... (${mgmt})</b>`;
+          statusBadge = `⚡ <b>Executando... (${cycleMgmt})</b>`;
           execucaoCount++;
         } else if (c.status === 'Meta Batida') {
           metaBatidaCount++;
