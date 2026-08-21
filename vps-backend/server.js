@@ -481,6 +481,11 @@ wss.on('connection', (ws) => {
       const payload = JSON.parse(message.toString());
       const type = payload.type;
       
+      if (type === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong' }));
+        return;
+      }
+
       if (type === 'auth') {
         const { email } = payload;
         if (!email) {

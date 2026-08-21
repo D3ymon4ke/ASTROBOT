@@ -2142,13 +2142,17 @@ export default function App() {
       }
       setIsProfileConfigured(isConfigured);
 
-      setShowWelcome(true);
-
-      if (isConfigured) {
-        setTimeout(() => {
-          setAuthorized(true);
-          setShowWelcome(false);
-        }, 2200);
+      if (!authorized) {
+        setShowWelcome(true);
+        if (isConfigured) {
+          setTimeout(() => {
+            setAuthorized(true);
+            setShowWelcome(false);
+          }, 2200);
+        }
+      } else {
+        setAuthorized(true);
+        setShowWelcome(false);
       }
 
       addLog({ message: `Sincronizado com o Servidor VPS. Usuário: ${info.email}`, type: 'success', time: new Date().toLocaleTimeString() });

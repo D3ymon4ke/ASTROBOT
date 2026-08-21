@@ -60,6 +60,12 @@ export class DerivAPI {
         this.authorized = true;
         this.onAuthSuccess({ email: this.email });
       }
+      if (this.pingInterval) clearInterval(this.pingInterval);
+      this.pingInterval = setInterval(() => {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 20000);
     };
 
     this.ws.onmessage = (event) => {
@@ -67,7 +73,9 @@ export class DerivAPI {
         const payload = JSON.parse(event.data);
         const type = payload.type;
 
-        if (type === 'sync') {
+        if (type === 'pong') {
+          return;
+        } else if (type === 'sync') {
           const syncData = payload.data;
           this.derivConnected = syncData.derivConnected;
           this.derivAuthorized = syncData.derivAuthorized;
@@ -95,6 +103,7 @@ export class DerivAPI {
     };
 
     this.ws.onclose = () => {
+      if (this.pingInterval) clearInterval(this.pingInterval);
       console.warn('[VPS WS] Connection closed. Reconnecting in 3 seconds...');
       this.connected = false;
       this.authorized = false;

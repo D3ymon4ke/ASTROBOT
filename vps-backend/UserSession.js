@@ -1758,15 +1758,39 @@ export class UserSession {
           message: `✔ [Fakegale - Testes] Vela 1 fechou em WIN virtual (${candleColor} / ${pending.direction}). Sinal cumprido com sucesso! Entrada descartada para proteger a banca (0 risco).`,
           type: 'info'
         });
+        this.sendTelegramNotif(
+          'fakegale_win_virtual',
+          `🟢 <b>ASTROBOT • [FAKEGALE] VELA 1 WIN VIRTUAL</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `📈 <b>Ativo:</b> <code>${this.settings.symbol}</code>\n` +
+          `↕️ <b>Direção Prevista:</b> <code>${pending.direction}</code>\n` +
+          `🕯️ <b>Fechamento Vela 1:</b> <code>🟢 WIN VIRTUAL (Acerto direto)</code>\n` +
+          `🛡️ <b>Ação do Robô:</b> <code>Entrada Real Descartada (Banca Protegida • Risco $0.00)</code>\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `🤖 <i>Aguardando o fechamento do ciclo M5 para a próxima oportunidade.</i>`
+        );
         this.fakegalePending = null;
+        this.syncToClients();
+        return;
       } else {
         // Vela 1 was LOSS (or NEUTRAL) -> Trigger REAL TRADE on Vela 2 (G1)!
-        this.addLog({
-          message: `🎯 [Fakegale - Testes] Vela 1 fechou em LOSS virtual (${candleColor}). Disparando ENTRADA REAL na Vela 2 (G1) para ${pending.direction}...`,
-          type: 'success'
-        });
         const stake = this.calculateCurrentStake(false);
         const direction = pending.direction;
+        this.addLog({
+          message: `🎯 [Fakegale - Testes] Vela 1 fechou em LOSS virtual (${candleColor}). Disparando ENTRADA REAL na Vela 2 (G1) para ${direction}...`,
+          type: 'success'
+        });
+        this.sendTelegramNotif(
+          'fakegale_loss_virtual',
+          `🎯 <b>ASTROBOT • [FAKEGALE] LOSS VIRTUAL ➔ ENTRADA REAL</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `📈 <b>Ativo:</b> <code>${this.settings.symbol}</code>\n` +
+          `🕯️ <b>Vela 1:</b> <code>🔴 LOSS VIRTUAL (${candleColor})</code>\n` +
+          `🚀 <b>Ação do Robô:</b> <code>Disparando ENTRADA REAL na Vela 2 (G1)</code>\n` +
+          `↕️ <b>Direção:</b> <code>${direction}</code> | 💵 <b>Stake Base:</b> <code>$${stake.toFixed(2)}</code>\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `🤖 <i>Ordem executada na corretora. Aguardando resultado...</i>`
+        );
         this.fakegalePending = null;
         this.executeTrade(stake, direction);
         return;
