@@ -173,6 +173,106 @@ export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority', va
   return { winRate, totalTrades: total, wins, losses, signals };
 }
 
+/**
+ * 2.5. Fakegale (Modo MHI Vol 100 - Em Testes)
+ * 5-candle cycle. Identifies MHI signal on Candles 3, 4, 5.
+ * Candle 1 is used strictly as a virtual signal / filter.
+ * If Candle 1 closes in WIN -> Virtual WIN, real trade skipped to protect bankroll.
+ * If Candle 1 closes in LOSS -> REAL TRADE is opened on Candle 2 (G1),
+ * with subsequent martingales (Candle 3 = Gale 1 real, Candle 4 = Gale 2 real) up to maxMartingale.
+ */
+export function runFakegaleBacktest(candles, maxMartingale = 2) {
+  if (candles.length < 10) return { winRate: 0, totalTrades: 0, wins: 0, losses: 0, signals: [] };
+  
+  let wins = 0;
+  let losses = 0;
+  const signals = [];
+  
+  const cycles = {};
+  for (let i = 0; i < candles.length; i++) {
+    const c = candles[i];
+    const date = new Date(c.epoch * 1000);
+    const minute = date.getMinutes();
+    const cycleStartMinute = minute - (minute % 5);
+    const cycleId = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${cycleStartMinute}`;
+    if (!cycles[cycleId]) cycles[cycleId] = [];
+    cycles[cycleId].push({ candle: c, index: i, minutePos: minute % 5 });
+  }
+  
+  const cycleIds = Object.keys(cycles).sort();
+  for (let cIdx = 0; cIdx < cycleIds.length - 1; cIdx++) {
+    const currentCycle = cycles[cycleIds[cIdx]];
+    const nextCycle = cycles[cycleIds[cycleIds.indexOf(cycleIds[cIdx]) + 1]];
+    if (!nextCycle) continue;
+    
+    const c3 = currentCycle.find(item => item.minutePos === 2);
+    const c4 = currentCycle.find(item => item.minutePos === 3);
+    const c5 = currentCycle.find(item => item.minutePos === 4);
+    if (!c3 || !c4 || !c5) continue;
+    
+    const color3 = getCandleColor(c3.candle);
+    const color4 = getCandleColor(c4.candle);
+    const color5 = getCandleColor(c5.candle);
+    if (color3 === 'NEUTRAL' || color4 === 'NEUTRAL' || color5 === 'NEUTRAL') continue;
+    
+    let greenCount = 0;
+    let redCount = 0;
+    [color3, color4, color5].forEach(color => {
+      if (color === 'CALL') greenCount++;
+      if (color === 'PUT') redCount++;
+    });
+    
+    // Minority direction
+    const direction = greenCount < redCount ? 'CALL' : 'PUT';
+    
+    // Candle 1 (minutePos === 0) is the virtual signal
+    const c1Next = nextCycle.find(item => item.minutePos === 0);
+    if (!c1Next) continue;
+    
+    const color1Next = getCandleColor(c1Next.candle);
+    if (color1Next === direction) {
+      // Virtual WIN on Candle 1 -> no real trade opened
+      signals.push({
+        epoch: c1Next.candle.epoch,
+        time: new Date(c1Next.candle.epoch * 1000).toLocaleTimeString(),
+        direction,
+        result: 'VIRTUAL_WIN',
+        isFakegaleFiltered: true,
+        steps: 0,
+        candleIndex: c1Next.index
+      });
+      continue;
+    }
+    
+    // Virtual LOSS on Candle 1 -> Real trade entered on Candle 2 (minutePos === 1)
+    const c2Next = nextCycle.find(item => item.minutePos === 1);
+    if (!c2Next) continue;
+    
+    // Evaluate trade starting at Candle 2 with maxMartingale
+    const evaluation = evaluateTrade(candles, c2Next.index, direction, maxMartingale);
+    if (evaluation.result !== 'PENDING') {
+      const isWin = evaluation.result === 'WIN';
+      if (isWin) wins++;
+      else losses++;
+      
+      signals.push({
+        epoch: c2Next.candle.epoch,
+        time: new Date(c2Next.candle.epoch * 1000).toLocaleTimeString(),
+        direction,
+        result: evaluation.result,
+        steps: evaluation.steps,
+        candleIndex: c2Next.index,
+        isFakegaleRealTrade: true
+      });
+    }
+  }
+  
+  const total = wins + losses;
+  const winRate = total > 0 ? (wins / total) * 100 : 0;
+  return { winRate, totalTrades: total, wins, losses, signals };
+}
+
+
 export function runTwinTowersBacktest(candles, maxMartingale = 0) {
   if (candles.length < 10) return { winRate: 0, totalTrades: 0, wins: 0, losses: 0, signals: [] };
   let wins = 0;
@@ -1100,6 +1200,7 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
   const mhi3MajorityResult = runMHIBacktest(candles, maxMartingale, 'majority', 3);
   const bestMHIStrategy = getBestMHIStrategy(candles, maxMartingale);
   const mhiAutoResult = runMHIAutoBacktest(candles, maxMartingale);
+  const fakegaleResult = runFakegaleBacktest(candles, maxMartingale);
   const twinTowersResult = runTwinTowersBacktest(candles, maxMartingale);
   const threeMusketeersResult = runThreeMusketeersBacktest(candles, maxMartingale);
   const padrao23Result = runPadrao23Backtest(candles, maxMartingale);
@@ -1125,6 +1226,7 @@ export function analyzeStrategies(candles, maxMartingale = 0) {
   };
   
   const rawList = [
+    { id: 'fakegale', name: 'Fakegale MHI Vol 100 🧪', winRate: fakegaleResult.winRate, totalTrades: fakegaleResult.totalTrades, wins: fakegaleResult.wins, losses: fakegaleResult.losses, description: 'Estratégia MHI com filtro Fakegale. A 1ª vela serve de sinal virtual; a entrada real com stake inicial ocorre na 2ª vela (G1) após loss virtual, seguido de martingales normais.' },
     { id: 'mhi_auto', name: 'Estudo Dinâmico MHI (1 a 3)', winRate: mhiAutoResult.winRate > 0 ? mhiAutoResult.winRate : bestMHIStrategy.winRate, totalTrades: mhiAutoResult.totalTrades > 0 ? mhiAutoResult.totalTrades : bestMHIStrategy.totalTrades, wins: mhiAutoResult.wins, losses: mhiAutoResult.losses, description: `Estuda e decide em tempo real o melhor padrão entre MHI 1 a 3 (Minoria/Maioria). Padrão líder atual: ${bestMHIStrategy.name}.` },
     { id: 'ma_crossover', name: 'Cruzamento de Médias (9/21)', winRate: maResult.winRate, totalTrades: maResult.totalTrades, wins: maResult.wins, losses: maResult.losses, description: 'Entrada baseada no cruzamento da Média Móvel Rápida (EMA 9) sobre a Média Móvel Lenta (EMA 21).' },
     { id: 'mhi_minority', name: 'MHI 1 (Minoria)', winRate: mhiMinorityResult.winRate, totalTrades: mhiMinorityResult.totalTrades, wins: mhiMinorityResult.wins, losses: mhiMinorityResult.losses, description: 'Analisa velas 3, 4 e 5 do ciclo de 5 min. Entra a favor da minoria na Vela 1 do próximo ciclo.' },
@@ -1273,6 +1375,26 @@ function computeRawLiveSignal(strategyId, candles, maxMartingale = 0) {
         return { direction, triggerTime: lastCandle.epoch + 60 };
       }
     }
+  }
+
+  if (strategyId === 'fakegale') {
+    const mPos = min % 5;
+    // Identical trigger point as MHI 1 (close of candle 5 / mPos === 4)
+    if (mPos === 4) {
+      const resMin = runMHIBacktest(candles, maxMartingale, 'minority', 1);
+      const resMaj = runMHIBacktest(candles, maxMartingale, 'majority', 1);
+      const chosenId = resMaj.winRate > resMin.winRate ? 'mhi_majority' : 'mhi_minority';
+      const sig = computeRawLiveSignal(chosenId, candles, maxMartingale);
+      if (sig) {
+        return {
+          ...sig,
+          isFakegale: true,
+          detectedMhiName: 'Fakegale (MHI G1 Sniper)',
+          detectedMhiPattern: chosenId
+        };
+      }
+    }
+    return null;
   }
 
   if (strategyId === 'mhi_auto') {

@@ -211,7 +211,8 @@ export default function Scheduler({
     disableMaCrossover: false,
     useSmartHours: true,
     onlyMhiR100: true,
-    mhiVariant: 'mhi_auto'
+    mhiVariant: 'mhi_auto',
+    enableFakegale: false
   });
 
   // ─── Smart Hours Engine ───────────────────────────────────────────────────
@@ -302,6 +303,7 @@ export default function Scheduler({
   };
 
   const mhiVariantLabels = {
+    fakegale: 'Fakegale (Entrada G1) 🧪',
     mhi_auto: 'Estudo MHI Dinâmico 🧠',
     mhi_minority: 'MHI 1 Minoria',
     mhi_majority: 'MHI 1 Maioria',
@@ -312,7 +314,25 @@ export default function Scheduler({
   };
 
   const applyGeneratorPreset = (presetType) => {
-    if (presetType === 'mhi_smart') {
+    if (presetType === 'fakegale') {
+      setGeneratorData(prev => ({
+        ...prev,
+        onlyMhiR100: true,
+        mhiVariant: 'fakegale',
+        enableFakegale: true,
+        stakeValue: 1.0,
+        takeProfit: 5.0,
+        stopLoss: 15.0,
+        moneyManagement: 'fakegale',
+        martingaleLevels: 2,
+        martingaleMultiplier: 2.0,
+        useSmartHours: true,
+        enableStreakShield: true,
+        enableTimeGuard: true,
+        enableStalemateFailover: true,
+        periods: { dawn: true, morning: true, afternoon: true, night: true }
+      }));
+    } else if (presetType === 'mhi_smart') {
       setGeneratorData(prev => ({
         ...prev,
         onlyMhiR100: true,
@@ -519,6 +539,8 @@ export default function Scheduler({
             takeProfit: tp,
             stopLoss: sl,
             moneyManagement: moneyMgmt,
+            enableFakegale: !!(generatorData.enableFakegale || generatorData.moneyManagement === 'fakegale' || selectedMhiVariant === 'fakegale'),
+            fakegale: !!(generatorData.enableFakegale || generatorData.moneyManagement === 'fakegale' || selectedMhiVariant === 'fakegale'),
             sorosgaleLevels: parseInt(generatorData.sorosgaleLevels) || 2,
             sorosgaleMaxGale: parseInt(generatorData.sorosgaleMaxGale) || 2,
             sorosgaleCompounding: parseFloat(generatorData.sorosgaleCompounding) || 100,
@@ -596,6 +618,7 @@ export default function Scheduler({
 
   const strategies = [
     { id: 'autopilot', name: 'Piloto Automático 🤖' },
+    { id: 'fakegale', name: 'Fakegale (MHI Vol 100) 🧪' },
     { id: 'mhi_auto', name: 'Estudo Dinâmico MHI (1 a 3) 🧠' },
     { id: 'mhi_minority', name: 'MHI 1 (Minoria)' },
     { id: 'mhi_majority', name: 'MHI 1 (Maioria)' },
@@ -1426,7 +1449,14 @@ export default function Scheduler({
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.64rem', color: 'var(--text-secondary)' }}>
-                        <span style={{ color: '#cbd5e1', fontWeight: '600' }}>🛡️ {getCleanSymbolName(c.symbol)}</span>
+                        <span style={{ color: '#cbd5e1', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>🛡️ {getCleanSymbolName(c.symbol)}</span>
+                          {(c.enableFakegale || c.moneyManagement === 'fakegale' || c.selectedStrategy === 'fakegale') && (
+                            <span style={{ fontSize: '0.52rem', background: 'rgba(236, 72, 153, 0.2)', border: '1px solid rgba(236, 72, 153, 0.5)', color: '#fbcfe8', padding: '0px 4px', borderRadius: '3px', fontWeight: 'bold' }}>
+                              🧪 FAKEGALE
+                            </span>
+                          )}
+                        </span>
                         <span>Stake: <strong>${c.stakeValue}</strong></span>
                       </div>
 
@@ -1640,6 +1670,7 @@ export default function Scheduler({
 
               {/* Strategy & MHI AI Dynamic Study Highlight Banner */}
               {(() => {
+                const isFakegale = selectedCycle.selectedStrategy === 'fakegale' || selectedCycle.moneyManagement === 'fakegale' || selectedCycle.enableFakegale;
                 const isMhiAuto = selectedCycle.selectedStrategy === 'mhi_auto';
                 const isSmartHours = selectedCycle.name.includes('%') || selectedCycle.name.includes('ops');
                 const winRateMatch = selectedCycle.name.match(/(\d+(?:\.\d+)?%)/);
@@ -1649,11 +1680,13 @@ export default function Scheduler({
 
                 return (
                   <div style={{
-                    background: isMhiAuto
+                    background: isFakegale
+                      ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.2) 0%, rgba(139, 92, 246, 0.18) 100%)'
+                      : isMhiAuto
                       ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(59, 130, 246, 0.15) 100%)'
                       : 'linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%)',
-                    border: isMhiAuto ? '1.5px solid rgba(167, 139, 250, 0.55)' : '1px solid rgba(139, 92, 246, 0.3)',
-                    boxShadow: isMhiAuto ? '0 0 20px rgba(139, 92, 246, 0.15)' : 'none',
+                    border: isFakegale ? '1.5px solid rgba(244, 114, 182, 0.55)' : isMhiAuto ? '1.5px solid rgba(167, 139, 250, 0.55)' : '1px solid rgba(139, 92, 246, 0.3)',
+                    boxShadow: isFakegale ? '0 0 20px rgba(236, 72, 153, 0.18)' : isMhiAuto ? '0 0 20px rgba(139, 92, 246, 0.15)' : 'none',
                     borderRadius: '14px',
                     padding: '0.85rem 1.15rem',
                     display: 'flex',
@@ -1664,8 +1697,8 @@ export default function Scheduler({
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                       <div style={{
-                        background: 'rgba(139, 92, 246, 0.25)',
-                        border: '1px solid rgba(139, 92, 246, 0.45)',
+                        background: isFakegale ? 'rgba(236, 72, 153, 0.25)' : 'rgba(139, 92, 246, 0.25)',
+                        border: isFakegale ? '1px solid rgba(244, 114, 182, 0.45)' : '1px solid rgba(139, 92, 246, 0.45)',
                         borderRadius: '10px',
                         padding: '8px',
                         display: 'flex',
@@ -1673,17 +1706,19 @@ export default function Scheduler({
                         justifyContent: 'center',
                         fontSize: '1.2rem'
                       }}>
-                        {isMhiAuto ? '🧠' : '🏆'}
+                        {isFakegale ? '🧪' : isMhiAuto ? '🧠' : '🏆'}
                       </div>
                       <div>
                         <div style={{ fontSize: '0.8rem', fontWeight: '800', color: 'white', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>{isMhiAuto ? 'MODO MHI VOL 100 — AUTO-ESTUDO DINÂMICO IA' : 'SMART HOURS ENGINE (IA ESTATÍSTICA)'}</span>
-                          <span style={{ fontSize: '0.58rem', background: '#10B981', color: 'white', padding: '1px 6px', borderRadius: '4px', fontWeight: '800' }}>
-                            {isMhiAuto ? 'SNIPER ATIVO' : 'OTIMIZADO'}
+                          <span>{isFakegale ? 'MODO FAKEGALE VOL 100 — TESTES IA' : isMhiAuto ? 'MODO MHI VOL 100 — AUTO-ESTUDO DINÂMICO IA' : 'SMART HOURS ENGINE (IA ESTATÍSTICA)'}</span>
+                          <span style={{ fontSize: '0.58rem', background: isFakegale ? '#ec4899' : '#10B981', color: 'white', padding: '1px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                            {isFakegale ? 'TESTES / G1 SNIPER' : isMhiAuto ? 'SNIPER ATIVO' : 'OTIMIZADO'}
                           </span>
                         </div>
                         <span style={{ fontSize: '0.66rem', color: '#cbd5e1', marginTop: '2px', display: 'block' }}>
-                          {isMhiAuto
+                          {isFakegale
+                            ? 'A 1ª vela atua como sinal/teste virtual. Entrada real disparada na 2ª vela (G1) apenas se a 1ª vela der Loss.'
+                            : isMhiAuto
                             ? 'O robô estuda continuamente o Volatility 100 Index e decide antes de operar o padrão líder (MHI 1 a 3 Minoria/Maioria).'
                             : isSmartHours
                             ? `Horário de alta assertividade: ${winRateText ? winRateText + ' winrate' : ''} ${opsText ? '(' + opsText + ')' : ''}`
@@ -1695,8 +1730,8 @@ export default function Scheduler({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <div style={{ background: 'rgba(255,255,255,0.04)', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)', textAlign: 'right' }}>
                         <span style={{ fontSize: '0.55rem', color: '#94A3B8', display: 'block', textTransform: 'uppercase', fontWeight: 'bold' }}>GERENCIAMENTO</span>
-                        <strong style={{ fontSize: '0.74rem', color: '#c084fc' }}>
-                          {selectedCycle.moneyManagement === 'sorosgale' ? '🚀 Sorosgale' : selectedCycle.moneyManagement === 'soros' ? 'Soros' : 'Martingale'}
+                        <strong style={{ fontSize: '0.74rem', color: isFakegale ? '#f472b6' : '#c084fc' }}>
+                          {isFakegale ? '🧪 Fakegale (G1)' : selectedCycle.moneyManagement === 'sorosgale' ? '🚀 Sorosgale' : selectedCycle.moneyManagement === 'soros' ? 'Soros' : 'Martingale'}
                         </strong>
                       </div>
                     </div>
@@ -2407,15 +2442,33 @@ export default function Scheduler({
               </span>
               <button
                 type="button"
+                onClick={() => applyGeneratorPreset('fakegale')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 'bold',
+                  background: (generatorData.enableFakegale || generatorData.moneyManagement === 'fakegale' || generatorData.mhiVariant === 'fakegale') ? 'rgba(236, 72, 153, 0.25)' : 'rgba(255,255,255,0.04)',
+                  border: (generatorData.enableFakegale || generatorData.moneyManagement === 'fakegale' || generatorData.mhiVariant === 'fakegale') ? '1px solid #f472b6' : '1px solid rgba(255,255,255,0.08)',
+                  color: (generatorData.enableFakegale || generatorData.moneyManagement === 'fakegale' || generatorData.mhiVariant === 'fakegale') ? '#f472b6' : '#cbd5e1',
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <span>🧪</span> Fakegale Sniper (MHI G1) [Testes]
+              </button>
+              <button
+                type="button"
                 onClick={() => applyGeneratorPreset('mhi_smart')}
                 style={{
                   padding: '5px 12px',
                   borderRadius: '8px',
                   fontSize: '0.72rem',
                   fontWeight: 'bold',
-                  background: generatorData.onlyMhiR100 && generatorData.mhiVariant === 'mhi_auto' ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.04)',
-                  border: generatorData.onlyMhiR100 && generatorData.mhiVariant === 'mhi_auto' ? '1px solid #a78bfa' : '1px solid rgba(255,255,255,0.08)',
-                  color: generatorData.onlyMhiR100 && generatorData.mhiVariant === 'mhi_auto' ? '#c084fc' : '#cbd5e1',
+                  background: generatorData.onlyMhiR100 && generatorData.mhiVariant === 'mhi_auto' && !generatorData.enableFakegale ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.04)',
+                  border: generatorData.onlyMhiR100 && generatorData.mhiVariant === 'mhi_auto' && !generatorData.enableFakegale ? '1px solid #a78bfa' : '1px solid rgba(255,255,255,0.08)',
+                  color: generatorData.onlyMhiR100 && generatorData.mhiVariant === 'mhi_auto' && !generatorData.enableFakegale ? '#c084fc' : '#cbd5e1',
                   cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: '5px',
                   transition: 'all 0.2s ease'
@@ -2539,7 +2592,11 @@ export default function Scheduler({
                             </label>
                             <select
                               value={generatorData.mhiVariant || 'mhi_auto'}
-                              onChange={(e) => setGeneratorData(prev => ({ ...prev, mhiVariant: e.target.value }))}
+                              onChange={(e) => setGeneratorData(prev => ({
+                                ...prev,
+                                mhiVariant: e.target.value,
+                                enableFakegale: e.target.value === 'fakegale' ? true : prev.enableFakegale
+                              }))}
                               style={{
                                 fontSize: '0.75rem',
                                 padding: '0.5rem',
@@ -2553,6 +2610,7 @@ export default function Scheduler({
                               }}
                             >
                               <option value="mhi_auto">🧠 Estudo Automático MHI (IA)</option>
+                              <option value="fakegale">🧪 Fakegale MHI (Auto IA - Testes)</option>
                               <option value="mhi_minority">🎯 MHI 1 (Minoria)</option>
                               <option value="mhi_majority">🎯 MHI 1 (Maioria)</option>
                               <option value="mhi_2_minority">🎯 MHI 2 (Minoria)</option>
@@ -2725,7 +2783,11 @@ export default function Scheduler({
                       <label style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>MODO DE GESTÃO</label>
                       <select
                         value={generatorData.moneyManagement || 'sorosgale'}
-                        onChange={(e) => setGeneratorData(prev => ({ ...prev, moneyManagement: e.target.value }))}
+                        onChange={(e) => setGeneratorData(prev => ({
+                          ...prev,
+                          moneyManagement: e.target.value,
+                          enableFakegale: e.target.value === 'fakegale' ? true : prev.enableFakegale
+                        }))}
                         style={{
                           fontSize: '0.78rem',
                           padding: '0.55rem',
@@ -2738,12 +2800,47 @@ export default function Scheduler({
                         }}
                       >
                         <option value="sorosgale">🚀 Sorosgale (Recomendado)</option>
+                        <option value="fakegale">🧪 Fakegale (Entrada no G1 - Testes)</option>
                         <option value="fixed">Mão Fixa (Fixed)</option>
                         <option value="martingale">Martingale Padrão</option>
                         <option value="progressive_gale">Gale Progressivo</option>
                         <option value="soros">Soros (Apenas Win)</option>
                         <option value="iron_hands">Iron Hands</option>
                       </select>
+                    </div>
+
+                    {/* Dedicated Fakegale Toggle Switch */}
+                    <div style={{
+                      padding: '8px 10px',
+                      background: (generatorData.enableFakegale || generatorData.moneyManagement === 'fakegale') ? 'rgba(236, 72, 153, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                      border: (generatorData.enableFakegale || generatorData.moneyManagement === 'fakegale') ? '1px solid rgba(244, 114, 182, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      transition: 'all 0.2s ease'
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '0.74rem', fontWeight: 'bold', color: (generatorData.enableFakegale || generatorData.moneyManagement === 'fakegale') ? '#f472b6' : '#e2e8f0', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <span>🧪 Modo Fakegale</span>
+                          <span style={{ fontSize: '0.55rem', background: 'rgba(236, 72, 153, 0.25)', border: '1px solid #f472b6', padding: '1px 5px', borderRadius: '4px', color: '#fbcfe8', fontWeight: '800' }}>
+                            EM TESTES
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.58rem', color: '#94a3b8', marginTop: '2px' }}>
+                          1ª vela como sinal virtual. Entrada real no G1 após loss.
+                        </div>
+                      </div>
+                      <Switch
+                        showStatus={false}
+                        scale={0.8}
+                        checked={generatorData.enableFakegale || generatorData.moneyManagement === 'fakegale'}
+                        onChange={(e) => setGeneratorData(prev => ({
+                          ...prev,
+                          enableFakegale: e.target.checked,
+                          moneyManagement: e.target.checked ? 'fakegale' : (prev.moneyManagement === 'fakegale' ? 'sorosgale' : prev.moneyManagement)
+                        }))}
+                      />
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
@@ -3433,10 +3530,11 @@ export default function Scheduler({
                       </label>
                       <select
                         value={wizardData.moneyManagement || 'sorosgale'}
-                        onChange={(e) => setWizardData({ ...wizardData, moneyManagement: e.target.value })}
+                        onChange={(e) => setWizardData({ ...wizardData, moneyManagement: e.target.value, enableFakegale: e.target.value === 'fakegale' ? true : wizardData.enableFakegale })}
                         style={{ height: '38px', fontSize: '0.85rem' }}
                       >
                         <option value="sorosgale">🚀 Sorosgale</option>
+                        <option value="fakegale">🧪 Fakegale (G1 Sniper - Testes)</option>
                         <option value="fixed">Mão Fixa (Fixed)</option>
                         <option value="martingale">Martingale</option>
                         <option value="progressive_gale">Gale Progressivo</option>

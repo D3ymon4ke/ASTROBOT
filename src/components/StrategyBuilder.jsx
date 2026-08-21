@@ -386,6 +386,7 @@ export default function StrategyBuilder({
                   style={{ width: '100%', padding: '0.65rem', background: '#09090f', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: 'white', fontSize: '0.85rem' }}
                 >
                   <option value="sequence">📊 Sequência de Velas (Mesma Cor)</option>
+                  <option value="fakegale">🧪 Fakegale (MHI G1 Sniper - Testes)</option>
                   <option value="mhi_minority">🎲 MHI Padrão (Minoria do Ciclo)</option>
                   <option value="mhi_majority">🎲 MHI Maioria (Maioria do Ciclo)</option>
                   <option value="marubozu">💥 Marubozu (Vela sem Pavio)</option>

@@ -72,6 +72,7 @@ export default function Settings({
   const getMoneyManagementLabel = (val) => {
     switch (val) {
       case 'fixed': return 'Mão Fixa';
+      case 'fakegale': return '🧪 Fakegale (G1)';
       case 'sorosgale': return '🚀 Sorosgale';
       case 'soros': return 'Soros';
       case 'martingale': return 'Martingale Tradicional';
@@ -430,6 +431,7 @@ export default function Settings({
               <div className="glass-panel" style={{ padding: '1rem', borderRadius: '12px', background: 'rgba(255,255,255,0.01)' }}>
                 <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '6px' }}>ESTRATÉGIA SELECIONADA</label>
                 <select name="selectedStrategy" value={settings.selectedStrategy} onChange={handleInputChange} disabled={isRunning} style={{ fontSize: '0.82rem', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: '100%' }}>
+                  <option value="fakegale">🧪 Fakegale (MHI Vol 100 - Testes)</option>
                   <option value="mhi_minority">MHI 1 (Minoria - Vela 1)</option>
                   <option value="mhi_majority">MHI 1 (Maioria - Vela 1)</option>
                   <option value="mhi_2_minority">MHI 2 (Minoria - Vela 2)</option>
@@ -462,6 +464,7 @@ export default function Settings({
                 style={{ fontSize: '0.85rem', fontWeight: 'bold', padding: '0.5rem', background: '#09090f', color: 'white', border: '1px solid var(--border-active)', borderRadius: '8px', width: '100%' }}
               >
                 <option value="sorosgale">🚀 Sorosgale (Crescimento Acelerado + Recovery - RECOMENDADO)</option>
+                <option value="fakegale">🧪 Fakegale (Entrada no G1 - Em Testes)</option>
                 <option value="soros">Ciclo de Soros Puro</option>
                 <option value="fixed">Mão Fixa (Sem Recuperação)</option>
                 <option value="martingale">Martingale Tradicional</option>

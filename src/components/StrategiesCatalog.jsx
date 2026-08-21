@@ -40,6 +40,7 @@ export default function StrategiesCatalog({
 
   // Pre-configured official strategy details
   const catalogDetails = {
+    fakegale: { icon: Zap, bestAsset: 'Volatility 100 Index (R_100)', bestHour: '09:00 - 18:00', streak: ['WIN', 'WIN', 'WIN', 'WIN'], sparkline: 'M0,18 Q10,8 20,4 T40,2 T60,0' },
     ma_crossover: { icon: TrendingUp, bestAsset: 'EUR/USD', bestHour: '08:00 - 12:00', streak: ['WIN', 'WIN', 'LOSS', 'WIN'], sparkline: 'M0,15 Q10,5 20,18 T40,10 T60,2' },
     mhi_minority: { icon: Zap, bestAsset: 'Volatilidade 100 (1s)', bestHour: '14:00 - 18:00', streak: ['WIN', 'WIN', 'WIN', 'LOSS'], sparkline: 'M0,20 Q10,12 20,8 T40,4 T60,10' },
     mhi_majority: { icon: Zap, bestAsset: 'Volatilidade 75 (1s)', bestHour: '20:00 - 00:00', streak: ['LOSS', 'WIN', 'WIN', 'WIN'], sparkline: 'M0,25 Q10,20 20,15 T40,8 T60,5' },
@@ -61,6 +62,7 @@ export default function StrategiesCatalog({
   };
 
   const defaultStrategies = [
+    { id: 'fakegale', name: 'Fakegale (MHI Vol 100) 🧪', winRate: 0, totalTrades: 0, description: 'Estratégia MHI com filtro Fakegale. A 1ª vela serve de sinal virtual; a ordem real é enviada na 2ª vela (G1) após loss virtual.', type: 'official' },
     { id: 'ma_crossover', name: 'Cruzamento de Médias (9/21)', winRate: 0, totalTrades: 0, description: 'Média Móvel Rápida EMA 9 sobre EMA 21.', type: 'official' },
     { id: 'mhi_minority', name: 'MHI Padrão (Minoria)', winRate: 0, totalTrades: 0, description: 'Analisa últimas 3 velas do ciclo M5, opera minoria.', type: 'official' },
     { id: 'mhi_majority', name: 'MHI Maioria', winRate: 0, totalTrades: 0, description: 'Analisa últimas 3 velas do ciclo M5, opera maioria.', type: 'official' },

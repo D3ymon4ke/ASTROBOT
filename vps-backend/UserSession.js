@@ -56,6 +56,7 @@ const DEFAULT_SETTINGS = {
   enableStreakShield: true,
   maxStreakCandles: 4,
   streakShieldAction: 'block',
+  enableFakegale: false,
   // Auto-Blacklist Consolidação
   autoBlacklistConsolidation: true,
   consolidationDojiLimit: 4,
@@ -130,6 +131,7 @@ export class UserSession {
         galeLevel: 0,
         currentSorosStake: 0,
         waitingForGaleNextCandle: false,
+        fakegalePending: null,
         lastGaleDirection: null,
         activeContractId: null,
         lastContractDetails: null,
@@ -156,6 +158,7 @@ export class UserSession {
         galeLevel: 0,
         currentSorosStake: 0,
         waitingForGaleNextCandle: false,
+        fakegalePending: null,
         lastGaleDirection: null,
         activeContractId: null,
         lastContractDetails: null,
@@ -218,6 +221,9 @@ export class UserSession {
 
   get waitingForGaleNextCandle() { return this.modeStates[this.activeMode].waitingForGaleNextCandle; }
   set waitingForGaleNextCandle(val) { this.modeStates[this.activeMode].waitingForGaleNextCandle = val; }
+
+  get fakegalePending() { return this.modeStates[this.activeMode].fakegalePending; }
+  set fakegalePending(val) { this.modeStates[this.activeMode].fakegalePending = val; }
 
   get lastGaleDirection() { return this.modeStates[this.activeMode].lastGaleDirection; }
   set lastGaleDirection(val) { this.modeStates[this.activeMode].lastGaleDirection = val; }
@@ -710,6 +716,7 @@ export class UserSession {
     this.galeLevel = 0;
     this.currentSorosStake = 0;
     this.waitingForGaleNextCandle = false;
+    this.fakegalePending = null;
     this.candles = []; // Clear candles for a fresh analysis start
     this.addLog({ message: 'INICIANDO OPERAÇÕES AUTOMÁTICAS', type: 'success' });
     
@@ -1068,13 +1075,15 @@ export class UserSession {
     if (cycle.sorosgaleMaxGale !== undefined) this.settings.sorosgaleMaxGale = cycle.sorosgaleMaxGale.toString();
     if (cycle.sorosgaleCompounding !== undefined) this.settings.sorosgaleCompounding = cycle.sorosgaleCompounding.toString();
     if (cycle.sorosgaleAllowGale !== undefined) this.settings.sorosgaleAllowGale = cycle.sorosgaleAllowGale;
-
-
+    if (cycle.enableFakegale !== undefined || cycle.fakegale !== undefined || cycle.moneyManagement === 'fakegale' || strategyId === 'fakegale') {
+      this.settings.enableFakegale = !!(cycle.enableFakegale || cycle.fakegale || cycle.moneyManagement === 'fakegale' || strategyId === 'fakegale');
+    }
 
     // Reset gale levels and session tracking
     this.galeLevel = 0;
     this.currentSorosStake = 0;
     this.waitingForGaleNextCandle = false;
+    this.fakegalePending = null;
     if (prevSymbol !== this.settings.symbol || prevGranularity !== this.settings.granularity || !this.candles || this.candles.length < 5) {
       this.candles = [];
     }
@@ -1737,6 +1746,32 @@ export class UserSession {
       return;
     }
 
+    // Check Fakegale virtual test outcome if pending
+    if (this.fakegalePending) {
+      const pending = this.fakegalePending;
+      const lastClosed = closedCandles[closedCandles.length - 1];
+      const candleColor = getCandleColor(lastClosed);
+
+      if (candleColor === pending.direction) {
+        this.addLog({
+          message: `✔ [Fakegale - Testes] Vela 1 fechou em WIN virtual (${candleColor} / ${pending.direction}). Sinal cumprido com sucesso! Entrada descartada para proteger a banca (0 risco).`,
+          type: 'info'
+        });
+        this.fakegalePending = null;
+      } else {
+        // Vela 1 was LOSS (or NEUTRAL) -> Trigger REAL TRADE on Vela 2 (G1)!
+        this.addLog({
+          message: `🎯 [Fakegale - Testes] Vela 1 fechou em LOSS virtual (${candleColor}). Disparando ENTRADA REAL na Vela 2 (G1) para ${pending.direction}...`,
+          type: 'success'
+        });
+        const stake = this.calculateCurrentStake(false);
+        const direction = pending.direction;
+        this.fakegalePending = null;
+        this.executeTrade(stake, direction);
+        return;
+      }
+    }
+
     // Normal strategy entry signal
     let targetStrategyId = this.settings.selectedStrategy;
     if (this.settings.autoPilot && bestStrategy) {
@@ -1777,6 +1812,33 @@ export class UserSession {
       let stratName = strategyUsed;
       if (strategyUsed === 'mhi_auto' && signal.detectedMhiName) {
         stratName = `Estudo MHI (${signal.detectedMhiName})`;
+      } else if (strategyUsed === 'fakegale' || signal.isFakegale) {
+        stratName = `Fakegale MHI Vol 100 🧪`;
+      }
+      
+      const isFakegaleActive = !!(
+        this.settings.enableFakegale ||
+        this.settings.moneyManagement === 'fakegale' ||
+        strategyUsed === 'fakegale' ||
+        signal.isFakegale
+      );
+
+      if (isFakegaleActive) {
+        this.fakegalePending = {
+          direction: signal.direction,
+          triggerEpoch: closedCandles[closedCandles.length - 1].epoch,
+          strategyUsed: stratName
+        };
+        this.addLog({
+          message: `🧪 [Fakegale - Testes] Sinal ${signal.direction} identificado em [${stratName}]. Monitorando Vela 1 (Sinal Virtual). A entrada real será executada no G1 (Vela 2) apenas se houver loss na Vela 1.`,
+          type: 'info'
+        });
+        this.sendTelegramNotif('opportunity', `🧪 <b>[FAKEGALE - TESTES] SINAL VIRTUAL DETECTADO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ativo:</b> <code>${this.settings.symbol}</code>\n<b>Direção:</b> <code>${signal.direction}</code>\n<b>Estratégia:</b> <code>${stratName}</code>\n<b>Status:</b> <code>Monitorando Vela 1 (Entrada Real apenas se der Loss)</code>`);
+        this.syncToClients();
+        return;
+      }
+
+      if (strategyUsed === 'mhi_auto' && signal.detectedMhiName) {
         this.addLog({ 
           message: `🧠 [MHI IA Adaptativo] Estudo concluído em ${this.settings.symbol}: Padrão [${signal.detectedMhiName}] selecionado com ${signal.detectedMhiWinRate?.toFixed(1) || '0.0'}% assertividade. Disparando ${signal.direction}.`, 
           type: 'success' 
@@ -1838,7 +1900,7 @@ export class UserSession {
       return baseStake;
     }
 
-    if (mode === 'martingale') {
+    if (mode === 'martingale' || mode === 'fakegale') {
       if (level > 0) {
         return baseStake * Math.pow(multiplier, level);
       }
@@ -1971,7 +2033,7 @@ export class UserSession {
         const nextGale = this.galeLevel + 1;
         const allowGale = this.settings.moneyManagement === 'sorosgale' ? (this.settings.sorosgaleAllowGale !== false) : true;
         const maxGale = parseInt(this.settings.moneyManagement === 'sorosgale' ? (this.settings.sorosgaleMaxGale || '2') : (this.settings.martingaleMaxLevels || '2'));
-        const hasGale = allowGale && nextGale <= maxGale && (['martingale', 'progressive_gale', 'sorosgale'].includes(this.settings.moneyManagement));
+        const hasGale = allowGale && nextGale <= maxGale && (['martingale', 'progressive_gale', 'sorosgale', 'fakegale'].includes(this.settings.moneyManagement));
         const nextStakeEst = hasGale ? (this.currentSorosStake || (parseFloat(this.settings.stakeValue) * Math.pow(parseFloat(this.settings.martingaleMultiplier || '2.0'), nextGale))) : 0;
         this.sendTelegramNotif('loss', formatLossMessage(profit, newBal, hasGale ? nextGale : 0, nextStakeEst));
       }
