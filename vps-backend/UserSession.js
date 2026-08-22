@@ -1036,11 +1036,15 @@ export class UserSession {
     // Old: cycle.strategy / cycle.maxGale / cycle.management / cycle.autopilot
     // New (Scheduler Generator): cycle.selectedStrategy / cycle.martingaleLevels
     const strategyId = cycle.strategy || cycle.selectedStrategy || this.settings.selectedStrategy;
-    const maxGale = cycle.maxGale ?? cycle.martingaleLevels ?? parseInt(this.settings.martingaleMaxLevels);
+    const isFakegale = !!(cycle.enableFakegale || cycle.fakegale || cycle.moneyManagement === 'fakegale' || strategyId === 'fakegale');
+    const maxGale = isFakegale 
+      ? (cycle.martingaleLevels ?? cycle.maxGale ?? 6) 
+      : (cycle.maxGale ?? cycle.martingaleLevels ?? parseInt(this.settings.martingaleMaxLevels));
     // If no management field set explicitly, infer from martingaleLevels:
     // > 0 means martingale should be active
-    const management = cycle.management || cycle.moneyManagement ||
-      (parseInt(maxGale) > 0 ? 'martingale' : 'fixed');
+    const management = isFakegale 
+      ? 'martingale' 
+      : (cycle.management || cycle.moneyManagement || (parseInt(maxGale) > 0 ? 'martingale' : 'fixed'));
     const autopilot = cycle.autopilot ?? (strategyId === 'autopilot');
     const stake = cycle.stake ?? cycle.stakeValue ?? parseFloat(this.settings.stakeValue);
     const stopLoss = cycle.stopLoss ?? parseFloat(this.settings.stopLoss);

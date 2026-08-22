@@ -325,9 +325,9 @@ export default function Scheduler({
         enableFakegale: true,
         stakeValue: 1.0,
         takeProfit: 5.0,
-        stopLoss: 15.0,
-        moneyManagement: 'fakegale',
-        martingaleLevels: 2,
+        stopLoss: 35.0,
+        moneyManagement: 'martingale',
+        martingaleLevels: 6,
         martingaleMultiplier: 2.0,
         useSmartHours: true,
         enableStreakShield: true,
@@ -435,7 +435,9 @@ export default function Scheduler({
     const selectedMhiVariant = generatorData.mhiVariant || 'mhi_auto';
     const isFakegaleSelected = !!(generatorData.enableFakegale || generatorData.moneyManagement === 'fakegale' || selectedMhiVariant === 'fakegale');
     const moneyMgmt = isFakegaleSelected ? 'martingale' : (generatorData.moneyManagement || 'sorosgale');
-    const galeLevels = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' ? 0 : (parseInt(generatorData.martingaleLevels) ?? 2);
+    const galeLevels = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' 
+      ? 0 
+      : (isFakegaleSelected ? (parseInt(generatorData.martingaleLevels) || 6) : (parseInt(generatorData.martingaleLevels) ?? 2));
     const galeMult = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' || galeLevels === 0 ? 1.0 : (parseFloat(generatorData.martingaleMultiplier) || 2.0);
     const strategyToUse = isOnlyMhiR100 ? selectedMhiVariant : 'autopilot';
 
@@ -548,6 +550,7 @@ export default function Scheduler({
             sorosgaleCompounding: parseFloat(generatorData.sorosgaleCompounding) || 100,
             sorosgaleAllowGale: generatorData.sorosgaleAllowGale !== false,
             martingaleLevels: galeLevels,
+            maxGale: galeLevels,
             martingaleMultiplier: galeMult,
             enableStreakShield: generatorData.enableStreakShield ?? true,
             maxStreakCandles: parseInt(generatorData.maxStreakCandles) || 4,
