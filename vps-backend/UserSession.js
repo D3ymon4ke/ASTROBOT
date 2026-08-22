@@ -2183,6 +2183,11 @@ export class UserSession {
               message: `⚠️ [Sorosgale] Loss detectado. Executando Nível de Recuperação Gale ${nextGale}/${maxGalesAllowed}: $${this.currentSorosStake}`,
               type: 'warning'
             });
+
+            if (this.settings.martingaleMode === 'next_candle' && this.lastGaleDirection) {
+              this.executeTrade(this.currentSorosStake, this.lastGaleDirection);
+              this.waitingForGaleNextCandle = false;
+            }
           } else {
             this.galeLevel = 0;
             this.currentSorosStake = 0;
@@ -2221,7 +2226,7 @@ export class UserSession {
         }
       } 
       
-      else { // Standard Martingale / Progressive Martingale
+      else { // Standard Martingale / Progressive Martingale / Fakegale
         if (isWin) {
           this.galeLevel = 0;
           this.waitingForGaleNextCandle = false;
@@ -2231,31 +2236,17 @@ export class UserSession {
           
           if (nextLevel <= maxLevels) {
             this.galeLevel = nextLevel;
+            const nextStake = this.calculateCurrentStake(true);
             this.addLog({
-              message: `Loss detectado. Preparando ${mode === 'progressive_gale' ? 'Gale Progressivo' : 'Martingale'} Nível ${nextLevel}...`,
+              message: `⚠️ [Martingale G${nextLevel}/${maxLevels}] Loss detectado. Disparando entrada imediata de recuperação no valor de $${nextStake.toFixed(2)} (${this.lastGaleDirection})...`,
               type: 'warning'
             });
 
-            if (this.settings.martingaleMode === 'next_candle') {
-              const granularity = parseInt(this.settings.granularity || '60');
-              const secondsElapsed = Math.floor(Date.now() / 1000) % granularity;
-              const threshold = Math.max(15, Math.floor(granularity * 0.25));
-
-              if (secondsElapsed <= threshold) {
-                const nextStake = this.calculateCurrentStake(true);
-                this.addLog({
-                  message: `Executando Nível ${nextLevel} imediatamente na nova vela aberta (${secondsElapsed}s decorridos).`,
-                  type: 'warning'
-                });
-                this.executeTrade(nextStake, this.lastGaleDirection);
-                this.waitingForGaleNextCandle = false;
-              } else {
-                this.waitingForGaleNextCandle = true;
-                this.addLog({
-                  message: `Próxima vela já avançada (${secondsElapsed}s decorridos). Agendado para o início do próximo ciclo.`,
-                  type: 'warning'
-                });
-              }
+            if (this.settings.martingaleMode === 'next_candle' && this.lastGaleDirection) {
+              this.executeTrade(nextStake, this.lastGaleDirection);
+              this.waitingForGaleNextCandle = false;
+            } else {
+              this.waitingForGaleNextCandle = true;
             }
           } else {
             this.galeLevel = 0;
