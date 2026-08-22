@@ -575,12 +575,13 @@ export default function Scheduler({
       return;
     }
     
-    const updatedCycles = [...sanitizedCycles, ...newCycles].sort((a, b) => {
+    const sortedNewCycles = [...newCycles].sort((a, b) => {
       const [ah, am] = (a.startTime || '00:00').split(':').map(Number);
       const [bh, bm] = (b.startTime || '00:00').split(':').map(Number);
       return (ah * 60 + am) - (bh * 60 + bm);
     });
-    onSaveCycles(updatedCycles);
+
+    onSaveCycles(sortedNewCycles);
     setIsGeneratorOpen(false);
   };
 
@@ -2812,11 +2813,16 @@ export default function Scheduler({
                       <label style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94a3b8', display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>MODO DE GESTÃO</label>
                       <select
                         value={generatorData.moneyManagement || 'sorosgale'}
-                        onChange={(e) => setGeneratorData(prev => ({
-                          ...prev,
-                          moneyManagement: e.target.value,
-                          enableFakegale: e.target.value === 'fakegale' ? true : prev.enableFakegale
-                        }))}
+                        onChange={(e) => {
+                          const isFake = e.target.value === 'fakegale';
+                          setGeneratorData(prev => ({
+                            ...prev,
+                            moneyManagement: isFake ? 'martingale' : e.target.value,
+                            enableFakegale: isFake ? true : prev.enableFakegale,
+                            martingaleLevels: isFake ? 6 : prev.martingaleLevels,
+                            stopLoss: isFake ? 35.0 : prev.stopLoss
+                          }));
+                        }}
                         style={{
                           fontSize: '0.78rem',
                           padding: '0.55rem',
