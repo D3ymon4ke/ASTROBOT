@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { DerivAPI } from './deriv/DerivAPI.js';
-import { analyzeStrategies, getLiveSignal } from './strategies/tradingStrategies.js';
+import { analyzeStrategies, getLiveSignal, getCandleColor, evaluateNeuralOpportunity } from './strategies/tradingStrategies.js';
 import {
   sendTelegramMessage,
   formatWinMessage,
@@ -436,7 +436,11 @@ export class UserSession {
           
           // Candle CLOSED transition
           setTimeout(() => {
-            this.handleCandleClosed(this.candles);
+            try {
+              this.handleCandleClosed(this.candles);
+            } catch (err) {
+              console.error(`[handleCandleClosed Error] for ${this.email}:`, err);
+            }
           }, 100);
         }
       }
@@ -1186,17 +1190,19 @@ export class UserSession {
       finalProfit: undefined
     }));
 
-    if (this.isRunning && !manual) {
-      console.log(`[Scheduler] Pausing running bot on Auto Reset for ${this.email}.`);
+    if (this.isRunning) {
+      console.log(`[Scheduler] Stopping running bot on Cycle Reset for ${this.email}.`);
       this.isRunning = false;
     }
     this.activeCycleId = null;
+    this.fakegalePending = null;
+    this.waitingForGaleNextCandle = false;
 
     const todayStr = new Date().toDateString();
     this.lastResetDay = todayStr;
 
     this.addLog({
-      message: `[Reset Automático] ${manual ? 'Reset manual executado.' : 'Reset diário das ' + summaryStats.resetTime + ' concluído!'} Status dos ciclos renovado para "Aguardando". ${isAutoRenew ? 'Renovação Ativada (ciclos serão executados novamente).' : 'Renovação Desativada.'}`,
+      message: `[Reset de Ciclos] ${manual ? 'Reset manual executado.' : 'Reset diário das ' + summaryStats.resetTime + ' concluído!'} Status dos ciclos renovado para "Aguardando". ${isAutoRenew ? 'Renovação Ativada (ciclos serão executados novamente).' : 'Renovação Desativada.'}`,
       type: 'success'
     });
 
@@ -1349,7 +1355,7 @@ export class UserSession {
       this.triggerAutoReset(false);
     }
 
-    // 1b. Inconsistency check (Active cycle pointing to "Aguardando" or missing)
+    // 1b. Inconsistency check (Active cycle pointing to "Aguardando", missing, or running without activeCycleId)
     if (this.activeCycleId) {
       const activeCycle = this.cycles.find(c => c.id === this.activeCycleId);
       if (!activeCycle || activeCycle.status === 'Aguardando') {
@@ -1362,15 +1368,21 @@ export class UserSession {
           this.syncCyclesToFirestore();
         }
       }
+    } else if (this.isRunning && !this.activeCycleId) {
+      // Clean up orphaned running state with no active cycle
+      console.log(`[Scheduler] Cleaning up orphaned running state without active cycle for ${this.email}.`);
+      this.isRunning = false;
+      this.saveToFile();
+      this.syncStatusToFirestore();
     }
 
-    // 2. Safety Timeout Check (Max 3 hours running duration)
+    // 2. Safety Timeout Check (Max 45 minutes running duration per cycle)
     if (this.activeCycleId && this.isRunning && this.sessionStartTime) {
       const elapsedMs = now.getTime() - this.sessionStartTime;
-      const maxDurationMs = 3 * 60 * 60 * 1000; // 3 hours
+      const maxDurationMs = 45 * 60 * 1000; // 45 minutes
       if (elapsedMs > maxDurationMs) {
-        console.log(`[Scheduler] Active cycle "${this.activeCycleId}" for ${this.email} exceeded maximum duration of 3 hours. Force stopping...`);
-        this.addLog({ message: `Ciclo finalizado por tempo limite de segurança de 3 horas.`, type: 'warning' });
+        console.log(`[Scheduler] Active cycle "${this.activeCycleId}" for ${this.email} reached max duration of 45m. Concluding cycle...`);
+        this.addLog({ message: `⏱️ [Tempo Limite] Ciclo finalizado pelo limite operacional de 45 minutos.`, type: 'info' });
         
         const staleId = this.activeCycleId;
         const profit = this.balance - (this.initialBalance || this.balance);
@@ -1416,63 +1428,55 @@ export class UserSession {
       this.syncCyclesToFirestore();
     }
 
-    // 4. Pending Cycle Check (only evaluate first 10s of a minute)
-    const currentSeconds = now.getSeconds();
-    let pendingCycle = null;
+    // 4. Pending Cycle Check & Triggering
+    const parseTimezoneOffset = (tzString) => {
+      if (!tzString || tzString === 'UTC') return 0;
+      const match = tzString.match(/(?:GMT|UTC)?([+-])(\d+)/i);
+      if (match) {
+        const sign = match[1] === '+' ? 1 : -1;
+        const hours = parseInt(match[2]);
+        return sign * hours;
+      }
+      return -3; // Default to GMT-3 (Brasília)
+    };
 
-    if (currentSeconds <= 10) {
-      const parseTimezoneOffset = (tzString) => {
-        if (!tzString || tzString === 'UTC') return 0;
-        const match = tzString.match(/GMT([+-])(\d+)/);
-        if (match) {
-          const sign = match[1] === '+' ? 1 : -1;
-          const hours = parseInt(match[2]);
-          return sign * hours;
-        }
-        return 0;
+    const getCycleTimeParts = (timezone, dateObj) => {
+      const offsetHours = parseTimezoneOffset(timezone);
+      const targetDate = new Date(dateObj.getTime() + (offsetHours * 3600000));
+      const hh = targetDate.getUTCHours().toString().padStart(2, '0');
+      const mm = targetDate.getUTCMinutes().toString().padStart(2, '0');
+      const dayIndex = targetDate.getUTCDay();
+      const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+      return {
+        hhmm: `${hh}:${mm}`,
+        currentDayName: dayNames[dayIndex],
+        minutesSinceMidnight: targetDate.getUTCHours() * 60 + targetDate.getUTCMinutes()
       };
+    };
 
-      const getCycleTimeParts = (timezone, dateObj) => {
-        const offsetHours = parseTimezoneOffset(timezone);
-        const targetDate = new Date(dateObj.getTime() + (offsetHours * 3600000));
-        const hh = targetDate.getUTCHours().toString().padStart(2, '0');
-        const mm = targetDate.getUTCMinutes().toString().padStart(2, '0');
-        const dayIndex = targetDate.getUTCDay();
-        const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-        return {
-          hhmm: `${hh}:${mm}`,
-          currentDayName: dayNames[dayIndex],
-          minutesSinceMidnight: targetDate.getUTCHours() * 60 + targetDate.getUTCMinutes()
-        };
-      };
+    const timeToMinutes = (hhmm) => {
+      const [h, m] = (hhmm || '00:00').split(':').map(Number);
+      return h * 60 + m;
+    };
 
-      const timeToMinutes = (hhmm) => {
-        const [h, m] = hhmm.split(':').map(Number);
-        return h * 60 + m;
-      };
+    // Sort cycles by startTime ascending
+    const sortedCycles = [...(this.cycles || [])].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
 
-      pendingCycle = this.cycles.find(cycle => {
-        if (!cycle.active || cycle.status !== 'Aguardando') return false;
-        const parts = getCycleTimeParts(cycle.timezone || 'GMT-3', now);
-        const days = cycle.days || ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-        const dayMatches = days.includes(parts.currentDayName);
-        if (!dayMatches) return false;
+    const pendingCycle = sortedCycles.find(cycle => {
+      if (!cycle.active || cycle.status !== 'Aguardando') return false;
+      const parts = getCycleTimeParts(cycle.timezone || 'GMT-3', now);
+      const days = cycle.days || ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+      const dayMatches = days.includes(parts.currentDayName);
+      if (!dayMatches) return false;
 
-        const cycleMinutes = timeToMinutes(cycle.startTime);
-        const currentMinutes = parts.minutesSinceMidnight;
-        // Check if start time has arrived and we are within the 15-minute grace/catch-up window
-        const minutesDiff = currentMinutes - cycleMinutes;
-        const timeMatches = minutesDiff >= 0 && minutesDiff <= 15;
+      const cycleMinutes = timeToMinutes(cycle.startTime);
+      const currentMinutes = parts.minutesSinceMidnight;
+      // Check if start time has arrived and we are within the 45-minute execution window
+      const minutesDiff = currentMinutes - cycleMinutes;
+      const timeMatches = minutesDiff >= 0 && minutesDiff <= 45;
 
-        if (dayMatches && !timeMatches) {
-          // Log near-miss for debugging (only log once per minute at second 0)
-          if (now.getSeconds() <= 5) {
-            console.log(`[Scheduler][${this.email}] Cycle "${cycle.name}" waiting. Expected: ${cycle.startTime}, Current: ${parts.hhmm} (tz: ${cycle.timezone || 'GMT-3'})`);
-          }
-        }
-        return timeMatches;
-      });
-    }
+      return timeMatches;
+    });
 
     // 5. Preemption & Triggering
     if (pendingCycle) {
@@ -1499,6 +1503,7 @@ export class UserSession {
         
         // Mark the previous cycle with its status and profit
         this.cycles = this.cycles.map(c => c.id === currentActiveId ? { ...c, status: finishStatus, finalProfit: profit } : c);
+        this.activeCycleId = null;
       }
       
       this.triggerCycle(pendingCycle);
@@ -1645,15 +1650,17 @@ export class UserSession {
         this.autoShareSessionResult(profit, true);
         this.stopBot();
         return;
-      } else if ((Date.now() - this.sessionStartTime) >= 45 * 60 * 1000 && this.settings.symbol && !this.isAssetBlacklisted(this.settings.symbol)) {
-        // If session exceeds 45 minutes and is stuck around breakeven, switch asset
-        this.addLog({ message: `🛡️ [Time Guard] Sessão estagnada há 45+ minutos no ativo ${this.settings.symbol}. Alternando ativo automaticamente para romper o empasse...`, type: 'warning' });
-        this.addAssetToBlacklist(this.settings.symbol, 1, 'Estagnação de Tempo');
-        const altAssets = ['R_100', '1HZ75V', 'R_75', '1HZ100V', 'R_50', '1HZ50V'];
-        const safeAlt = altAssets.find(s => !this.isAssetBlacklisted(s)) || 'R_100';
-        this.settings.symbol = safeAlt;
-        this.derivAPI.changeSymbol(safeAlt, parseInt(this.settings.granularity));
-        this.syncSettingsToFirestore();
+      } else if ((Date.now() - this.sessionStartTime) >= 45 * 60 * 1000) {
+        // Conclude cycle after 45 minutes of monitoring to keep scheduler cadence clean
+        this.addLog({ message: `⏱️ [Time Guard] Ciclo finalizado após 45 minutos de monitoramento. Resultado: $${profit.toFixed(2)}.`, type: 'info' });
+        const cycleId = this.activeCycleId;
+        const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const finishStatus = profit > 0 ? 'Meta Batida' : profit < 0 ? 'Stop Atingido' : 'Finalizado';
+        this.cycles = this.cycles.map(c => c.id === cycleId ? { ...c, status: finishStatus, finalProfit: profit, winTime: timeNow } : c);
+        this.activeCycleId = null;
+        this.syncCyclesToFirestore();
+        this.stopBot();
+        return;
       }
     }
 
