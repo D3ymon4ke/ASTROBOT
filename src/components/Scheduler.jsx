@@ -431,6 +431,7 @@ export default function Scheduler({
     
     const stake = parseFloat(generatorData.stakeValue) || 1.0;
     const tp = parseFloat(generatorData.takeProfit) || 5.0;
+    const sl = parseFloat(generatorData.stopLoss) || 35.0;
     const isOnlyMhiR100 = !!generatorData.onlyMhiR100;
     const selectedMhiVariant = generatorData.mhiVariant || 'mhi_auto';
     const isFakegaleSelected = !!(generatorData.enableFakegale || generatorData.moneyManagement === 'fakegale' || selectedMhiVariant === 'fakegale');
