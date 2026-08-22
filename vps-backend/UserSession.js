@@ -451,6 +451,25 @@ export class UserSession {
       });
     };
 
+    this.processedContractIds = new Set();
+
+    this.derivAPI.onBuySuccess = (buyDetails) => {
+      const buyId = String(buyDetails.contract_id);
+      console.log(`[DerivAPI] onBuySuccess registered for ${this.email}: ID ${buyId}`);
+      this.activeContractId = buyId;
+      this.lastContractDetails = {
+        contractId: buyId,
+        epoch: Math.floor(Date.now() / 1000),
+        symbol: this.settings.symbol,
+        contractType: this.lastGaleDirection === 'PUT' ? 'PUT' : 'CALL',
+        stake: parseFloat(buyDetails.buy_price || this.settings.stakeValue),
+        galeLevel: this.galeLevel,
+        entryPrice: 0
+      };
+      this.saveToFile();
+      this.syncToClients();
+    };
+
     this.derivAPI.onContractUpdate = (poc) => {
       this.handleContractUpdate(poc);
     };
@@ -1064,8 +1083,8 @@ export class UserSession {
     const prevGranularity = this.settings.granularity;
 
     // Apply optional settings from cycle if present
-    let chosenSymbol = cycle.symbol || this.settings.symbol;
-    if (this.isAssetBlacklisted(chosenSymbol)) {
+    let chosenSymbol = isFakegale ? 'R_100' : (cycle.symbol || this.settings.symbol);
+    if (!isFakegale && this.isAssetBlacklisted(chosenSymbol)) {
       this.addLog({
         message: `⚠️ [Blacklist Protection] O ativo ${chosenSymbol} está bloqueado na blacklist! Chaveando automaticamente para um ativo seguro...`,
         type: 'warning'
@@ -1999,10 +2018,22 @@ export class UserSession {
     if (!this.isRunning) return;
 
     const incomingId = String(poc.contract_id || '');
+    if (!incomingId) return;
+
+    if (!this.processedContractIds) this.processedContractIds = new Set();
+    if (this.processedContractIds.has(incomingId)) {
+      return; // Already processed!
+    }
+
     const currentActiveId = String(this.activeContractId || '');
     const lastId = String(this.lastContractDetails?.contractId || '');
 
     if (this.activeContractId === 'PENDING_REGISTRATION' || this.activeContractId === 'PENDING_REGISTRATION_RECALL') {
+      const isAlreadyClosed = poc.is_sold === 1 || poc.is_expired === 1 || poc.is_settleable === 1 || poc.status === 'won' || poc.status === 'lost';
+      if (isAlreadyClosed) {
+        return; // Ignore stale packets from previously finished contracts
+      }
+
       this.activeContractId = incomingId;
 
       this.lastContractDetails = {
@@ -2132,6 +2163,9 @@ export class UserSession {
         message: `[${resultLabel}] Operação concluída. Lucro/Retorno: $${profit.toFixed(2)} | Novo Saldo: $${newBal.toFixed(2)}`,
         type: isWin ? 'success' : 'error'
       });
+
+      if (!this.processedContractIds) this.processedContractIds = new Set();
+      this.processedContractIds.add(incomingId);
 
       this.activeContractId = null;
       this.lastContractDetails = null;

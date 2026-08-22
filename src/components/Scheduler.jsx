@@ -523,10 +523,11 @@ export default function Scheduler({
       if (periodsSelected[periodKey]) {
         periodConfigs[periodKey].forEach(cfg => {
           const assetIndex = generatedCount % targetAssets.length;
-          const symbol = isOnlyMhiR100 ? 'R_100' : targetAssets[assetIndex];
-          const backupSymbol = isOnlyMhiR100 ? 'R_100' : (generatorData.backupSymbol || '1HZ100V');
+          const isFakegale = !!(isFakegaleSelected || selectedMhiVariant === 'fakegale');
+          const symbol = (isOnlyMhiR100 || isFakegale) ? 'R_100' : targetAssets[assetIndex];
+          const backupSymbol = (isOnlyMhiR100 || isFakegale) ? '1HZ100V' : (generatorData.backupSymbol || '1HZ100V');
           
-          const labelSuffix = isOnlyMhiR100 ? ` (${mhiVariantLabels[selectedMhiVariant] || 'MHI'})` : '';
+          const labelSuffix = (isOnlyMhiR100 || isFakegale) ? ` (${mhiVariantLabels[selectedMhiVariant] || 'MHI'})` : '';
           const name = `${cfg.name}${labelSuffix} ${cfg.time}`;
           
           newCycles.push({

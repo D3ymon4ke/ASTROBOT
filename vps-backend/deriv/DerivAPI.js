@@ -504,6 +504,9 @@ export class DerivAPI {
       } else {
         const buyDetails = data.buy;
         this.log(`Ordem executada! ID Contrato: ${buyDetails.contract_id} | Compra: $${buyDetails.buy_price}`, 'success');
+        if (typeof this.onBuySuccess === 'function') {
+          try { this.onBuySuccess(buyDetails); } catch (e) { console.error('Error in onBuySuccess:', e); }
+        }
         this.subscribeContract(buyDetails.contract_id);
       }
     }
