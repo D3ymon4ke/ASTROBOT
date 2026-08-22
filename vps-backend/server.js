@@ -405,38 +405,18 @@ function restoreSessions() {
       
       for (const file of files) {
         if (file.startsWith('session_') && file.endsWith('.json')) {
-          // Extract email from file path by parsing JSON
-          const filePath = path.join(DATA_DIR, file);
-          const raw = fs.readFileSync(filePath, 'utf8');
-          const data = JSON.parse(raw);
-          
-          if (data.settings && data.settings.token) {
-            // Find email from settings or decode it
-            // Simple approach: we create user session which reads file.
-            // Filename format: session_${clean_email}.json
-            // Let's read email from saved settings or derive from filename
-            const email = data.settings.email || file.substring(8, file.length - 5).replace(/_/g, '@'); // fallback translation
+          try {
+            const filePath = path.join(DATA_DIR, file);
+            const raw = fs.readFileSync(filePath, 'utf8');
+            const data = JSON.parse(raw);
             
-            // To be perfectly safe, we store email directly inside the session JSON
-            // Let's create session
-            let userEmail = data.email || data.settings.email;
-            if (!userEmail) {
-              // Try to parse from filename if it has standard format session_email_domain_ext.json
-              // e.g. session_deymonmachado_gmail_com.json -> deymonmachado@gmail.com
-              const parts = file.substring(8, file.length - 5).split('_');
-              if (parts.length >= 3) {
-                const ext = parts.pop();
-                const domain = parts.pop();
-                const local = parts.join('_');
-                userEmail = `${local}@${domain}.${ext}`;
-              } else {
-                userEmail = file.substring(8, file.length - 5).replace(/_/g, '@'); // fallback
-              }
-            }
+            const userEmail = data.email || (data.settings && data.settings.email);
             if (userEmail) {
               const session = getOrCreateSession(userEmail);
               restoreCount++;
             }
+          } catch (fileErr) {
+            console.error(`[Startup] Failed to parse session file ${file}:`, fileErr);
           }
         }
       }
