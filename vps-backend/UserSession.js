@@ -1911,12 +1911,22 @@ export class UserSession {
   }
 
   calculateCurrentStake(isMartingaleUpdate) {
-    const mode = this.settings.moneyManagement || (this.settings.martingaleEnabled ? 'martingale' : 'fixed');
+    const isFakegale = !!(this.settings.enableFakegale || this.settings.moneyManagement === 'fakegale');
+    const mode = isFakegale ? 'martingale' : (this.settings.moneyManagement || (this.settings.martingaleEnabled ? 'martingale' : 'fixed'));
     let baseStake = parseFloat(this.settings.stakeValue || '1.00');
 
     if (this.settings.stakeType === 'percentage') {
       baseStake = (this.balance * (baseStake / 100));
       if (baseStake < 0.35) baseStake = 0.35;
+    }
+
+    if (isFakegale) {
+      const level = this.galeLevel;
+      const multiplier = parseFloat(this.settings.martingaleMultiplier || '2.0');
+      if (level > 0) {
+        return parseFloat((baseStake * Math.pow(multiplier, level)).toFixed(2));
+      }
+      return baseStake;
     }
 
     if (mode === 'fixed' || mode === 'iron_hands') {
@@ -2434,7 +2444,10 @@ export class UserSession {
 
       const takeProfit = parseFloat(this.settings.takeProfit || '5.00');
       const progressPct = takeProfit > 0 ? Math.min(100, Math.max(0, (profit / takeProfit) * 100)).toFixed(1) : '0.0';
-      const isFakegale = this.settings.enableFakegale || this.settings.moneyManagement === 'fakegale';
+      const isFakegale = !!(this.settings.enableFakegale || this.settings.moneyManagement === 'fakegale');
+      if (isFakegale) {
+        this.currentSorosStake = 0;
+      }
       const mgmtName = isFakegale ? '🧪 Fakegale (G1 Sniper)' : this.settings.moneyManagement === 'sorosgale' ? '🚀 Sorosgale' : this.settings.moneyManagement === 'soros' ? 'Soros' : 'Martingale';
       const nextStake = this.calculateCurrentStake(false);
 
@@ -2447,7 +2460,7 @@ export class UserSession {
         `📊 <b>DESEMPENHO DA SESSÃO</b>\n` +
         `━━━━━━━━━━━━━━━━━━━━━━\n` +
         `💵 <b>Resultado da Sessão:</b> <code>${sign}$${profit.toFixed(2)}</code>\n` +
-        `🎯 <b>Micro-Meta Alvo:</b> <code>$${takeProfit.toFixed(2)}</code> (Progresso: <code>${progressPct}%</code>)\n` +
+        `🎯 <b>Meta do Ciclo (Take Profit):</b> <code>$${takeProfit.toFixed(2)}</code> (Progresso: <code>${progressPct}%</code>)\n` +
         `💳 <b>Saldo em Conta:</b> <code>$${this.balance?.toFixed(2)}</code>\n` +
         `🏆 <b>Placar da Sessão:</b> <code>${wins}W - ${losses}L</code> (Winrate: <code>${sessionWinrate}%</code>)\n` +
         `🔥 <b>Próxima Stake:</b> <code>$${nextStake.toFixed(2)}</code>\n` +
