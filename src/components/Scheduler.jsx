@@ -431,13 +431,12 @@ export default function Scheduler({
     
     const stake = parseFloat(generatorData.stakeValue) || 1.0;
     const tp = parseFloat(generatorData.takeProfit) || 5.0;
-    const sl = parseFloat(generatorData.stopLoss) || 15.0;
-    const moneyMgmt = generatorData.moneyManagement || 'sorosgale';
-    const galeLevels = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' ? 0 : (parseInt(generatorData.martingaleLevels) ?? 2);
-    const galeMult = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' || galeLevels === 0 ? 1.0 : (parseFloat(generatorData.martingaleMultiplier) || 2.0);
-    
     const isOnlyMhiR100 = !!generatorData.onlyMhiR100;
     const selectedMhiVariant = generatorData.mhiVariant || 'mhi_auto';
+    const isFakegaleSelected = !!(generatorData.enableFakegale || generatorData.moneyManagement === 'fakegale' || selectedMhiVariant === 'fakegale');
+    const moneyMgmt = isFakegaleSelected ? 'martingale' : (generatorData.moneyManagement || 'sorosgale');
+    const galeLevels = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' ? 0 : (parseInt(generatorData.martingaleLevels) ?? 2);
+    const galeMult = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' || galeLevels === 0 ? 1.0 : (parseFloat(generatorData.martingaleMultiplier) || 2.0);
     const strategyToUse = isOnlyMhiR100 ? selectedMhiVariant : 'autopilot';
 
     const defaultPeriodConfigs = {

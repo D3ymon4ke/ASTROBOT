@@ -1081,7 +1081,12 @@ export class UserSession {
     if (cycle.sorosgaleCompounding !== undefined) this.settings.sorosgaleCompounding = cycle.sorosgaleCompounding.toString();
     if (cycle.sorosgaleAllowGale !== undefined) this.settings.sorosgaleAllowGale = cycle.sorosgaleAllowGale;
     if (cycle.enableFakegale !== undefined || cycle.fakegale !== undefined || cycle.moneyManagement === 'fakegale' || strategyId === 'fakegale') {
-      this.settings.enableFakegale = !!(cycle.enableFakegale || cycle.fakegale || cycle.moneyManagement === 'fakegale' || strategyId === 'fakegale');
+      const isFakegale = !!(cycle.enableFakegale || cycle.fakegale || cycle.moneyManagement === 'fakegale' || strategyId === 'fakegale');
+      this.settings.enableFakegale = isFakegale;
+      if (isFakegale) {
+        this.settings.moneyManagement = 'martingale';
+        this.settings.martingaleEnabled = true;
+      }
     }
 
     // Reset gale levels and session tracking
