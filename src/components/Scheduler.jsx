@@ -56,7 +56,7 @@ export default function Scheduler({
     sorosgaleLevels: 2,
     sorosgaleCompounding: 100,
     sorosgaleAllowGale: true,
-    microMetaEnabled: true,
+    microMetaEnabled: false,
     microMetaTarget: 5.0,
     autoBlacklistConsolidation: true,
     martingaleMultiplier: 2.0,
