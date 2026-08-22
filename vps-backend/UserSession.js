@@ -1296,19 +1296,26 @@ export class UserSession {
         if (this.activeTradeCountdown && this.activeTradeCountdown.dateExpiry) {
           this.stuckContractStartTime = null;
           const nowEpoch = Math.floor(now.getTime() / 1000);
-          if (nowEpoch > this.activeTradeCountdown.dateExpiry + 15) { // 15s grace period past expiry
-            console.log(`[Watchdog] Ordem ${this.activeContractId} expirada sem evento de fechamento para ${this.email}. Solicitando consulta à Deriv...`);
-            
-            // Try fetching contract update explicitly from Deriv API before forcing lock release
-            if (this.derivAPI && this.derivAPI.connected) {
-              this.derivAPI.subscribeContract(this.activeContractId);
+          if (nowEpoch > this.activeTradeCountdown.dateExpiry + 10) { // 10s grace period past expiry
+            if (!this.watchdogPollingRequested) {
+              this.watchdogPollingRequested = nowEpoch;
+              console.log(`[Watchdog] Ordem ${this.activeContractId} expirada sem evento de fechamento para ${this.email}. Solicitando consulta à Deriv...`);
+              if (this.derivAPI && this.derivAPI.connected) {
+                this.derivAPI.subscribeContract(this.activeContractId);
+              }
+              this.addLog({ message: `[Watchdog] Consultando resultado final da ordem #${this.activeContractId} na Deriv...`, type: 'info' });
+            } else if (nowEpoch - this.watchdogPollingRequested > 30) {
+              // Only force unlock after 30s of attempting to fetch
+              console.log(`[Watchdog] Ordem ${this.activeContractId} sem resposta definitiva da Deriv após 30s. Liberando trava de execução.`);
+              this.addLog({ message: `[Watchdog] Trava de ordem #${this.activeContractId} liberada por tempo limite.`, type: 'warning' });
+              this.activeContractId = null;
+              this.activeTradeCountdown = null;
+              this.watchdogPollingRequested = null;
+              this.saveToFile();
+              this.syncToClients();
             }
-            
-            this.addLog({ message: `[Watchdog] Verificando resultado final da ordem #${this.activeContractId} no servidor Deriv...`, type: 'warning' });
-            this.activeContractId = null;
-            this.activeTradeCountdown = null;
-            this.saveToFile();
-            this.syncToClients();
+          } else {
+            this.watchdogPollingRequested = null;
           }
         } else {
           // If activeContractId is set but activeTradeCountdown is missing/null, prevent permanent lock
@@ -1972,16 +1979,21 @@ export class UserSession {
   handleContractUpdate(poc) {
     if (!this.isRunning) return;
 
+    const incomingId = String(poc.contract_id || '');
+    const currentActiveId = String(this.activeContractId || '');
+    const lastId = String(this.lastContractDetails?.contractId || '');
+
     if (this.activeContractId === 'PENDING_REGISTRATION' || this.activeContractId === 'PENDING_REGISTRATION_RECALL') {
-      this.activeContractId = poc.contract_id;
+      this.activeContractId = incomingId;
 
       this.lastContractDetails = {
-        epoch: poc.date_start,
-        symbol: poc.underlying_symbol,
+        contractId: incomingId,
+        epoch: poc.date_start || Math.floor(Date.now() / 1000),
+        symbol: poc.underlying_symbol || this.settings.symbol,
         contractType: poc.contract_type || 'CALL',
-        stake: parseFloat(poc.buy_price),
+        stake: parseFloat(poc.buy_price || this.settings.stakeValue),
         galeLevel: this.galeLevel,
-        entryPrice: parseFloat(poc.entry_tick)
+        entryPrice: parseFloat(poc.entry_tick || 0)
       };
       
       this.addLog({
@@ -1993,10 +2005,10 @@ export class UserSession {
       const total = (poc.date_expiry && poc.date_start) ? (poc.date_expiry - poc.date_start) : fallbackDuration;
       
       this.activeTradeCountdown = {
-        contractId: poc.contract_id,
-        symbol: poc.underlying_symbol,
+        contractId: incomingId,
+        symbol: poc.underlying_symbol || this.settings.symbol,
         contractType: poc.contract_type || 'CALL',
-        stake: parseFloat(poc.buy_price),
+        stake: parseFloat(poc.buy_price || this.settings.stakeValue),
         dateStart: poc.date_start || Math.floor(Date.now() / 1000),
         dateExpiry: poc.date_expiry || (Math.floor(Date.now() / 1000) + fallbackDuration),
         totalDuration: total,
@@ -2008,10 +2020,10 @@ export class UserSession {
       return;
     }
 
-    if (poc.contract_id !== this.activeContractId) return;
+    if (incomingId !== currentActiveId && incomingId !== lastId) return;
 
     const status = poc.status;
-    const isSold = poc.is_sold;
+    const isSold = poc.is_sold === 1 || poc.is_expired === 1 || poc.is_settleable === 1;
     const profit = parseFloat(poc.profit || 0);
 
     // Update countdown remaining
@@ -2022,9 +2034,16 @@ export class UserSession {
       this.syncToClients();
     }
 
-    if (isSold === 1 || status === 'won' || status === 'lost') {
-      const details = this.lastContractDetails;
-      if (!details) return;
+    if (isSold || status === 'won' || status === 'lost') {
+      const details = this.lastContractDetails || {
+        contractId: incomingId,
+        epoch: poc.date_start || Math.floor(Date.now() / 1000),
+        symbol: poc.underlying_symbol || this.settings.symbol,
+        contractType: poc.contract_type || 'CALL',
+        stake: parseFloat(poc.buy_price || this.settings.stakeValue),
+        galeLevel: this.galeLevel,
+        entryPrice: parseFloat(poc.entry_tick || 0)
+      };
 
       this.activeTradeCountdown = null;
       const isWin = profit > 0;
