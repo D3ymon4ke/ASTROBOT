@@ -1057,7 +1057,7 @@ export class UserSession {
     const strategyId = cycle.strategy || cycle.selectedStrategy || this.settings.selectedStrategy;
     const isFakegale = !!(cycle.enableFakegale || cycle.fakegale || cycle.moneyManagement === 'fakegale' || strategyId === 'fakegale');
     const maxGale = isFakegale 
-      ? (cycle.martingaleLevels ?? cycle.maxGale ?? 6) 
+      ? (cycle.martingaleLevels ?? cycle.maxGale ?? 3) 
       : (cycle.maxGale ?? cycle.martingaleLevels ?? parseInt(this.settings.martingaleMaxLevels));
     // If no management field set explicitly, infer from martingaleLevels:
     // > 0 means martingale should be active

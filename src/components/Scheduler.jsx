@@ -327,7 +327,7 @@ export default function Scheduler({
         takeProfit: 5.0,
         stopLoss: 35.0,
         moneyManagement: 'martingale',
-        martingaleLevels: 6,
+        martingaleLevels: 3,
         martingaleMultiplier: 2.0,
         useSmartHours: true,
         enableStreakShield: true,
@@ -438,7 +438,7 @@ export default function Scheduler({
     const moneyMgmt = isFakegaleSelected ? 'martingale' : (generatorData.moneyManagement || 'sorosgale');
     const galeLevels = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' 
       ? 0 
-      : (isFakegaleSelected ? (parseInt(generatorData.martingaleLevels) || 6) : (parseInt(generatorData.martingaleLevels) ?? 2));
+      : (isFakegaleSelected ? (parseInt(generatorData.martingaleLevels) || 3) : (parseInt(generatorData.martingaleLevels) ?? 3));
     const galeMult = generatorData.moneyManagement === 'fixed' || generatorData.moneyManagement === 'iron_hands' || galeLevels === 0 ? 1.0 : (parseFloat(generatorData.martingaleMultiplier) || 2.0);
     const strategyToUse = isOnlyMhiR100 ? selectedMhiVariant : 'autopilot';
 
@@ -2820,8 +2820,8 @@ export default function Scheduler({
                             ...prev,
                             moneyManagement: isFake ? 'martingale' : e.target.value,
                             enableFakegale: isFake ? true : prev.enableFakegale,
-                            martingaleLevels: isFake ? 6 : prev.martingaleLevels,
-                            stopLoss: isFake ? 35.0 : prev.stopLoss
+                            martingaleLevels: isFake ? 3 : prev.martingaleLevels,
+                            stopLoss: isFake ? 15.0 : prev.stopLoss
                           }));
                         }}
                         style={{
