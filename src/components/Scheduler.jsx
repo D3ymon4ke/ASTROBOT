@@ -2904,6 +2904,10 @@ export default function Scheduler({
                           <option value="4">4 Gales</option>
                           <option value="5">5 Gales</option>
                           <option value="6">6 Gales</option>
+                          <option value="7">7 Gales</option>
+                          <option value="8">8 Gales</option>
+                          <option value="9">9 Gales</option>
+                          <option value="10">10 Gales (Máximo Livre)</option>
                         </select>
                       </div>
                       <div>
@@ -3597,6 +3601,10 @@ export default function Scheduler({
                           <option value="4">Gale Nível 4</option>
                           <option value="5">Gale Nível 5</option>
                           <option value="6">Gale Nível 6</option>
+                          <option value="7">Gale Nível 7</option>
+                          <option value="8">Gale Nível 8</option>
+                          <option value="9">Gale Nível 9</option>
+                          <option value="10">Gale Nível 10 (Máximo Livre)</option>
                         </select>
                       </div>
                       <div>

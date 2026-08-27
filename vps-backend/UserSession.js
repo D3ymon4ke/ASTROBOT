@@ -2223,7 +2223,7 @@ export class UserSession {
         } else {
           const allowGale = mode === 'sorosgale' && (this.settings.sorosgaleAllowGale !== false);
           const maxGalesAllowed = allowGale 
-            ? Math.min(6, Math.max(1, parseInt(this.settings.sorosgaleMaxGale || this.settings.martingaleMaxLevels || '2')))
+            ? Math.min(10, Math.max(1, parseInt(this.settings.sorosgaleMaxGale || this.settings.martingaleMaxLevels || '2')))
             : 0;
 
           if (allowGale && this.galeLevel < maxGalesAllowed) {

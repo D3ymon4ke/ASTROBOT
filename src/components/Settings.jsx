@@ -507,7 +507,7 @@ export default function Settings({
 
                       {(settings.sorosgaleAllowGale !== false) && (
                         <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                          <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>MÁXIMO DE GALES DE RECUPERAÇÃO (1 ATÉ 6)</label>
+                          <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>MÁXIMO DE GALES DE RECUPERAÇÃO (1 ATÉ 10)</label>
                           <select
                             name="sorosgaleMaxGale"
                             value={settings.sorosgaleMaxGale || '2'}
@@ -520,7 +520,11 @@ export default function Settings({
                             <option value="3">3 Gales (Moderado)</option>
                             <option value="4">4 Gales (Alavancado)</option>
                             <option value="5">5 Gales (Agressivo)</option>
-                            <option value="6">6 Gales (Máximo Livre)</option>
+                            <option value="6">6 Gales (Super Agressivo)</option>
+                            <option value="7">7 Gales (Ultra Agressivo)</option>
+                            <option value="8">8 Gales (Extremo)</option>
+                            <option value="9">9 Gales (Mega Extremo)</option>
+                            <option value="10">10 Gales (Máximo Livre)</option>
                           </select>
                         </div>
                       )}
