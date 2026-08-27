@@ -439,7 +439,7 @@ export default function App() {
     if (user.cycles && user.cycles.length > 0) {
       const migratedCycles = user.cycles.map(c => ({
         ...c,
-        selectedStrategy: 'autopilot'
+        selectedStrategy: c.selectedStrategy || c.strategy || 'mhi_auto'
       }));
       setCycles(migratedCycles);
       localStorage.setItem('astrobot_scheduler_cycles', JSON.stringify(migratedCycles));
@@ -1629,10 +1629,10 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map(c => ({
             ...c,
-            selectedStrategy: 'autopilot'
+            selectedStrategy: c.selectedStrategy || c.strategy || 'fakegale'
           }));
         }
       } catch (e) {
@@ -1641,9 +1641,10 @@ export default function App() {
     }
     // Default seeded cycles
     return [
-      { id: 'c1', name: 'Manhã (MHI)', startTime: '09:00', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], timezone: 'GMT-3', symbol: 'R_100', granularity: '60', selectedStrategy: 'autopilot', stakeValue: 1.0, takeProfit: 5.0, stopLoss: 15.0, moneyManagement: 'sorosgale', sorosgaleLevels: 2, sorosgaleCompounding: 100, sorosgaleAllowGale: true, sorosgaleMaxGale: 2, martingaleLevels: 2, martingaleMultiplier: 2.0, active: true, status: 'Aguardando', icon: '🌅', color: '#f59e0b' },
-      { id: 'c2', name: 'Tarde (Scalper)', startTime: '14:00', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], timezone: 'GMT-3', symbol: '1HZ100V', granularity: '60', selectedStrategy: 'autopilot', stakeValue: 1.0, takeProfit: 5.0, stopLoss: 15.0, moneyManagement: 'sorosgale', sorosgaleLevels: 2, sorosgaleCompounding: 100, sorosgaleAllowGale: true, sorosgaleMaxGale: 2, martingaleLevels: 2, martingaleMultiplier: 2.0, active: true, status: 'Aguardando', icon: '🌇', color: '#06b6d4' },
-      { id: 'c3', name: 'Noite (Corretora)', startTime: '20:00', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'], timezone: 'GMT-3', symbol: 'R_75', granularity: '60', selectedStrategy: 'autopilot', stakeValue: 1.0, takeProfit: 5.0, stopLoss: 15.0, moneyManagement: 'sorosgale', sorosgaleLevels: 2, sorosgaleCompounding: 100, sorosgaleAllowGale: true, sorosgaleMaxGale: 2, martingaleLevels: 2, martingaleMultiplier: 2.0, active: true, status: 'Aguardando', icon: '🌙', color: '#8b5cf6' }
+      { id: 'c1', name: 'Madrugada (Fakegale MHI)', startTime: '03:40', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], timezone: 'GMT-3', symbol: 'R_100', granularity: '60', selectedStrategy: 'fakegale', enableFakegale: true, fakegale: true, stakeValue: 1.0, takeProfit: 5.0, stopLoss: 35.0, moneyManagement: 'martingale', martingaleLevels: 3, maxGale: 3, martingaleMultiplier: 2.0, active: true, status: 'Aguardando', icon: '🌙', color: '#8b5cf6' },
+      { id: 'c2', name: 'Manhã (Fakegale MHI)', startTime: '09:45', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], timezone: 'GMT-3', symbol: 'R_100', granularity: '60', selectedStrategy: 'fakegale', enableFakegale: true, fakegale: true, stakeValue: 1.0, takeProfit: 5.0, stopLoss: 35.0, moneyManagement: 'martingale', martingaleLevels: 3, maxGale: 3, martingaleMultiplier: 2.0, active: true, status: 'Aguardando', icon: '⚡', color: '#f59e0b' },
+      { id: 'c3', name: 'Tarde (Fakegale MHI)', startTime: '15:45', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], timezone: 'GMT-3', symbol: 'R_100', granularity: '60', selectedStrategy: 'fakegale', enableFakegale: true, fakegale: true, stakeValue: 1.0, takeProfit: 5.0, stopLoss: 35.0, moneyManagement: 'martingale', martingaleLevels: 3, maxGale: 3, martingaleMultiplier: 2.0, active: true, status: 'Aguardando', icon: '🤖', color: '#06b6d4' },
+      { id: 'c4', name: 'Noite (Fakegale MHI)', startTime: '21:15', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], timezone: 'GMT-3', symbol: 'R_100', granularity: '60', selectedStrategy: 'fakegale', enableFakegale: true, fakegale: true, stakeValue: 1.0, takeProfit: 5.0, stopLoss: 35.0, moneyManagement: 'martingale', martingaleLevels: 3, maxGale: 3, martingaleMultiplier: 2.0, active: true, status: 'Aguardando', icon: '🌌', color: '#10b981' }
     ];
   });
 

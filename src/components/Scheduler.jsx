@@ -47,12 +47,15 @@ export default function Scheduler({
     timezone: 'GMT-3',
     symbol: 'R_100',
     granularity: '60', // 1m
-    selectedStrategy: 'autopilot',
-    moneyManagement: 'sorosgale',
+    selectedStrategy: 'fakegale',
+    enableFakegale: true,
+    fakegale: true,
+    moneyManagement: 'martingale',
     stakeValue: 1.0,
     takeProfit: 5.0,
-    stopLoss: 15.0,
-    martingaleLevels: 2,
+    stopLoss: 35.0,
+    martingaleLevels: 3,
+    maxGale: 3,
     sorosgaleLevels: 2,
     sorosgaleCompounding: 100,
     sorosgaleAllowGale: true,
@@ -190,13 +193,14 @@ export default function Scheduler({
   const [generatorData, setGeneratorData] = useState({
     stakeValue: 1.0,
     takeProfit: 5.0,
-    stopLoss: 15.0,
-    moneyManagement: 'sorosgale',
+    stopLoss: 35.0,
+    moneyManagement: 'martingale',
     sorosgaleLevels: 2,
     sorosgaleMaxGale: 2,
     sorosgaleCompounding: 100,
     sorosgaleAllowGale: true,
-    martingaleLevels: 2,
+    martingaleLevels: 3,
+    maxGale: 3,
     martingaleMultiplier: 2.0,
     periods: {
       dawn: true,
@@ -214,8 +218,8 @@ export default function Scheduler({
     disableMaCrossover: false,
     useSmartHours: true,
     onlyMhiR100: true,
-    mhiVariant: 'mhi_auto',
-    enableFakegale: false
+    mhiVariant: 'fakegale',
+    enableFakegale: true
   });
 
   // ─── Smart Hours Engine ───────────────────────────────────────────────────
@@ -1359,9 +1363,32 @@ export default function Scheduler({
           {/* Timeline Missions Scrollbox */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1, overflowY: 'auto', paddingRight: '2px' }}>
             {filteredTimelineCycles.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '0.5rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1rem' }}>
-                <Clock size={28} />
-                <span style={{ fontSize: '0.72rem' }}>Nenhuma missão encontrada para este filtro.</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem 1rem' }}>
+                <Clock size={32} style={{ opacity: 0.6, color: '#a78bfa' }} />
+                <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                  {cycles.length === 0 ? 'Nenhuma missão no cronograma ainda.' : 'Nenhuma missão encontrada para este filtro.'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleGenerateTimeline}
+                  style={{
+                    marginTop: '0.5rem',
+                    padding: '0.65rem 1.2rem',
+                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '0.78rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    boxShadow: '0 4px 14px rgba(139, 92, 246, 0.4)'
+                  }}
+                >
+                  <span>⚡</span> Gerar Cronograma Fakegale MHI
+                </button>
               </div>
             ) : (
               filteredTimelineCycles.map((c, idx) => {
