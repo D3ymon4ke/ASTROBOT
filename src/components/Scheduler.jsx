@@ -78,6 +78,15 @@ export default function Scheduler({
     color: '#8b5cf6'
   };
 
+  const CALIBRATED_CYCLES = [
+    { id: 'c1', name: 'Madrugada Sniper (03:45)', startTime: '03:45', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], timezone: 'GMT-3', symbol: '1HZ50V', granularity: '60', selectedStrategy: 'mhi_auto', enableFakegale: true, fakegale: true, stakeValue: 0.35, takeProfit: 3.0, stopLoss: 10.0, moneyManagement: 'martingale', martingaleLevels: 2, maxGale: 2, martingaleMultiplier: 2.1, martingaleMode: 'next_signal', enableStreakShield: true, maxStreakCandles: 3, streakShieldAction: 'block', active: true, status: 'Aguardando', icon: '🌙', color: '#8b5cf6' },
+    { id: 'c2', name: 'Manhã Alta Liquidez (09:30)', startTime: '09:30', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], timezone: 'GMT-3', symbol: 'R_100', granularity: '60', selectedStrategy: 'mhi_auto', enableFakegale: true, fakegale: true, stakeValue: 0.35, takeProfit: 3.0, stopLoss: 10.0, moneyManagement: 'martingale', martingaleLevels: 2, maxGale: 2, martingaleMultiplier: 2.1, martingaleMode: 'next_signal', enableStreakShield: true, maxStreakCandles: 3, streakShieldAction: 'block', active: true, status: 'Aguardando', icon: '⚡', color: '#f59e0b' },
+    { id: 'c3', name: 'Almoço Consistência (12:15)', startTime: '12:15', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], timezone: 'GMT-3', symbol: '1HZ50V', granularity: '60', selectedStrategy: 'mhi_auto', enableFakegale: true, fakegale: true, stakeValue: 0.35, takeProfit: 2.5, stopLoss: 10.0, moneyManagement: 'martingale', martingaleLevels: 2, maxGale: 2, martingaleMultiplier: 2.1, martingaleMode: 'next_signal', enableStreakShield: true, maxStreakCandles: 3, streakShieldAction: 'block', active: true, status: 'Aguardando', icon: '🎯', color: '#10b981' },
+    { id: 'c4', name: 'Tarde Fluxo (15:45)', startTime: '15:45', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], timezone: 'GMT-3', symbol: 'R_100', granularity: '60', selectedStrategy: 'mhi_auto', enableFakegale: true, fakegale: true, stakeValue: 0.35, takeProfit: 3.0, stopLoss: 10.0, moneyManagement: 'martingale', martingaleLevels: 2, maxGale: 2, martingaleMultiplier: 2.1, martingaleMode: 'next_signal', enableStreakShield: true, maxStreakCandles: 3, streakShieldAction: 'block', active: true, status: 'Aguardando', icon: '🤖', color: '#06b6d4' },
+    { id: 'c5', name: 'Início da Noite (18:30)', startTime: '18:30', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], timezone: 'GMT-3', symbol: '1HZ50V', granularity: '60', selectedStrategy: 'mhi_auto', enableFakegale: true, fakegale: true, stakeValue: 0.35, takeProfit: 2.5, stopLoss: 10.0, moneyManagement: 'martingale', martingaleLevels: 2, maxGale: 2, martingaleMultiplier: 2.1, martingaleMode: 'next_signal', enableStreakShield: true, maxStreakCandles: 3, streakShieldAction: 'block', active: true, status: 'Aguardando', icon: '🔥', color: '#ec4899' },
+    { id: 'c6', name: 'Noite Fechamento de Meta (21:15)', startTime: '21:15', days: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], timezone: 'GMT-3', symbol: 'R_100', granularity: '60', selectedStrategy: 'mhi_auto', enableFakegale: true, fakegale: true, stakeValue: 0.35, takeProfit: 3.0, stopLoss: 10.0, moneyManagement: 'martingale', martingaleLevels: 2, maxGale: 2, martingaleMultiplier: 2.1, martingaleMode: 'next_signal', enableStreakShield: true, maxStreakCandles: 3, streakShieldAction: 'block', active: true, status: 'Aguardando', icon: '🌌', color: '#38bdf8' }
+  ];
+
   // Sanitize cycles array on the fly to support old items from localStorage and match historical trades
   const sanitizedCycles = useMemo(() => {
     const rawList = (cycles || []).map(c => ({
@@ -849,11 +858,29 @@ export default function Scheduler({
   };
 
   const handleResetCycleStatus = (id) => {
-    onSaveCycles(cycles.map(c => c.id === id ? { ...c, status: 'Aguardando' } : c));
+    onSaveCycles(cycles.map(c => {
+      if (c.id === id) {
+        const { finalProfit, lastProfit, sessionProfit, totalOps, wins, losses, lastRun, ...rest } = c;
+        return { ...rest, status: 'Aguardando' };
+      }
+      return c;
+    }));
   };
 
   const handleResetAllCycles = () => {
-    onSaveCycles(cycles.map(c => ({ ...c, status: 'Aguardando' })));
+    onSaveCycles(cycles.map(c => {
+      const { finalProfit, lastProfit, sessionProfit, totalOps, wins, losses, lastRun, ...rest } = c;
+      return { ...rest, status: 'Aguardando', active: true };
+    }));
+  };
+
+  const handleRestoreCalibratedCycles = () => {
+    if (window.confirm('Deseja carregar os 6 Ciclos Estratégicos Calibrados (MHI Auto + Fakegale com metas de $2.50 a $3.00)?')) {
+      onSaveCycles(CALIBRATED_CYCLES);
+      if (CALIBRATED_CYCLES.length > 0) {
+        setSelectedCycleId(CALIBRATED_CYCLES[0].id);
+      }
+    }
   };
 
   const handleBatchToggleActive = (activate) => {
@@ -1593,38 +1620,66 @@ export default function Scheduler({
           </div>
 
           {/* Bottom Batch Controls */}
-          <div style={{ display: 'flex', gap: '6px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 0.8fr', gap: '5px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
             <button
+              type="button"
               onClick={handleResetAllCycles}
+              title="Zera o status de todas as missões para Aguardando e remove os lucros antigos"
               style={{
-                flex: 1,
-                padding: '0.45rem',
-                fontSize: '0.65rem',
+                padding: '0.45rem 0.2rem',
+                fontSize: '0.62rem',
                 borderRadius: '6px',
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                color: 'var(--text-secondary)',
+                background: 'rgba(99, 102, 241, 0.15)',
+                border: '1px solid rgba(99, 102, 241, 0.35)',
+                color: '#a5b4fc',
                 cursor: 'pointer',
-                fontWeight: 'bold'
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
               }}
             >
-              🔄 Resetar Status
+              🔄 Resetar
             </button>
             <button
-              onClick={handleBatchClearAll}
+              type="button"
+              onClick={handleRestoreCalibratedCycles}
+              title="Carrega os 6 Ciclos Estratégicos Calibrados (MHI Auto + Fakegale com metas $2.50-$3.00)"
               style={{
-                flex: 1,
-                padding: '0.45rem',
-                fontSize: '0.65rem',
+                padding: '0.45rem 0.2rem',
+                fontSize: '0.62rem',
+                borderRadius: '6px',
+                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(99, 102, 241, 0.3) 100%)',
+                border: '1px solid rgba(139, 92, 246, 0.5)',
+                color: '#d8b4fe',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}
+            >
+              ⚡ 6 Calibrados
+            </button>
+            <button
+              type="button"
+              onClick={handleBatchClearAll}
+              title="Apaga todas as missões da linha do tempo"
+              style={{
+                padding: '0.45rem 0.2rem',
+                fontSize: '0.62rem',
                 borderRadius: '6px',
                 background: 'rgba(239,68,68,0.08)',
                 border: '1px solid rgba(239,68,68,0.25)',
                 color: '#ef4444',
                 cursor: 'pointer',
-                fontWeight: 'bold'
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
               }}
             >
-              🗑️ Limpar Todos
+              🗑️ Limpar
             </button>
           </div>
         </div>
