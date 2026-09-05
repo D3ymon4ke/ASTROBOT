@@ -4820,6 +4820,44 @@ export default function App() {
               <span>Dashboard</span>
             </button>
 
+            {/* Validador $100 (Página Exclusiva) */}
+            <button
+              onClick={() => {
+                setActivePage('validator');
+                setIsAnalysisDropdownOpen(false);
+                setIsManagementDropdownOpen(false);
+                setIsProfileDropdownOpen(false);
+                setIsNotificationsOpen(false);
+              }}
+              style={{
+                background: activePage === 'validator' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                border: 'none',
+                color: activePage === 'validator' ? '#34d399' : 'var(--text-secondary)',
+                borderBottom: activePage === 'validator' ? '2px solid #10b981' : '2px solid transparent',
+                padding: '0.5rem 0.6rem',
+                fontSize: '0.8rem',
+                fontWeight: activePage === 'validator' ? '700' : '500',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: '6px 6px 0 0',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+              }}
+            >
+              <ShieldCheck size={13} style={{ color: '#10b981' }} />
+              <span>Validador $100</span>
+              <span style={{
+                background: 'linear-gradient(135deg, #10b981 0%, #38bdf8 100%)',
+                color: '#022c22',
+                fontSize: '0.55rem',
+                fontWeight: '900',
+                padding: '1px 5px',
+                borderRadius: '8px',
+                textTransform: 'uppercase'
+              }}>NOVO</span>
+            </button>
+
             {/* Automação */}
             <button
               onClick={() => {
@@ -5833,6 +5871,7 @@ export default function App() {
                     trades={dbTrades && dbTrades.length > 0 ? dbTrades : trades}
                     isDemo={isDemo}
                     settings={settings}
+                    onOpenValidatorPage={() => setActivePage('validator')}
                   />
 
                   {/* Disconnected warning */}
@@ -6374,6 +6413,56 @@ export default function App() {
                   }}
                 />
               )}
+            </main>
+          );
+        }
+
+        if (activePage === 'validator') {
+          return (
+            <main style={{ padding: '1.5rem', flex: 1, overflowY: 'auto', maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
+              <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.3) 0%, rgba(56,189,248,0.2) 100%)', border: '1px solid #10b981', padding: '10px', borderRadius: '12px' }}>
+                    <ShieldCheck size={26} style={{ color: '#10b981' }} />
+                  </div>
+                  <div>
+                    <h1 style={{ margin: 0, fontSize: '1.45rem', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.5px' }}>
+                      Laboratório & Validador de Estratégias
+                    </h1>
+                    <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                      Área exclusiva para acompanhamento em tempo real da performance, auditoria de banca e blindagem do novo método.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    onClick={() => setActivePage('dashboard')}
+                    style={{
+                      background: 'rgba(139, 92, 246, 0.15)',
+                      border: '1px solid rgba(139, 92, 246, 0.4)',
+                      color: '#c084fc',
+                      padding: '8px 14px',
+                      borderRadius: '10px',
+                      fontSize: '0.78rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <Layers size={14} /> Voltar ao Dashboard
+                  </button>
+                </div>
+              </div>
+
+              <MethodTracker
+                trades={dbTrades && dbTrades.length > 0 ? dbTrades : trades}
+                isDemo={isDemo}
+                settings={settings}
+                isStandalonePage={true}
+              />
             </main>
           );
         }
