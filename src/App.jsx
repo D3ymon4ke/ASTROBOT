@@ -5868,14 +5868,6 @@ export default function App() {
                 {/* ── CHART AREA ───────────────────────────────── */}
                 <div className="command-chart-area">
 
-                  {/* ── VALIDADOR DO NOVO MÉTODO (MARCADOR LIVE TELEMETRIA) ── */}
-                  <MethodTracker
-                    trades={dbTrades && dbTrades.length > 0 ? dbTrades : trades}
-                    isDemo={isDemo}
-                    settings={settings}
-                    onOpenValidatorPage={() => setActivePage('validator')}
-                  />
-
                   {/* Disconnected warning */}
                   {(!connected || !settings.token) && (
                     <div className="cmd-alert-banner danger" style={{ marginBottom: '10px' }}>

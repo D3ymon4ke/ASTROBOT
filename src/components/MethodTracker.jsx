@@ -67,9 +67,14 @@ export default function MethodTracker({
   const filteredTrades = useMemo(() => {
     if (!trades || !Array.isArray(trades)) return [];
     return trades.filter(t => {
-      const tradeTime = Number(t.timestamp) || (Number(t.epoch) * 1000) || 0;
-      if (tradeTime > 0) return tradeTime >= trackerEpoch;
-      return true;
+      let tradeTime = 0;
+      if (t.timestamp) {
+        tradeTime = typeof t.timestamp === 'number' ? t.timestamp : (Date.parse(t.timestamp) || Number(t.timestamp) || 0);
+      } else if (t.epoch) {
+        tradeTime = Number(t.epoch) * 1000;
+      }
+      // Strictly require tradeTime to be greater than or equal to the tracker epoch
+      return tradeTime > 0 && tradeTime >= trackerEpoch;
     });
   }, [trades, trackerEpoch]);
 
