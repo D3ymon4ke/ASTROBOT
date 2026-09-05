@@ -28,6 +28,7 @@ import UserProfile from './components/UserProfile';
 import TrainingModule from './components/TrainingModule';
 import StrategyBuilder from './components/StrategyBuilder';
 import AdminGamificationEditor from './components/AdminGamificationEditor';
+import MethodTracker from './components/MethodTracker';
 import Landing3DCard from './components/Landing3DCard';
 import HeroSection from './components/landing/HeroSection';
 import AIWorkflowSection from './components/landing/AIWorkflowSection';
@@ -573,23 +574,40 @@ export default function App() {
     symbol: 'R_100',
     granularity: '60', // 1 min (60)
     stakeType: 'fixed', // 'fixed' | 'percentage'
-    stakeValue: 1.0,
-    stopLoss: 50.0,
-    takeProfit: 50.0,
+    stakeValue: 0.35,
+    stopLoss: 25.0,
+    takeProfit: 10.0,
     moneyManagement: 'martingale',
     martingaleEnabled: true,
-    martingaleMode: 'next_candle', // 'next_candle' | 'next_signal'
-    martingaleMultiplier: 2.2,
+    martingaleMode: 'next_signal', // 'next_candle' | 'next_signal'
+    martingaleMultiplier: 2.1,
     martingaleMaxLevels: 2,
-    selectedStrategy: 'mhi_minority',
+    selectedStrategy: 'mhi_auto',
     autoPilot: true,
     autoPilotInterval: '5',
-    disableSlowStrategies: false,
+    disableSlowStrategies: true,
+    disableMaCrossover: false,
     enableMasterCandleSecondary: false,
     enableStreakShield: true,
-    maxStreakCandles: 4,
+    maxStreakCandles: 3,
     streakShieldAction: 'block',
     soundEnabled: true,
+    blacklistedAssets: [
+      {
+        symbol: 'R_50',
+        addedAt: Date.now(),
+        expiresAt: Date.now() + 30 * 86400000,
+        days: 30,
+        reason: 'Baixa Assertividade / Alta Consolidação'
+      },
+      {
+        symbol: '1HZ75V',
+        addedAt: Date.now(),
+        expiresAt: Date.now() + 30 * 86400000,
+        days: 30,
+        reason: 'Drawdown Alto no Histórico'
+      }
+    ],
     // Recall Engine / Shadow Account
     recallEnabled: false,
     recallAccount: 'demo',
@@ -5809,6 +5827,13 @@ export default function App() {
 
                 {/* ── CHART AREA ───────────────────────────────── */}
                 <div className="command-chart-area">
+
+                  {/* ── VALIDADOR DO NOVO MÉTODO (MARCADOR LIVE TELEMETRIA) ── */}
+                  <MethodTracker
+                    trades={dbTrades && dbTrades.length > 0 ? dbTrades : trades}
+                    isDemo={isDemo}
+                    settings={settings}
+                  />
 
                   {/* Disconnected warning */}
                   {(!connected || !settings.token) && (
