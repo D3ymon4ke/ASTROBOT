@@ -37,27 +37,27 @@ const DEFAULT_SETTINGS = {
   token: '',
   appId: '33KjYszMx4FNIHT6qAJ7V',
   isDemo: true,
-  selectedStrategy: 'mhi_auto',
-  stakeValue: '0.35',
+  selectedStrategy: 'ma_crossover',
+  stakeValue: '1.00',
   stakeType: 'fixed',
-  stopLoss: '25.00',
-  takeProfit: '10.00',
+  stopLoss: '50.00',
+  takeProfit: '20.00',
   granularity: '60',
   symbol: 'R_100',
-  moneyManagement: 'martingale',
-  martingaleMultiplier: '2.1',
+  moneyManagement: 'fixed',
+  martingaleMultiplier: '2.0',
   martingaleMaxLevels: '2',
-  martingaleMode: 'next_signal',
+  martingaleMode: 'next_candle',
   autoPilot: false,
   autoPilotInterval: '5',
-  disableSlowStrategies: true,
+  disableSlowStrategies: false,
   disableMaCrossover: false,
   enableMasterCandleSecondary: false,
   soundEnabled: true,
   enableStreakShield: true,
-  maxStreakCandles: 3,
+  maxStreakCandles: 4,
   streakShieldAction: 'block',
-  enableFakegale: true,
+  enableFakegale: false,
   // Auto-Blacklist Consolidação
   autoBlacklistConsolidation: true,
   consolidationDojiLimit: 4,
@@ -75,22 +75,7 @@ const DEFAULT_SETTINGS = {
   telegramNotifWin: true,
   telegramNotifLoss: true,
   telegramNotifDailySummary: true,
-  blacklistedAssets: [
-    {
-      symbol: 'R_50',
-      addedAt: Date.now(),
-      expiresAt: Date.now() + 30 * 86400000,
-      days: 30,
-      reason: 'Baixa Assertividade / Alta Consolidação'
-    },
-    {
-      symbol: '1HZ75V',
-      addedAt: Date.now(),
-      expiresAt: Date.now() + 30 * 86400000,
-      days: 30,
-      reason: 'Drawdown Alto no Histórico'
-    }
-  ],
+  blacklistedAssets: [],
   // Shadow Account & Recall Engine
   recallEnabled: false,
   recallAccount: 'demo', // 'demo' | 'real2'
@@ -1072,7 +1057,7 @@ export class UserSession {
     const strategyId = cycle.strategy || cycle.selectedStrategy || this.settings.selectedStrategy;
     const isFakegale = !!(cycle.enableFakegale || cycle.fakegale || cycle.moneyManagement === 'fakegale' || strategyId === 'fakegale');
     const maxGale = isFakegale 
-      ? (cycle.martingaleLevels ?? cycle.maxGale ?? 3) 
+      ? (cycle.martingaleLevels ?? cycle.maxGale ?? 6) 
       : (cycle.maxGale ?? cycle.martingaleLevels ?? parseInt(this.settings.martingaleMaxLevels));
     // If no management field set explicitly, infer from martingaleLevels:
     // > 0 means martingale should be active
@@ -2238,7 +2223,7 @@ export class UserSession {
         } else {
           const allowGale = mode === 'sorosgale' && (this.settings.sorosgaleAllowGale !== false);
           const maxGalesAllowed = allowGale 
-            ? Math.min(10, Math.max(1, parseInt(this.settings.sorosgaleMaxGale || this.settings.martingaleMaxLevels || '2')))
+            ? Math.min(6, Math.max(1, parseInt(this.settings.sorosgaleMaxGale || this.settings.martingaleMaxLevels || '2')))
             : 0;
 
           if (allowGale && this.galeLevel < maxGalesAllowed) {

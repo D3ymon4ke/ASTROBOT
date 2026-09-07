@@ -47,10 +47,14 @@ export default function MethodTracker({
 
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Simulated base bankroll (default $100)
+  // Simulated base bankroll (defaults to current balance or 19 in real, 100 in demo)
   const [simBaseBankroll, setSimBaseBankroll] = useState(() => {
     const saved = localStorage.getItem('astrobot_sim_bankroll');
-    return saved ? Number(saved) : 100.0;
+    if (saved) return Number(saved);
+    if (!isDemo && settings?.balance && Number(settings.balance) > 0) {
+      return Number(Number(settings.balance).toFixed(2));
+    }
+    return !isDemo ? 19.0 : 100.0;
   });
 
   // Target profit in USD (default 10% of base bankroll)
@@ -58,7 +62,7 @@ export default function MethodTracker({
 
   // Custom bankroll input handler
   const handleBankrollChange = (newVal) => {
-    const val = Number(newVal) || 100;
+    const val = Number(newVal) || 19;
     setSimBaseBankroll(val);
     localStorage.setItem('astrobot_sim_bankroll', val.toString());
   };
@@ -419,17 +423,17 @@ export default function MethodTracker({
                 </div>
               </div>
 
-              {/* Seletor Rápido de Banca ($50 / $100 / $200 / $500) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {/* Seletor Rápido de Banca ($19 / $50 / $100 / $200 / $500) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 'bold' }}>Alterar Banca:</span>
-                {[50, 100, 200, 500].map(amt => (
+                {[19, 50, 100, 200, 500].map(amt => (
                   <button
                     key={amt}
                     onClick={() => handleBankrollChange(amt)}
                     style={{
-                      background: simBaseBankroll === amt ? '#10b981' : 'rgba(255, 255, 255, 0.05)',
-                      border: `1px solid ${simBaseBankroll === amt ? '#10b981' : 'rgba(255, 255, 255, 0.1)'}`,
-                      color: simBaseBankroll === amt ? '#022c22' : '#cbd5e1',
+                      background: Math.floor(simBaseBankroll) === amt ? '#10b981' : 'rgba(255, 255, 255, 0.05)',
+                      border: `1px solid ${Math.floor(simBaseBankroll) === amt ? '#10b981' : 'rgba(255, 255, 255, 0.1)'}`,
+                      color: Math.floor(simBaseBankroll) === amt ? '#022c22' : '#cbd5e1',
                       padding: '3px 8px',
                       borderRadius: '6px',
                       fontSize: '0.68rem',
@@ -441,6 +445,25 @@ export default function MethodTracker({
                     ${amt}
                   </button>
                 ))}
+                {!isDemo && settings?.balance && (
+                  <button
+                    onClick={() => handleBankrollChange(Number(Number(settings.balance).toFixed(2)))}
+                    style={{
+                      background: simBaseBankroll === Number(Number(settings.balance).toFixed(2)) ? 'linear-gradient(135deg, #10b981 0%, #38bdf8 100%)' : 'rgba(56, 189, 248, 0.15)',
+                      border: `1px solid ${simBaseBankroll === Number(Number(settings.balance).toFixed(2)) ? '#38bdf8' : 'rgba(56, 189, 248, 0.3)'}`,
+                      color: simBaseBankroll === Number(Number(settings.balance).toFixed(2)) ? '#022c22' : '#38bdf8',
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      fontSize: '0.68rem',
+                      fontWeight: '900',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                    title="Usar Saldo Real Atual da Conta Deriv"
+                  >
+                    Saldo Real (${Number(settings.balance).toFixed(2)})
+                  </button>
+                )}
               </div>
             </div>
 
@@ -742,19 +765,22 @@ export default function MethodTracker({
             fontSize: '0.72rem'
           }}>
             <span style={{ color: '#a78bfa', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Sparkles size={13} /> Regras do Novo Método Ativas:
+              <Sparkles size={13} /> Regras do Método Ativas:
             </span>
             <span style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)', padding: '3px 9px', borderRadius: '6px' }}>
-              ✔ Max Gale: 2 (Next Signal)
+              ✔ Fakegale Sniper (Vela 1 Virtual / 0 Risco)
             </span>
             <span style={{ background: 'rgba(139,92,246,0.12)', color: '#c084fc', border: '1px solid rgba(139,92,246,0.3)', padding: '3px 9px', borderRadius: '6px' }}>
-              ✔ Estratégia: MHI Auto Dinâmica
-            </span>
-            <span style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)', padding: '3px 9px', borderRadius: '6px' }}>
-              🚫 Blacklist: R_50 & 1HZ75V Bloqueados
+              ✔ Stake Base: $0.35 (Mínimo Deriv)
             </span>
             <span style={{ background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)', padding: '3px 9px', borderRadius: '6px' }}>
-              🛡️ Streak Shield: Max 3 Velas
+              ✔ Max Gale: 3 (Protegido $5.25)
+            </span>
+            <span style={{ background: 'rgba(245,158,11,0.12)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)', padding: '3px 9px', borderRadius: '6px' }}>
+              🎯 Ativo: Volatility 100 Index (R_100)
+            </span>
+            <span style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)', padding: '3px 9px', borderRadius: '6px' }}>
+              🛡️ Streak Shield: Max 4 Velas
             </span>
           </div>
 

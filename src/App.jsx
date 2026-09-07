@@ -4848,7 +4848,7 @@ export default function App() {
               }}
             >
               <ShieldCheck size={13} style={{ color: '#10b981' }} />
-              <span>Validador $100</span>
+              <span>Laboratório & Validador</span>
               <span style={{
                 background: 'linear-gradient(135deg, #10b981 0%, #38bdf8 100%)',
                 color: '#022c22',

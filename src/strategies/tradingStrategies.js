@@ -147,8 +147,7 @@ export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority', va
     const minute = date.getMinutes();
     const cycleStartMinute = minute - (minute % 5);
     
-    const pad = n => String(n).padStart(2, '0');
-    const cycleId = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(cycleStartMinute)}`;
+    const cycleId = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${cycleStartMinute}`;
     
     if (!cycles[cycleId]) {
       cycles[cycleId] = [];
@@ -256,8 +255,7 @@ export function runFakegaleBacktest(candles, maxMartingale = 2) {
     const date = new Date(c.epoch * 1000);
     const minute = date.getMinutes();
     const cycleStartMinute = minute - (minute % 5);
-    const pad = n => String(n).padStart(2, '0');
-    const cycleId = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(cycleStartMinute)}`;
+    const cycleId = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${cycleStartMinute}`;
     if (!cycles[cycleId]) cycles[cycleId] = [];
     cycles[cycleId].push({ candle: c, index: i, minutePos: minute % 5 });
   }
@@ -355,8 +353,7 @@ export function runTwinTowersBacktest(candles, maxMartingale = 0) {
     const date = new Date(c.epoch * 1000);
     const minute = date.getMinutes();
     const cycleStartMinute = minute - (minute % 5);
-    const pad = n => String(n).padStart(2, '0');
-    const cycleId = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(cycleStartMinute)}`;
+    const cycleId = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${cycleStartMinute}`;
     
     if (!cycles[cycleId]) cycles[cycleId] = [];
     cycles[cycleId].push({ candle: c, index: i, minutePos: minute % 5 });
@@ -479,8 +476,7 @@ export function runPadrao23Backtest(candles, maxMartingale = 0) {
     const date = new Date(c.epoch * 1000);
     const minute = date.getMinutes();
     const cycleStartMinute = minute - (minute % 5);
-    const pad = n => String(n).padStart(2, '0');
-    const cycleId = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(cycleStartMinute)}`;
+    const cycleId = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${cycleStartMinute}`;
     
     if (!cycles[cycleId]) cycles[cycleId] = [];
     cycles[cycleId].push({ candle: c, index: i, minutePos: minute % 5 });
@@ -539,8 +535,7 @@ export function runPadrao3x1Backtest(candles, maxMartingale = 0) {
     const date = new Date(c.epoch * 1000);
     const minute = date.getMinutes();
     const cycleStartMinute = minute - (minute % 5);
-    const pad = n => String(n).padStart(2, '0');
-    const cycleId = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(cycleStartMinute)}`;
+    const cycleId = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${cycleStartMinute}`;
     
     if (!cycles[cycleId]) cycles[cycleId] = [];
     cycles[cycleId].push({ candle: c, index: i, minutePos: minute % 5 });
@@ -613,8 +608,7 @@ export function runPadraoImparBacktest(candles, maxMartingale = 0) {
     const date = new Date(c.epoch * 1000);
     const minute = date.getMinutes();
     const cycleStartMinute = minute - (minute % 5);
-    const pad = n => String(n).padStart(2, '0');
-    const cycleId = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(cycleStartMinute)}`;
+    const cycleId = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${cycleStartMinute}`;
     
     if (!cycles[cycleId]) cycles[cycleId] = [];
     cycles[cycleId].push({ candle: c, index: i, minutePos: minute % 5 });
@@ -675,8 +669,7 @@ export function runR7Backtest(candles, maxMartingale = 0) {
     const date = new Date(c.epoch * 1000);
     const minute = date.getMinutes();
     const cycleStartMinute = minute - (minute % 10);
-    const pad = n => String(n).padStart(2, '0');
-    const cycleId = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(cycleStartMinute)}`;
+    const cycleId = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${cycleStartMinute}`;
     
     if (!cycles[cycleId]) cycles[cycleId] = [];
     cycles[cycleId].push({ candle: c, index: i, minutePos: minute % 10 });
@@ -1037,8 +1030,7 @@ export function runR10Backtest(candles, maxMartingale = 0) {
     const date = new Date(c.epoch * 1000);
     const minute = date.getMinutes();
     const cycleStartMinute = minute - (minute % 10);
-    const pad = n => String(n).padStart(2, '0');
-    const cycleId = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(cycleStartMinute)}`;
+    const cycleId = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${cycleStartMinute}`;
     
     if (!cycles[cycleId]) cycles[cycleId] = [];
     cycles[cycleId].push({ candle: c, index: i, minutePos: minute % 10 });
@@ -1267,8 +1259,7 @@ export function runPadrao21Backtest(candles, maxMartingale = 0) {
     const date = new Date(c.epoch * 1000);
     const minute = date.getMinutes();
     const cycleStartMinute = minute - (minute % 15);
-    const pad = n => String(n).padStart(2, '0');
-    const cycleId = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(cycleStartMinute)}`;
+    const cycleId = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${cycleStartMinute}`;
     if (!cycles[cycleId]) cycles[cycleId] = [];
     cycles[cycleId].push({ candle: c, index: i, minutePos: minute % 15 });
   }
@@ -1381,29 +1372,30 @@ export function getBestMHIStrategy(candles, maxMartingale = 0) {
 export function runMHIAutoBacktest(candles, maxMartingale = 0) {
   if (!candles || candles.length < 10) return { winRate: 0, totalTrades: 0, wins: 0, losses: 0, signals: [] };
 
-  const variants = [
-    { id: 'mhi_minority', name: 'MHI 1 (Minoria)', res: runMHIBacktest(candles, maxMartingale, 'minority', 1) },
-    { id: 'mhi_majority', name: 'MHI 1 (Maioria)', res: runMHIBacktest(candles, maxMartingale, 'majority', 1) },
-    { id: 'mhi_2_minority', name: 'MHI 2 (Minoria)', res: runMHIBacktest(candles, maxMartingale, 'minority', 2) },
-    { id: 'mhi_2_majority', name: 'MHI 2 (Maioria)', res: runMHIBacktest(candles, maxMartingale, 'majority', 2) },
-    { id: 'mhi_3_minority', name: 'MHI 3 (Minoria)', res: runMHIBacktest(candles, maxMartingale, 'minority', 3) },
-    { id: 'mhi_3_majority', name: 'MHI 3 (Maioria)', res: runMHIBacktest(candles, maxMartingale, 'majority', 3) }
-  ];
+  const res1Min = runMHIBacktest(candles, maxMartingale, 'minority', 1);
+  const res1Maj = runMHIBacktest(candles, maxMartingale, 'majority', 1);
+  const res2Min = runMHIBacktest(candles, maxMartingale, 'minority', 2);
+  const res2Maj = runMHIBacktest(candles, maxMartingale, 'majority', 2);
+  const res3Min = runMHIBacktest(candles, maxMartingale, 'minority', 3);
+  const res3Maj = runMHIBacktest(candles, maxMartingale, 'majority', 3);
 
-  const sorted = [...variants].sort((a, b) => {
-    const scoreA = a.res.totalTrades >= 3 ? a.res.winRate : a.res.winRate * (a.res.totalTrades / 3);
-    const scoreB = b.res.totalTrades >= 3 ? b.res.winRate : b.res.winRate * (b.res.totalTrades / 3);
-    return scoreB - scoreA;
+  const best1 = res1Maj.winRate > res1Min.winRate ? res1Maj : res1Min;
+  const best2 = res2Maj.winRate > res2Min.winRate ? res2Maj : res2Min;
+  const best3 = res3Maj.winRate > res3Min.winRate ? res3Maj : res3Min;
+
+  const allSignals = [...best1.signals, ...best2.signals, ...best3.signals]
+    .sort((a, b) => a.epoch - b.epoch);
+
+  let wins = 0;
+  let losses = 0;
+  allSignals.forEach(s => {
+    if (s.result === 'WIN') wins++;
+    else if (s.result === 'LOSS') losses++;
   });
 
-  const best = sorted[0] ? sorted[0].res : variants[0].res;
-  return {
-    winRate: best.winRate,
-    totalTrades: best.totalTrades,
-    wins: best.wins,
-    losses: best.losses,
-    signals: best.signals || []
-  };
+  const total = wins + losses;
+  const winRate = total > 0 ? (wins / total) * 100 : 0;
+  return { winRate, totalTrades: total, wins, losses, signals: allSignals };
 }
 
 /**
@@ -1827,18 +1819,65 @@ function computeRawLiveSignal(strategyId, candles, maxMartingale = 0) {
   }
 
   if (strategyId === 'mhi_auto') {
-    const bestMhi = getBestMHIStrategy(candles, maxMartingale);
-    if (!bestMhi || !bestMhi.id) return null;
+    const mPos = min % 5;
     
-    const sig = computeRawLiveSignal(bestMhi.id, candles, maxMartingale);
-    if (sig) {
-      return {
-        ...sig,
-        detectedMhiPattern: bestMhi.id,
-        detectedMhiName: bestMhi.name,
-        detectedMhiWinRate: bestMhi.winRate
-      };
+    // MHI 1: Evaluated at close of candle 5 (mPos === 4) for entry on Candle 1
+    if (mPos === 4) {
+      const resMin = runMHIBacktest(candles, maxMartingale, 'minority', 1);
+      const resMaj = runMHIBacktest(candles, maxMartingale, 'majority', 1);
+      const chosenId = resMaj.winRate > resMin.winRate ? 'mhi_majority' : 'mhi_minority';
+      const chosenName = chosenId === 'mhi_majority' ? 'MHI 1 (Maioria)' : 'MHI 1 (Minoria)';
+      const chosenWinRate = chosenId === 'mhi_majority' ? resMaj.winRate : resMin.winRate;
+      
+      const sig = computeRawLiveSignal(chosenId, candles, maxMartingale);
+      if (sig) {
+        return {
+          ...sig,
+          detectedMhiPattern: chosenId,
+          detectedMhiName: chosenName,
+          detectedMhiWinRate: chosenWinRate
+        };
+      }
     }
+
+    // MHI 2: Evaluated at close of candle 1 (mPos === 0) for entry on Candle 2
+    if (mPos === 0) {
+      const resMin = runMHIBacktest(candles, maxMartingale, 'minority', 2);
+      const resMaj = runMHIBacktest(candles, maxMartingale, 'majority', 2);
+      const chosenId = resMaj.winRate > resMin.winRate ? 'mhi_2_majority' : 'mhi_2_minority';
+      const chosenName = chosenId === 'mhi_2_majority' ? 'MHI 2 (Maioria)' : 'MHI 2 (Minoria)';
+      const chosenWinRate = chosenId === 'mhi_2_majority' ? resMaj.winRate : resMin.winRate;
+
+      const sig = computeRawLiveSignal(chosenId, candles, maxMartingale);
+      if (sig) {
+        return {
+          ...sig,
+          detectedMhiPattern: chosenId,
+          detectedMhiName: chosenName,
+          detectedMhiWinRate: chosenWinRate
+        };
+      }
+    }
+
+    // MHI 3: Evaluated at close of candle 2 (mPos === 1) for entry on Candle 3
+    if (mPos === 1) {
+      const resMin = runMHIBacktest(candles, maxMartingale, 'minority', 3);
+      const resMaj = runMHIBacktest(candles, maxMartingale, 'majority', 3);
+      const chosenId = resMaj.winRate > resMin.winRate ? 'mhi_3_majority' : 'mhi_3_minority';
+      const chosenName = chosenId === 'mhi_3_majority' ? 'MHI 3 (Maioria)' : 'MHI 3 (Minoria)';
+      const chosenWinRate = chosenId === 'mhi_3_majority' ? resMaj.winRate : resMin.winRate;
+
+      const sig = computeRawLiveSignal(chosenId, candles, maxMartingale);
+      if (sig) {
+        return {
+          ...sig,
+          detectedMhiPattern: chosenId,
+          detectedMhiName: chosenName,
+          detectedMhiWinRate: chosenWinRate
+        };
+      }
+    }
+
     return null;
   }
 
