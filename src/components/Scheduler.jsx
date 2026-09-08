@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Clock, Plus, Trash2, Play, AlertCircle, CheckCircle, RefreshCw, Calendar, Power, 
   X, ChevronRight, ChevronLeft, User, Cpu, ShieldCheck, Layers, TrendingUp, 
   TrendingDown, Info, Sliders, Eye, Settings, Activity, FileText, Check, Search, Award 
 } from 'lucide-react';
 import Switch from './Switch';
+import './Scheduler.css';
 import DecisionTreeMapModal from './DecisionTreeMapModal';
 
 export default function Scheduler({
+  connected = false,
   schedulerState,
   onToggleScheduler,
   cycles,
@@ -184,7 +186,7 @@ export default function Scheduler({
       }
     });
 
-    const winRate = completed.length > 0 ? ((wins / completed.length) * 100).toFixed(1) : (total > 0 ? '100.0' : '0.0');
+    const winRate = completed.length > 0 ? ((wins / completed.length) * 100).toFixed(1) : '—';
     
     return {
       total,
@@ -200,6 +202,31 @@ export default function Scheduler({
   // Scheduling Generator Modal States
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
   const [isTreeMapModalOpen, setIsTreeMapModalOpen] = useState(false);
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    if (!isWizardOpen && !isGeneratorOpen) return;
+    const previousFocus = document.activeElement;
+    const dialog = dialogRef.current;
+    const focusable = () => [...(dialog?.querySelectorAll('button, input, select, textarea, [tabindex="0"]') || [])]
+      .filter(element => !element.disabled && element.getClientRects().length > 0);
+    focusable()[0]?.focus();
+    const handleKey = (event) => {
+      if (event.key === 'Escape') {
+        setIsWizardOpen(false);
+        setIsGeneratorOpen(false);
+      }
+      if (event.key === 'Tab') {
+        const elements = focusable();
+        const first = elements[0];
+        const last = elements.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => { document.removeEventListener('keydown', handleKey); previousFocus?.focus(); };
+  }, [isWizardOpen, isGeneratorOpen]);
   const [generatorData, setGeneratorData] = useState({
     stakeValue: 1.0,
     takeProfit: 5.0,
@@ -1024,7 +1051,7 @@ export default function Scheduler({
   };
 
   return (
-    <div style={{
+    <div className="mission-workspace" style={{
       display: 'flex',
       flexDirection: 'column',
       gap: '1.25rem',
@@ -1032,226 +1059,30 @@ export default function Scheduler({
       color: 'var(--text-primary)'
     }}>
 
-      {/* TOPO: CENTRAL DE AUTOMAÇÃO (METRIC HUD & CONTROLS) */}
-      <div className="glass-panel" style={{
-        padding: '1.15rem 1.5rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        background: 'linear-gradient(135deg, rgba(15, 11, 28, 0.88) 0%, rgba(20, 15, 38, 0.75) 100%)',
-        border: '1px solid rgba(139, 92, 246, 0.25)',
-        borderRadius: '18px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-        gap: '1.25rem',
-        flexWrap: 'wrap'
-      }}>
-        {/* Left: Brand / Title / Engine Status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(59, 130, 246, 0.2) 100%)',
-            border: '1px solid rgba(139, 92, 246, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 15px rgba(139, 92, 246, 0.25)'
-          }}>
-            <Cpu size={22} style={{ color: '#c084fc' }} className="pulse-primary" />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '900', margin: 0, letterSpacing: '-0.5px', color: 'white' }}>
-                Central de Automação de Missões
-              </h2>
-              <span style={{
-                fontSize: '0.6rem',
-                fontWeight: '800',
-                padding: '2px 7px',
-                borderRadius: '5px',
-                background: schedulerState ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                color: schedulerState ? '#34d399' : '#f87171',
-                border: `1px solid ${schedulerState ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: schedulerState ? '#10b981' : '#ef4444' }} className={schedulerState ? 'pulse-dot-green' : ''} />
-                {schedulerState ? 'ENGINE ONLINE' : 'ENGINE PAUSADO'}
-              </span>
-            </div>
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span>🕒 Local: <strong style={{ fontFamily: 'var(--font-mono)', color: 'white' }}>{currentTime}</strong></span>
-              <span>•</span>
-              <span>🌐 Servidor: <strong style={{ fontFamily: 'var(--font-mono)', color: '#a78bfa' }}>GMT-3</strong></span>
-            </div>
+      <section className="mission-header">
+        <div className="mission-heading-row">
+          <div><span className="workspace-eyebrow">WORKSPACE / AUTOMAÇÃO</span><h1>Central de Automação de Missões<span>.</span></h1><p>Planeje sua rotina. Acompanhe cada etapa. Mantenha o controle.</p></div>
+          <span className={'workspace-status ' + (schedulerState ? 'is-online' : '')}><i />{schedulerState ? 'Automação ativa' : 'Automação pausada'}</span>
+        </div>
+        <div className="mission-summary">
+          <div className="mission-kpi"><span><Layers size={16} /> Missões habilitadas</span><strong>{timelineMetrics.active}<small> / {timelineMetrics.total}</small></strong><p>{timelineMetrics.completed} concluídas no ciclo atual</p></div>
+          <div className="mission-kpi"><span><TrendingUp size={16} /> Taxa de acerto</span><strong>{timelineMetrics.winRate}{timelineMetrics.completed > 0 && <small>%</small>}</strong><p>{timelineMetrics.completed > 0 ? timelineMetrics.wins + ' com resultado positivo' : 'Aguardando missões concluídas'}</p></div>
+          <div className="mission-kpi"><span><Activity size={16} /> Resultado das missões</span><strong className={Number(timelineMetrics.totalProfit) < 0 ? 'mission-negative' : 'mission-positive'}>{Number(timelineMetrics.totalProfit) >= 0 ? '+' : ''}{'$'}{timelineMetrics.totalProfit}</strong><p>Consolidado do ciclo atual</p></div>
+          <div className="mission-kpi mission-next"><span><Clock size={16} /> Próxima missão</span><strong>{nextCycle ? nextCycle.startTime : '—'}<small>{nextCycle ? nextCycle.timezone : ''}</small></strong><p>{nextCycle ? nextCycle.name + ' · ' + (schedulerState ? nextCycleCountdown : 'automação pausada') : 'Habilite uma missão para começar'}</p></div>
+        </div>
+        <div className="mission-toolbar">
+          <div className="mission-engine"><Switch aria-label="Motor de automação" showStatus={false} scale={0.8} checked={schedulerState} onChange={(e) => onToggleScheduler(e.target.checked)} /><span>Motor de automação<small>{schedulerState ? 'Agenda habilitada para execução' : 'Execução automática pausada'}</small></span></div>
+          <div className="mission-actions">
+            <button className="workspace-button" onClick={() => setIsTreeMapModalOpen(true)}><Layers size={16} /> Árvore de decisão</button>
+            <button className="workspace-button" onClick={() => setIsGeneratorOpen(true)}><Sliders size={16} /> Gerador de agenda</button>
+            <button className="workspace-button workspace-button-primary" onClick={handleOpenNewWizard}><Plus size={17} /> Nova missão</button>
           </div>
         </div>
-
-        {/* Center: Live Consolidated Automation KPIs */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* Active Missions Card */}
-          <div style={{
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.06)',
-            borderRadius: '10px',
-            padding: '5px 10px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center'
-          }}>
-            <span style={{ fontSize: '0.55rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold' }}>Missões Ativas</span>
-            <strong style={{ fontSize: '0.85rem', color: '#c084fc', fontFamily: 'var(--font-mono)' }}>
-              {timelineMetrics.active} <span style={{ fontSize: '0.65rem', color: '#64748b' }}>/ {timelineMetrics.total}</span>
-            </strong>
-          </div>
-
-          {/* Win Rate KPI */}
-          <div style={{
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.06)',
-            borderRadius: '10px',
-            padding: '5px 10px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center'
-          }}>
-            <span style={{ fontSize: '0.55rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold' }}>Assertividade</span>
-            <strong style={{ fontSize: '0.85rem', color: parseFloat(timelineMetrics.winRate) >= 70 ? '#34d399' : '#fbbf24', fontFamily: 'var(--font-mono)' }}>
-              {timelineMetrics.winRate}%
-            </strong>
-          </div>
-
-          {/* Consolidated Profit */}
-          <div style={{
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.06)',
-            borderRadius: '10px',
-            padding: '5px 10px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center'
-          }}>
-            <span style={{ fontSize: '0.55rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 'bold' }}>Resultado Diário</span>
-            <strong style={{
-              fontSize: '0.85rem',
-              color: parseFloat(timelineMetrics.totalProfit) >= 0 ? '#34d399' : '#f87171',
-              fontFamily: 'var(--font-mono)'
-            }}>
-              {parseFloat(timelineMetrics.totalProfit) >= 0 ? '+' : ''}${timelineMetrics.totalProfit}
-            </strong>
-          </div>
-
-          {/* Next Cycle Widget */}
-          {nextCycle && (
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(59, 130, 246, 0.12) 100%)',
-              border: '1px solid rgba(139, 92, 246, 0.3)',
-              borderRadius: '10px',
-              padding: '5px 10px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start'
-            }}>
-              <span style={{ fontSize: '0.55rem', color: '#a78bfa', textTransform: 'uppercase', fontWeight: '800' }}>
-                Próximo Disparo ({nextCycle.startTime})
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '1px' }}>
-                <span style={{ fontSize: '0.75rem' }}>{nextCycle.icon}</span>
-                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#34d399', fontFamily: 'var(--font-mono)' }}>
-                  T-minus {nextCycleCountdown}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Master Controls & Generator */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Master Switch */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'rgba(0,0,0,0.25)',
-            padding: '5px 10px',
-            borderRadius: '10px',
-            border: '1px solid rgba(255,255,255,0.06)'
-          }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 'bold', color: schedulerState ? '#34d399' : '#94a3b8' }}>
-              {schedulerState ? 'Motor Ativo' : 'Motor Desativado'}
-            </span>
-            <Switch showStatus={false} scale={0.8} checked={schedulerState} onChange={(e) => onToggleScheduler(e.target.checked)} />
-          </div>
-
-          {/* Decision Tree Map Button */}
-          <button
-            type="button"
-            onClick={() => setIsTreeMapModalOpen(true)}
-            style={{
-              padding: '0.65rem 1.15rem',
-              borderRadius: '10px',
-              fontSize: '0.78rem',
-              fontWeight: '800',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.22) 0%, rgba(139, 92, 246, 0.22) 100%)',
-              border: '1px solid rgba(244, 114, 182, 0.45)',
-              color: '#fbcfe8',
-              boxShadow: '0 0 15px rgba(236, 72, 153, 0.2)',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <span>🌳</span> Árvore de Decisão
-          </button>
-
-          {/* Scheduling Generator Button */}
-          <button
-            onClick={() => setIsGeneratorOpen(true)}
-            className="action-button-glow"
-            style={{
-              padding: '0.65rem 1.15rem',
-              borderRadius: '10px',
-              fontSize: '0.78rem',
-              fontWeight: '800',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.22) 0%, rgba(59, 130, 246, 0.2) 100%)',
-              border: '1px solid rgba(139, 92, 246, 0.5)',
-              color: '#e9d5ff',
-              boxShadow: '0 0 15px rgba(139, 92, 246, 0.2)'
-            }}
-          >
-            <Sliders size={15} /> Gerador de Linha do Tempo
-          </button>
-
-          {/* Add New Mission Button */}
-          <button
-            onClick={handleOpenNewWizard}
-            className="primary"
-            style={{
-              padding: '0.65rem 1.15rem',
-              borderRadius: '10px',
-              fontSize: '0.78rem',
-              fontWeight: '800',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <Plus size={15} /> Nova Missão
-          </button>
-        </div>
-      </div>
+        <div className="mission-context"><span><Clock size={13} /> Horário local <b>{currentTime}</b></span><span>Agenda ordenada por horário · Consulte o fuso de cada missão</span></div>
+      </section>
 
       {/* BOTTOM LAYOUT GRID (3 COLUMNS: TIMELINE | COCKPIT | AUDIT TERMINAL) */}
-      <div style={{
+      <div className="mission-layout" style={{
         display: 'grid',
         gridTemplateColumns: '310px 1fr 310px',
         gap: '1.25rem',
@@ -1490,6 +1321,12 @@ export default function Scheduler({
                 return (
                   <div
                     key={c.id}
+                    className={`mission-card ${isSelected ? 'is-selected' : ''} ${isRunning ? 'is-running' : ''}`}
+                    tabIndex={0}
+                    role="button"
+                    aria-pressed={isSelected}
+                    aria-label={`Selecionar missão ${c.name}`}
+                    onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setSelectedCycleId(c.id); } }}
                     onClick={() => setSelectedCycleId(c.id)}
                     style={{
                       position: 'relative',
@@ -2279,7 +2116,7 @@ export default function Scheduler({
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Conexão Deriv:</span>
-                <strong style={{ color: '#34d399' }}>SYNCED 🟢</strong>
+                <strong style={{ color: connected ? '#73dbb5' : '#a3aec2' }}>{connected ? 'CONECTADA' : 'DESCONECTADA'}</strong>
               </div>
             </div>
           </div>
@@ -2517,7 +2354,7 @@ export default function Scheduler({
           zIndex: 2000,
           animation: 'fadeIn 0.2s ease-out'
         }}>
-          <div style={{
+          <div ref={dialogRef} className="mission-dialog mission-generator-dialog" role="dialog" aria-modal="true" aria-label="Gerador de agenda" style={{
             background: 'rgba(12, 10, 24, 0.97)',
             backdropFilter: 'blur(24px)',
             border: '1px solid rgba(139, 92, 246, 0.35)',
@@ -2542,6 +2379,7 @@ export default function Scheduler({
                 </span>
               </div>
               <button
+                aria-label="Fechar gerador de agenda"
                 onClick={() => setIsGeneratorOpen(false)}
                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', cursor: 'pointer', borderRadius: '10px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s ease' }}
               >
@@ -3271,7 +3109,7 @@ export default function Scheduler({
           zIndex: 2000,
           animation: 'fadeIn 0.2s ease-out'
         }}>
-          <div style={{
+          <div ref={dialogRef} className="mission-dialog" role="dialog" aria-modal="true" aria-label={wizardData.id ? 'Editar missão' : 'Nova missão'} style={{
             background: 'rgba(15, 11, 28, 0.95)',
             border: '1px solid rgba(139, 92, 246, 0.3)',
             boxShadow: '0 0 50px rgba(139, 92, 246, 0.2)',
@@ -3295,6 +3133,7 @@ export default function Scheduler({
                 </span>
               </div>
               <button
+                aria-label="Fechar editor de missão"
                 onClick={() => setIsWizardOpen(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
               >
@@ -3303,7 +3142,7 @@ export default function Scheduler({
             </div>
 
             {/* Stepper Progress bar */}
-            <div style={{ display: 'flex', padding: '0.75rem 1.5rem', background: 'rgba(0,0,0,0.15)', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+            <div className="mission-stepper" style={{ display: 'flex', padding: '0.75rem 1.5rem', background: 'rgba(0,0,0,0.15)', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
               {[
                 { step: 1, label: 'Identidade' },
                 { step: 2, label: 'Agenda' },
@@ -3852,6 +3691,7 @@ export default function Scheduler({
 
                 {wizardStep < 5 ? (
                   <button
+                    key="next-step"
                     type="button"
                     onClick={nextStep}
                     style={{
@@ -3872,6 +3712,7 @@ export default function Scheduler({
                   </button>
                 ) : (
                   <button
+                    key="save-mission"
                     type="submit"
                     className="primary"
                     style={{

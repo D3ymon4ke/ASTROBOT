@@ -11,18 +11,17 @@ import Overlay from './components/Overlay';
 import Scanner from './components/Scanner';
 import Scheduler from './components/Scheduler';
 import NewsEditor from './components/NewsEditor';
-import NewsFeed, { getUnreadCount } from './components/NewsFeed';
+
 import DownloadsEditor from './components/DownloadsEditor';
-import DownloadsFeed from './components/DownloadsFeed';
+
 import Reports from './components/Reports';
 import NeuralLoader from './components/NeuralLoader';
-import EvilEye from './components/EvilEye';
 import StrategiesCatalog from './components/StrategiesCatalog';
 import Planning from './components/Planning';
 import Strands from './components/Strands';
 import LightPillar from './components/LightPillar';
 import TelegramConfig from './components/TelegramConfig';
-import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, ChevronDown, TrendingUp, Zap, CheckCircle, Menu, X, Percent, TrendingDown, Target, Newspaper, Bell, User, Camera, Upload, Send, Download, Users, GraduationCap, BookOpen, StickyNote } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Cpu, Radio, LogOut, RefreshCw, KeyRound, Layers, Info, ExternalLink, Lock, Calendar, Brain, Shield, Activity, Sparkles, Clock, Coins, ChevronRight, ChevronDown, TrendingUp, Zap, CheckCircle, Menu, X, Percent, TrendingDown, Target, User, Camera, Upload, Send, Download, Users, BookOpen, StickyNote } from 'lucide-react';
 import CommunityFeed from './components/CommunityFeed';
 import UserProfile from './components/UserProfile';
 import TrainingModule from './components/TrainingModule';
@@ -345,7 +344,6 @@ export default function App() {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [showSessionResultsModal, setShowSessionResultsModal] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -823,13 +821,12 @@ export default function App() {
           '6': 'reports',
           '7': 'settings',
           '8': 'telegram',
-          '9': 'news'
+          '9': 'settings'
         };
         if (pageShortcuts[e.key]) {
           e.preventDefault();
           setActivePage(pageShortcuts[e.key]);
           setIsProfileDropdownOpen(false);
-          setIsNotificationsOpen(false);
         }
       }
     };
@@ -847,12 +844,12 @@ export default function App() {
 
   // News / Patch Notes state
   const [posts, setPosts] = useState([]);
-  const [postsLoading, setPostsLoading] = useState(false);
+  const [, setPostsLoading] = useState(false);
   const [postsFetched, setPostsFetched] = useState(false);
 
   // Downloads state
   const [downloads, setDownloads] = useState([]);
-  const [downloadsLoading, setDownloadsLoading] = useState(false);
+  const [, setDownloadsLoading] = useState(false);
   const [downloadsFetched, setDownloadsFetched] = useState(false);
 
   // Simulated Live Demo Dashboard states for Landing Page
@@ -4748,7 +4745,7 @@ export default function App() {
   const keyDays = keyExpiresAt ? Math.max(0, Math.ceil((keyExpiresAt - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', background: '#06080E', overflow: 'hidden' }}>
+    <div className="premium-app" style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', background: '#06080E', overflow: 'hidden' }}>
       {/* Header bar - Premium Status Bar */}
       <header style={{
         background: 'rgba(14, 11, 24, 0.8)',
@@ -4767,6 +4764,8 @@ export default function App() {
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.75rem' : '2rem' }}>
           {/* Mobile Drawer Toggle Button */}
           <button
+            className="workspace-menu-toggle"
+            aria-label="Abrir menu de navegação"
             onClick={() => setIsMobileDrawerOpen(!isMobileDrawerOpen)}
             style={{
               display: isMobile ? 'flex' : 'none',
@@ -4800,7 +4799,6 @@ export default function App() {
                 setIsAnalysisDropdownOpen(false);
                 setIsManagementDropdownOpen(false);
                 setIsProfileDropdownOpen(false);
-                setIsNotificationsOpen(false);
               }}
               style={{
                 background: activePage === 'dashboard' ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
@@ -4829,7 +4827,6 @@ export default function App() {
                 setIsAnalysisDropdownOpen(false);
                 setIsManagementDropdownOpen(false);
                 setIsProfileDropdownOpen(false);
-                setIsNotificationsOpen(false);
               }}
               style={{
                 background: activePage === 'validator' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
@@ -4867,7 +4864,6 @@ export default function App() {
                 setIsAnalysisDropdownOpen(false);
                 setIsManagementDropdownOpen(false);
                 setIsProfileDropdownOpen(false);
-                setIsNotificationsOpen(false);
               }}
               style={{
                 background: (activePage === 'automation' || activePage === 'scheduler') ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
@@ -4896,7 +4892,6 @@ export default function App() {
                 setIsAnalysisDropdownOpen(false);
                 setIsManagementDropdownOpen(false);
                 setIsProfileDropdownOpen(false);
-                setIsNotificationsOpen(false);
               }}
               style={{
                 background: activePage === 'strategies' ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
@@ -4925,7 +4920,6 @@ export default function App() {
                   setIsManagementDropdownOpen(!isManagementDropdownOpen);
                   setIsAnalysisDropdownOpen(false);
                   setIsProfileDropdownOpen(false);
-                  setIsNotificationsOpen(false);
                 }}
                 style={{
                   background: (activePage === 'planning' || activePage === 'notes' || activePage === 'reports' || activePage === 'telegram') ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
@@ -5063,107 +5057,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Atualizações */}
-            <button
-              onClick={() => {
-                setActivePage('news');
-                setIsAnalysisDropdownOpen(false);
-                setIsManagementDropdownOpen(false);
-                setIsProfileDropdownOpen(false);
-                setIsNotificationsOpen(false);
-              }}
-              style={{
-                background: activePage === 'news' ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
-                border: 'none',
-                color: activePage === 'news' ? 'var(--primary-light)' : 'var(--text-secondary)',
-                borderBottom: activePage === 'news' ? '2px solid var(--primary-light)' : '2px solid transparent',
-                padding: '0.5rem 0.6rem',
-                fontSize: '0.8rem',
-                fontWeight: activePage === 'news' ? '700' : '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                borderRadius: '6px 6px 0 0',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-              }}
-            >
-              <Newspaper size={13} />
-              <span>Atualizações</span>
-              {getUnreadCount(posts) > 0 && (
-                <span style={{
-                  background: 'var(--primary)',
-                  color: 'white',
-                  fontSize: '0.62rem',
-                  fontWeight: '800',
-                  borderRadius: '10px',
-                  padding: '1px 5px',
-                  marginLeft: '3px',
-                  display: 'inline-block'
-                }}>
-                  {getUnreadCount(posts)}
-                </span>
-              )}
-            </button>
-
-            {/* Downloads */}
-            <button
-              onClick={() => {
-                setActivePage('downloads');
-                setIsAnalysisDropdownOpen(false);
-                setIsManagementDropdownOpen(false);
-                setIsProfileDropdownOpen(false);
-                setIsNotificationsOpen(false);
-              }}
-              style={{
-                background: activePage === 'downloads' ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
-                border: 'none',
-                color: activePage === 'downloads' ? 'var(--primary-light)' : 'var(--text-secondary)',
-                borderBottom: activePage === 'downloads' ? '2px solid var(--primary-light)' : '2px solid transparent',
-                padding: '0.5rem 0.6rem',
-                fontSize: '0.8rem',
-                fontWeight: activePage === 'downloads' ? '700' : '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                borderRadius: '6px 6px 0 0',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-              }}
-            >
-              <Download size={13} />
-              <span>Downloads</span>
-            </button>
-
-            {/* Treinamento */}
-            <button
-              onClick={() => {
-                setActivePage('training');
-                setIsAnalysisDropdownOpen(false);
-                setIsManagementDropdownOpen(false);
-                setIsProfileDropdownOpen(false);
-                setIsNotificationsOpen(false);
-              }}
-              style={{
-                background: activePage === 'training' ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
-                border: 'none',
-                color: activePage === 'training' ? 'var(--primary-light)' : 'var(--text-secondary)',
-                borderBottom: activePage === 'training' ? '2px solid var(--primary-light)' : '2px solid transparent',
-                padding: '0.5rem 0.6rem',
-                fontSize: '0.8rem',
-                fontWeight: activePage === 'training' ? '700' : '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                borderRadius: '6px 6px 0 0',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-              }}
-            >
-              <GraduationCap size={13} style={{ color: '#10b981' }} />
-              <span>Treinamento & Provas</span>
-            </button>
-
             {/* Admin (if Admin) */}
             {isAdminLoggedIn && (
               <button
@@ -5172,7 +5065,6 @@ export default function App() {
                   setIsAnalysisDropdownOpen(false);
                   setIsManagementDropdownOpen(false);
                   setIsProfileDropdownOpen(false);
-                  setIsNotificationsOpen(false);
                 }}
                 style={{
                   background: activePage === 'admin' ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
@@ -5198,7 +5090,7 @@ export default function App() {
         </div>
 
         {/* Right: Balance, Account Type, Notifications, Profile Dropdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', position: 'relative' }}>
+        <div className="workspace-account-controls" style={{ display: 'flex', alignItems: 'center', gap: '1rem', position: 'relative' }}>
           
           {/* Balance Pill */}
           <button 
@@ -5250,7 +5142,7 @@ export default function App() {
           </button>
 
           {/* Ping & Latency */}
-          <div style={{
+          <div className="workspace-latency" style={{
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
@@ -5264,6 +5156,7 @@ export default function App() {
 
           {/* Cloud Sync Status Badge */}
           <button
+            className="workspace-cloud-sync"
             onClick={handleForceCloudSync}
             title="Sincronização com a nuvem ativa. Clique para forçar sincronização manual agora."
             style={{
@@ -5285,93 +5178,12 @@ export default function App() {
             <span>{cloudSyncStatus === 'syncing' ? 'Sincronizando...' : 'Nuvem OK'}</span>
           </button>
 
-          {/* Notifications Bell */}
-          <button
-            onClick={() => {
-              setIsNotificationsOpen(!isNotificationsOpen);
-              setIsProfileDropdownOpen(false);
-            }}
-            style={{
-              background: isNotificationsOpen ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(255,255,255,0.05)',
-              padding: '8px',
-              borderRadius: '50%',
-              color: isNotificationsOpen ? 'var(--primary-light)' : 'white',
-              cursor: 'pointer',
-              position: 'relative',
-              width: '32px',
-              height: '32px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <Bell size={14} />
-            {/* Unread news indicator */}
-            {getUnreadCount(posts) > 0 && (
-              <span style={{
-                position: 'absolute',
-                top: '2px',
-                right: '2px',
-                width: '8px',
-                height: '8px',
-                background: 'var(--accent)',
-                borderRadius: '50%',
-                boxShadow: '0 0 6px var(--accent)'
-              }} />
-            )}
-          </button>
-
-          {/* Notifications Dropdown */}
-          {isNotificationsOpen && (
-            <div className="glass-panel" style={{
-              position: 'absolute',
-              top: '40px',
-              right: '42px',
-              width: '300px',
-              maxHeight: '400px',
-              overflowY: 'auto',
-              zIndex: 1100,
-              padding: '1rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.75rem',
-              background: 'rgba(14, 11, 24, 0.95)',
-              border: '1px solid rgba(139, 92, 246, 0.25)',
-              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.6)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem' }}>
-                <strong style={{ fontSize: '0.75rem', color: 'white' }}>NOTIFICAÇÕES & NOVIDADES</strong>
-                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{getUnreadCount(posts)} não lidas</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {posts.length > 0 ? (
-                  posts.slice(0, 5).map((post, idx) => (
-                    <div key={idx} style={{ padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', borderLeft: '2px solid var(--primary-light)' }}>
-                      <strong style={{ fontSize: '0.7rem', color: 'white', display: 'block' }}>{post.title}</strong>
-                      <p style={{ fontSize: '0.62rem', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: '1.3' }}>{post.content}</p>
-                      <span style={{ fontSize: '0.5rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
-                        {(() => {
-                          const d = new Date(post.createdAt || post.timestamp);
-                          return isNaN(d.getTime()) ? 'Recente' : d.toLocaleDateString('pt-BR');
-                        })()}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem 0', fontSize: '0.7rem' }}>
-                    Nenhuma novidade encontrada no momento.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* Profile User Dropdown Toggle */}
           <button
+            className="workspace-profile-toggle"
+            aria-label="Abrir perfil"
             onClick={() => {
               setIsProfileDropdownOpen(!isProfileDropdownOpen);
-              setIsNotificationsOpen(false);
             }}
             style={{
               background: isProfileDropdownOpen ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255,255,255,0.02)',
@@ -5658,7 +5470,7 @@ export default function App() {
 
           // ── AI Copilot messages ────────────────────────────────────────
           const copilotMessages = (() => {
-            if (!isRunning) return "Aguardando início. Volatilidade estável detectada.";
+            if (!isRunning) return "Pronto para começar. Configure sua operação e acompanhe a análise aqui.";
             if (activeTradeCountdown && activeTradeCountdown.remaining > 0)
               return `Sinal ${activeTradeCountdown.contractType} em ${activeTradeCountdown.symbol}. Executando ordem...`;
             if (bestStrategy)
@@ -5683,6 +5495,13 @@ export default function App() {
 
           return (
             <div className="command-center-root">
+              <div className="workspace-heading">
+                <div><span className="workspace-eyebrow">WORKSPACE / VISÃO GERAL</span><h1>Seu centro de operações<span>.</span></h1><p>Mercado, estratégias e execução em uma única visão.</p></div>
+                <div className="workspace-heading-actions">
+                  <span className={'workspace-status ' + (connected ? 'is-online' : '')}><i />{connected ? 'Deriv conectada' : 'Deriv desconectada'}</span>
+                  <button className="workspace-button" onClick={() => setActivePage('automation')}><Calendar size={16} /> Central de missões <ChevronRight size={15} /></button>
+                </div>
+              </div>
               {/* ════════════════════════════════════════════════════
                   ① HERO BOT PANEL — "O Cérebro da IA"
               ════════════════════════════════════════════════════ */}
@@ -5710,7 +5529,7 @@ export default function App() {
                   </div>
 
                   <div className="hero-metric-block">
-                    <span className="hero-metric-label">Probabilidade</span>
+                    <span className="hero-metric-label">Taxa de acerto</span>
                     <span className="hero-metric-value mono green">
                       {bestStrategy ? `${bestStrategy.winRate.toFixed(1)}%` : '—'}
                     </span>
@@ -5746,73 +5565,6 @@ export default function App() {
                     </span>
                   </div>
                 </div>
-
-                {/* RIGHT: Neural pulse zone with WebGL EvilEye component */}
-                {(() => {
-                  const neuralStatus = (() => {
-                    if (activeTradeCountdown && activeTradeCountdown.remaining > 0) {
-                      const profit = activeTradeCountdown.profit || 0;
-                      const isWin = profit > 0 || (
-                        activeTradeCountdown.entrySpot && activeTradeCountdown.currentSpot ? (
-                          activeTradeCountdown.contractType === 'CALL'
-                            ? activeTradeCountdown.currentSpot >= activeTradeCountdown.entrySpot
-                            : activeTradeCountdown.currentSpot <= activeTradeCountdown.entrySpot
-                        ) : true
-                      );
-                      return isWin ? 'win' : 'loss';
-                    }
-                    if (recentTradeResult) {
-                      return recentTradeResult.toLowerCase();
-                    }
-                    if (isRunning) {
-                      return 'active';
-                    }
-                    return 'idle';
-                  })();
-
-                  const eyeColor = neuralStatus === 'win' 
-                    ? '#059669' 
-                    : neuralStatus === 'loss' 
-                    ? '#EF4444' 
-                    : isRunning 
-                    ? '#36F9C7' 
-                    : '#334155';
-
-                  const intensity = neuralStatus === 'win' ? 1.35 : neuralStatus === 'loss' ? 1.5 : isRunning ? 1.4 : 0.4;
-                  const flameSpeed = neuralStatus === 'win' || neuralStatus === 'loss' ? 1.4 : isRunning ? 1.0 : 0.15;
-                  const glowIntensity = neuralStatus === 'win' ? 0.38 : neuralStatus === 'loss' ? 0.45 : isRunning ? 0.4 : 0.15;
-                  const eyelidOpen = isRunning || neuralStatus === 'win' || neuralStatus === 'loss' ? 1.0 : 0.0;
-
-                  return (
-                    <div className="hero-neural-zone" style={{ overflow: 'hidden', padding: '4px 0' }}>
-                      <div style={{ width: '100%', flex: 1, minHeight: '85px', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <EvilEye
-                          eyeColor={eyeColor}
-                          intensity={intensity}
-                          pupilSize={0.58}
-                          irisWidth={0.28}
-                          glowIntensity={glowIntensity}
-                          scale={1.35}
-                          flameSpeed={flameSpeed}
-                          eyelidOpen={eyelidOpen}
-                          backgroundColor="transparent"
-                        />
-                      </div>
-                      <span style={{
-                        fontSize: '0.48rem',
-                        fontWeight: '800',
-                        letterSpacing: '1.2px',
-                        textTransform: 'uppercase',
-                        color: neuralStatus === 'win' ? '#059669' : neuralStatus === 'loss' ? '#ef4444' : isRunning ? 'rgba(54,249,199,0.9)' : 'rgba(100,116,139,0.5)',
-                        fontFamily: 'var(--font-mono)',
-                        marginTop: '2px',
-                        transition: 'color 0.4s ease'
-                      }}>
-                        {neuralStatus === 'win' ? 'NEURAL WIN 🟢' : neuralStatus === 'loss' ? 'NEURAL LOSS 🔴' : isRunning ? 'NEURAL ATIVO' : 'NEURAL OCIOSO'}
-                      </span>
-                    </div>
-                  );
-                })()}
 
                 {/* RECALL ENGINE HUD BAR */}
                 {settings.recallEnabled && (
@@ -6002,7 +5754,15 @@ export default function App() {
 
                   {/* ══ THE CHART — Protagonist ══ */}
                   <div className="chart-container-premium">
-                    <Chart
+                    {!connected && candles.length === 0 ? (
+                      <div className="workspace-chart-empty">
+                        <div className="workspace-chart-icon"><Activity size={30} strokeWidth={1.25} /></div>
+                        <span className="workspace-eyebrow">MONITOR DE MERCADO</span>
+                        <h2>Uma visão clara da sua próxima operação.</h2>
+                        <p>Conecte sua conta Deriv para acompanhar o gráfico e os sinais do mercado em tempo real.</p>
+                        <button className="workspace-button" onClick={() => setActivePage('settings')}><KeyRound size={16} /> Configurar conexão</button>
+                      </div>
+                    ) : <Chart
                       candles={candles}
                       trades={trades}
                       dbTrades={dbTrades}
@@ -6011,7 +5771,7 @@ export default function App() {
                       granularity={settings.granularity}
                       strategy={settings.selectedStrategy}
                       toggles={{}}
-                    />
+                    />}
 
                     {/* HUD overlays — minimal, elegant */}
                     <div style={{
@@ -6365,7 +6125,7 @@ export default function App() {
                     };
                     localStorage.setItem('astrobot_cached_community_posts', JSON.stringify([newPostObj, ...postsList]));
                     alert(`📢 Estratégia "${strat.name}" compartilhada no Feed Social com sucesso!`);
-                    setActivePage('training');
+                    setActivePage('community');
                   }}
                 />
               ) : (
@@ -6403,7 +6163,7 @@ export default function App() {
                     };
                     localStorage.setItem('astrobot_cached_community_posts', JSON.stringify([newPostObj, ...postsList]));
                     alert(`📢 Estratégia "${strat.name}" compartilhada no Feed Social!`);
-                    setActivePage('training');
+                    setActivePage('community');
                   }}
                 />
               )}
@@ -6506,6 +6266,7 @@ export default function App() {
           return (
             <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
               <Scheduler
+                connected={connected}
                 schedulerState={schedulerState}
                 onToggleScheduler={(newState) => {
                   setSchedulerState(newState);
@@ -6614,28 +6375,6 @@ export default function App() {
           );
         }
 
-        if (activePage === 'news') {
-          return (
-            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
-              <NewsFeed
-                posts={posts}
-                loading={postsLoading}
-              />
-            </main>
-          );
-        }
-
-        if (activePage === 'downloads') {
-          return (
-            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
-              <DownloadsFeed
-                downloads={downloads}
-                loading={downloadsLoading}
-              />
-            </main>
-          );
-        }
-
         if (activePage === 'profile') {
           return (
             <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
@@ -6657,49 +6396,6 @@ export default function App() {
         }
 
 
-
-        if (activePage === 'training') {
-          return (
-            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
-              <TrainingModule
-                isAdmin={isAdminLoggedIn}
-                currentUserEmail={accountInfo?.email || userEmail || 'trader@astrobot.com'}
-                profileData={profileData}
-                initialCompletedLessonIds={completedLessons}
-                initialLessons={customLessons}
-                onAddXp={(earnedXp) => {
-                  const currentXp = profileData.xp || 0;
-                  const updated = { ...profileData, xp: currentXp + earnedXp };
-                  setProfileData(updated);
-                  localStorage.setItem('astrobot_user_profile', JSON.stringify(updated));
-                }}
-                onUpdateCompletedLessons={(newCompleted, earnedXp) => {
-                  setCompletedLessons(newCompleted);
-                  localStorage.setItem('astrobot_completed_lessons', JSON.stringify(newCompleted));
-                  const updatedXp = (profileData.xp || 0) + (earnedXp || 0);
-                  syncSettingsToDb({
-                    training: {
-                      completed_lessons: newCompleted,
-                      xp: updatedXp,
-                      lessons: customLessons
-                    }
-                  });
-                }}
-                onUpdateLessons={(updatedLessons) => {
-                  setCustomLessons(updatedLessons);
-                  localStorage.setItem('astrobot_training_lessons', JSON.stringify(updatedLessons));
-                  syncSettingsToDb({
-                    training: {
-                      completed_lessons: completedLessons,
-                      xp: profileData.xp || 0,
-                      lessons: updatedLessons
-                    }
-                  });
-                }}
-              />
-            </main>
-          );
-        }
 
         if (activePage === 'admin' && isAdminLoggedIn) {
           return (
@@ -7447,10 +7143,10 @@ export default function App() {
             {/* Content Body */}
             <div>
               <h3 style={{ fontSize: '1.4rem', fontWeight: '900', margin: '0 0 0.5rem 0', background: 'linear-gradient(to right, #ffffff, var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                Comece por Treinamento & Provas 🎓
+                Organize sua primeira operação
               </h3>
               <p style={{ fontSize: '0.88rem', color: '#cbd5e1', lineHeight: '1.55', margin: 0 }}>
-                Para otimizar suas entradas, preservar sua banca e utilizar todo o potencial do Piloto Automático e da Inteligência Artificial, recomendamos realizar a nossa grade de treinamento rápida.
+                Configure sua conexão, revise os limites da operação e organize sua agenda na Central de Missões. Você acompanha cada etapa pela dashboard.
               </p>
             </div>
 
@@ -7458,15 +7154,15 @@ export default function App() {
             <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '1rem', borderRadius: '14px', border: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', color: '#e2e8f0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <CheckCircle size={15} style={{ color: '#10b981' }} />
-                <span>Vídeos educativos passo a passo sobre robôs e deriv.</span>
+                <span>Conecte sua conta Deriv nas configurações.</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <CheckCircle size={15} style={{ color: '#10b981' }} />
-                <span>Simulações de Martingale, SorosGale e Gestão de Banca.</span>
+                <span>Revise a estratégia e os limites de ganho e perda.</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <CheckCircle size={15} style={{ color: '#10b981' }} />
-                <span>Provas interativas que somam <b>XP</b> para subir seu nível VIP.</span>
+                <span>Crie missões e acompanhe sua agenda de automação.</span>
               </div>
             </div>
 
@@ -7488,7 +7184,7 @@ export default function App() {
                   if (dontShowWelcomeAgain) {
                     localStorage.setItem('astrobot_hide_welcome_onboarding', 'true');
                   }
-                  setActivePage('training');
+                  setActivePage('community');
                   setShowWelcomeModal(false);
                 }}
                 style={{
@@ -7508,7 +7204,7 @@ export default function App() {
                   boxShadow: '0 4px 20px rgba(139, 92, 246, 0.4)'
                 }}
               >
-                <GraduationCap size={18} /> Ir para Treinamento & Provas
+                <Users size={18} /> Explorar Comunidade
               </button>
 
               <button
@@ -7695,9 +7391,6 @@ export default function App() {
               { id: 'reports', label: 'Relatórios Mensais', icon: Coins, color: '#34d399' },
               { id: 'community', label: 'Comunidade & Ranking', icon: Users, color: '#f472b6' },
               { id: 'telegram', label: 'Telegram Notificações', icon: Send, color: '#38bdf8' },
-              { id: 'training', label: 'Treinamento & Provas', icon: GraduationCap, color: '#10b981' },
-              { id: 'news', label: 'Atualizações & Novidades', icon: Newspaper, color: '#a78bfa' },
-              { id: 'downloads', label: 'Downloads & Apps', icon: Download, color: '#60a5fa' },
               ...(isAdminLoggedIn ? [{ id: 'admin', label: 'Painel Admin ASTROBOT', icon: ShieldCheck, color: '#ef4444' }] : [])
             ].map((item) => {
               const Icon = item.icon;

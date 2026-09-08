@@ -324,6 +324,7 @@ export default function DecisionTreeMapModal({
             {/* Close Modal */}
             <button
               type="button"
+              aria-label="Fechar árvore de decisão"
               onClick={onClose}
               style={{
                 background: 'rgba(255, 255, 255, 0.05)',
