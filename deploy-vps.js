@@ -5,6 +5,9 @@ const conn = new Client();
 const FILES_TO_UPLOAD = [
   { local: 'vps-backend/server.js', remote: '/root/astrobot-backend/server.js' },
   { local: 'vps-backend/UserSession.js', remote: '/root/astrobot-backend/UserSession.js' },
+  { local: 'vps-backend/automation/ContinuousTrader.js', remote: '/root/astrobot-backend/automation/ContinuousTrader.js' },
+  { local: 'vps-backend/automation/signals.js', remote: '/root/astrobot-backend/automation/signals.js' },
+  { local: 'vps-backend/automation/research.js', remote: '/root/astrobot-backend/automation/research.js' },
   { local: 'vps-backend/supabase.js', remote: '/root/astrobot-backend/supabase.js' },
   { local: 'vps-backend/deriv/DerivAPI.js', remote: '/root/astrobot-backend/deriv/DerivAPI.js' },
   { local: 'vps-backend/strategies/tradingStrategies.js', remote: '/root/astrobot-backend/strategies/tradingStrategies.js' },
@@ -24,7 +27,7 @@ conn.on('ready', () => {
       streamBackup.on('close', () => {
         console.log('VPS Backup step complete.');
         console.log('Ensuring remote directories exist...');
-        conn.exec('mkdir -p /root/astrobot-backend/admin-panel /root/astrobot-backend/deriv /root/astrobot-backend/strategies /root/astrobot-backend/utils', (errDir, streamDir) => {
+        conn.exec('mkdir -p /root/astrobot-backend/admin-panel /root/astrobot-backend/deriv /root/astrobot-backend/strategies /root/astrobot-backend/utils /root/astrobot-backend/automation', (errDir, streamDir) => {
           if (errDir) throw errDir;
           if (streamDir) {
             streamDir.resume();

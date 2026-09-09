@@ -16,6 +16,10 @@ export class DerivAPI {
     this.reconnectTimeoutId = null;
     this.reconnectAttempts = 0;
     this.pendingRequests = new Map();
+    this.lateRequests = new Map();
+    this.requestSequence = 0;
+    this.onLateResponse = () => {};
+    this.onBuyRejected = () => {};
     this.lastReceivedTime = Date.now();
     
     // Callbacks
@@ -46,6 +50,7 @@ export class DerivAPI {
     }
 
     this.disconnect();
+    this.shouldReconnect = true;
     
     this.log(`Conectando à Deriv (App ID: ${this.appId})...`, 'info');
 
@@ -237,6 +242,7 @@ export class DerivAPI {
     // Reject and clean up all pending requests
     for (const [reqId, req] of this.pendingRequests.entries()) {
       if (req.timer) clearTimeout(req.timer);
+      if (req.requestBody?.buy) this.lateRequests.set(reqId, req.requestBody);
       req.reject(new Error('Conexão WebSocket encerrada.'));
     }
     this.pendingRequests.clear();
@@ -351,18 +357,24 @@ export class DerivAPI {
         reject(new Error('WebSocket não conectado.'));
         return;
       }
-      const reqId = Math.floor(100000 + Math.random() * 900000);
+      const reqId = ++this.requestSequence;
       const payload = { ...requestBody, req_id: reqId };
       
       const timer = setTimeout(() => {
         if (this.pendingRequests.has(reqId.toString())) {
           this.pendingRequests.delete(reqId.toString());
+          if (requestBody.buy) this.lateRequests.set(reqId.toString(), requestBody);
           reject(new Error(`Timeout (${timeoutMs}ms) aguardando resposta da API Deriv.`));
         }
       }, timeoutMs);
 
-      this.pendingRequests.set(reqId.toString(), { resolve, reject, timer });
-      this.ws.send(JSON.stringify(payload));
+      this.pendingRequests.set(reqId.toString(), { resolve, reject, timer, requestBody });
+      try { this.ws.send(JSON.stringify(payload)); }
+      catch (err) {
+        clearTimeout(timer); this.pendingRequests.delete(String(reqId));
+        if (requestBody.buy) this.lateRequests.set(String(reqId), requestBody);
+        reject(err);
+      }
     });
   }
 
@@ -395,14 +407,24 @@ export class DerivAPI {
       this.pendingRequests.delete(reqId.toString());
 
       if (data.error) {
-        entry.reject(new Error(data.error.message));
+        const error = new Error(data.error.message);
+        error.definitive = true;
+        entry.reject(error);
       } else {
         entry.resolve(data);
       }
       return;
     }
 
+    if (reqId && this.lateRequests.has(String(reqId))) {
+      const request = this.lateRequests.get(String(reqId));
+      this.lateRequests.delete(String(reqId));
+      this.onLateResponse(data, request);
+      return;
+    }
+
     if (data.error) {
+      if (data.msg_type === 'buy') this.onBuyRejected(data.error);
       this.log(`Erro da API: ${data.error.message}`, 'error');
       this.onErrorReceived(data.error.message);
       

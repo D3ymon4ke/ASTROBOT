@@ -23,6 +23,7 @@ import {
   deleteTelegramMessages
 } from './utils/telegram.js';
 import { analyzeMarketConditions } from './utils/marketIntelligence.js';
+import { ContinuousTrader } from './automation/ContinuousTrader.js';
 import { supabase, addCommunityPost, getUserProfile, saveUserBackup, loadUserBackup } from './supabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -188,6 +189,9 @@ export class UserSession {
 
     // Load persisted state if exists
     this.loadFromFile();
+    this.continuous = new ContinuousTrader(this, record => {
+      fs.appendFileSync(this.filePath.replace(/\.json$/, '_automation.jsonl'), JSON.stringify(record) + '\n', 'utf8');
+    });
 
     // Bind API callbacks
     this.setupDerivAPI();
@@ -369,9 +373,12 @@ export class UserSession {
         activeMode: this._activeMode,
         modeStates: this.modeStates
       };
-      fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2), 'utf8');
+      fs.writeFileSync(this.filePath + '.tmp', JSON.stringify(data, null, 2), 'utf8');
+      fs.renameSync(this.filePath + '.tmp', this.filePath);
+      return true;
     } catch (e) {
       console.error(`Error saving session file for ${this.email}:`, e);
+      return false;
     }
   }
 
@@ -382,9 +389,12 @@ export class UserSession {
     };
 
     this.derivAPI.onAuthSuccess = (info) => {
-      this.balance = info.balance;
+      this.accountCurrency = info.currency || 'USD';
       const isRealAccount = info.loginid ? (!info.loginid.startsWith('VRTC')) : (this._activeMode === 'real');
       this._activeMode = isRealAccount ? 'real' : 'demo';
+      // Keep settlement-based bookkeeping while reconciling outstanding orders.
+      const mode = this.modeStates[this._activeMode];
+      if (!mode.legacyOrder && !mode.activeContractId && !mode.continuous?.position) this.balance = info.balance;
       this.settings.isDemo = !isRealAccount;
       console.log(`Deriv Account Authorized for ${this.email}. Account: ${info.loginid || 'default'} (${this._activeMode.toUpperCase()}) | Balance: ${info.balance}`);
       this.saveToFile();
@@ -457,6 +467,7 @@ export class UserSession {
       const buyId = String(buyDetails.contract_id);
       console.log(`[DerivAPI] onBuySuccess registered for ${this.email}: ID ${buyId}`);
       this.activeContractId = buyId;
+      if (this.modeStates[this.activeMode].legacyOrder) this.modeStates[this.activeMode].legacyOrder.contractId = buyId;
       this.lastContractDetails = {
         contractId: buyId,
         epoch: Math.floor(Date.now() / 1000),
@@ -466,12 +477,20 @@ export class UserSession {
         galeLevel: this.galeLevel,
         entryPrice: 0
       };
+      Object.assign(this.lastContractDetails, this.modeStates[this.activeMode].legacyOrder?.metadata || {});
       this.saveToFile();
       this.syncToClients();
     };
 
     this.derivAPI.onContractUpdate = (poc) => {
       this.handleContractUpdate(poc);
+    };
+    this.derivAPI.onLateResponse = (data, request) => {
+      this.continuous.acknowledgeBuy(data, request).catch(err => console.error('Continuous reconciliation:', err.message));
+    };
+    this.derivAPI.onBuyRejected = () => {
+      this.modeStates[this.activeMode].legacyOrder = null;
+      this.saveToFile();
     };
 
     this.derivAPI.onErrorReceived = (err) => {
@@ -544,6 +563,7 @@ export class UserSession {
         schedulerState: this.schedulerState,
         activeTradeCountdown: this.activeTradeCountdown,
         settings: this.settings,
+        continuous: this.continuous.snapshot(),
         derivConnected: this.derivAPI.connected,
         derivAuthorized: this.derivAPI.authorized,
         derivLatency: (this.derivAPI && this.derivAPI.latency > 0) ? this.derivAPI.latency : (this.derivAPI?.connected ? Math.floor(18 + Math.random() * 6) : 0)
@@ -835,6 +855,12 @@ export class UserSession {
   }
 
   updateSettings(newSettings) {
+    const continuous = this.continuous.state;
+    if ((newSettings.isDemo !== undefined && newSettings.isDemo !== this.settings.isDemo || newSettings.token !== undefined && newSettings.token !== this.settings.token || newSettings.appId !== undefined && newSettings.appId !== this.settings.appId)
+      && (continuous.config.enabled || continuous.position || continuous.shadows.length || this.continuous.busy || this.activeContractId || this.modeStates[this.activeMode].legacyOrder)) {
+      this.addLog({ message: 'Pause o Trader Contínuo e aguarde as posições e observações antes de trocar a conta ou credenciais.', type: 'warning' });
+      return;
+    }
     const prevMode = this._activeMode;
     const prevSymbol = this.settings.symbol;
     const prevGranularity = this.settings.granularity;
@@ -862,9 +888,9 @@ export class UserSession {
       }
     }
 
-    const symbolChanged = newSettings.symbol !== this.settings.symbol;
-    const granularityChanged = parseInt(newSettings.granularity) !== parseInt(this.settings.granularity);
-    const tokenChanged = newSettings.token !== this.settings.token || newSettings.appId !== this.settings.appId || newSettings.isDemo !== this.settings.isDemo;
+    const symbolChanged = newSettings.symbol !== undefined && newSettings.symbol !== this.settings.symbol;
+    const granularityChanged = newSettings.granularity !== undefined && parseInt(newSettings.granularity) !== parseInt(this.settings.granularity);
+    const tokenChanged = (newSettings.token !== undefined && newSettings.token !== this.settings.token) || (newSettings.appId !== undefined && newSettings.appId !== this.settings.appId);
 
     // Merge settings into active mode's settings
     this.settings = { ...this.settings, ...newSettings };
@@ -1990,6 +2016,8 @@ export class UserSession {
   }
 
   executeTrade(stake, direction) {
+    const rejection = this.continuous.rejection(Number(stake), 'timeline');
+    if (rejection) { this.addLog({ message: `[Risco compartilhado] ${rejection}`, type: 'warning' }); return false; }
     const contractType = direction === 'CALL' ? 'CALL' : 'PUT';
     let durationMin = Math.max(1, Math.round(parseInt(this.settings.granularity) / 60));
     let durationUnit = 'm';
@@ -2005,6 +2033,11 @@ export class UserSession {
       }
     }
 
+    this.modeStates[this.activeMode].legacyOrder = { stake: Number(stake), symbol: this.settings.symbol, direction: contractType, requestedAt: Date.now(), metadata: {
+      source: this.activeCycleId ? 'timeline' : 'manual', cycleId: this.activeCycleId || null,
+      strategyId: this.settings.selectedStrategy, strategyVersion: 'legacy-v1', accountMode: this.activeMode
+    } };
+    if (!this.saveToFile()) { this.modeStates[this.activeMode].legacyOrder = null; return false; }
     this.derivAPI.buyContract(this.settings.symbol, stake, contractType, durationMin, durationUnit);
     this.lastGaleDirection = direction;
     this.activeContractId = 'PENDING_REGISTRATION';
@@ -2015,7 +2048,7 @@ export class UserSession {
   }
 
   handleContractUpdate(poc) {
-    if (!this.isRunning) return;
+    const wasRunning = this.isRunning;
 
     const incomingId = String(poc.contract_id || '');
     if (!incomingId) return;
@@ -2070,10 +2103,11 @@ export class UserSession {
       return;
     }
 
-    if (incomingId !== currentActiveId && incomingId !== lastId) return;
+    const reservedId = String(this.modeStates[this.activeMode].legacyOrder?.contractId || '');
+    if (incomingId !== currentActiveId && incomingId !== lastId && incomingId !== reservedId) return;
 
     const status = poc.status;
-    const isSold = poc.is_sold === 1 || poc.is_expired === 1 || poc.is_settleable === 1;
+    const isSold = poc.is_sold === 1;
     const profit = parseFloat(poc.profit || 0);
 
     // Update countdown remaining
@@ -2155,6 +2189,8 @@ export class UserSession {
         strategyName: this.settings.autoPilot ? 'Piloto Automático' : this.settings.selectedStrategy,
         timestamp: details.epoch ? details.epoch * 1000 : Date.now()
       };
+      Object.assign(tradeObj, { source: details.source || 'timeline', cycleId: details.cycleId || null, strategyId: details.strategyId || this.settings.selectedStrategy, strategyVersion: details.strategyVersion || 'legacy-v1' });
+      this.continuous.recordLegacy(tradeObj);
 
       this.trades.push(tradeObj);
       this.saveDbTradeFirestore(tradeObj);
@@ -2169,6 +2205,8 @@ export class UserSession {
 
       this.activeContractId = null;
       this.lastContractDetails = null;
+      this.modeStates[this.activeMode].legacyOrder = null;
+      if (!wasRunning) { this.saveToFile(); this.syncToClients(); return; }
 
       const mode = this.settings.moneyManagement || (this.settings.martingaleEnabled ? 'martingale' : 'fixed');
 
@@ -2379,6 +2417,10 @@ export class UserSession {
 
   executeRecallTrade(stake, direction) {
     if (!this.recallState || !this.recallState.active) return;
+    const rejection = this.continuous.rejection(Number(stake), 'timeline');
+    if (rejection) { this.addLog({ message: `[Risco compartilhado] ${rejection}`, type: 'warning' }); return; }
+    this.modeStates[this.activeMode].legacyOrder = { stake: Number(stake), symbol: this.settings.symbol, direction, requestedAt: Date.now(), metadata: { source: 'recall', cycleId: this.activeCycleId || null, strategyId: this.settings.selectedStrategy } };
+    if (!this.saveToFile()) { this.modeStates[this.activeMode].legacyOrder = null; return; }
 
     this.recallState.status = 'executing';
     this.recallState.attemptCount = (this.recallState.attemptCount || 0) + 1;
@@ -2755,6 +2797,7 @@ export class UserSession {
   }
 
   destroy() {
+    this.continuous.destroyed = true;
     this.stopCountdownTimer();
     if (this.supabaseSubscription) {
       this.supabaseSubscription.unsubscribe();

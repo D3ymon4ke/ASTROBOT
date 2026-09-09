@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import { UserSession } from './UserSession.js';
+import { walkForward } from './automation/research.js';
 import { supabase, addCommunityPost, getCommunityPostsRaw, updateCommunityPost, getUserProfile } from './supabase.js';
 import { sendTelegramMessage } from './utils/telegram.js';
 
@@ -243,7 +244,7 @@ app.post('/admin/action', (req, res) => {
     console.log(`[Admin] Delete session from memory requested for ${cleanEmail}`);
     const existingSession = sessions.get(cleanEmail);
     if (existingSession) {
-      if (existingSession.isRunning) {
+      if (existingSession.isRunning || existingSession.continuous.state.config.enabled || existingSession.continuous.state.position || existingSession.continuous.state.shadows.length || existingSession.continuous.busy) {
         return res.status(400).json({ error: 'Não é possível remover da memória um robô em operação.' });
       }
       existingSession.destroy();
@@ -496,6 +497,22 @@ wss.on('connection', (ws) => {
       
       if (type === 'start_bot') {
         session.startBot();
+      } else if (type === 'continuous_config') {
+        session.continuous.configure(payload.config);
+        ws.send(JSON.stringify({ type: 'automation_result', message: 'Configuração aplicada na VPS.' }));
+      } else if (type === 'continuous_reconcile') {
+        if (payload.source && !['continuous', 'timeline'].includes(payload.source)) throw Error('Origem inválida.');
+        await session.continuous.reconcile(payload.contractId, payload.source);
+        ws.send(JSON.stringify({ type: 'automation_result', message: 'Contrato conciliado.' }));
+      } else if (type === 'laboratory_run') {
+        if (session.laboratoryBusy) throw Error('Já existe uma avaliação em andamento.');
+        if (!['R_100', '1HZ50V', 'R_50', '1HZ100V'].includes(payload.symbol)) throw Error('Ativo inválido.');
+        session.laboratoryBusy = true;
+        try {
+          const history = await session.derivAPI.fetchCandleHistory(payload.symbol, 60, 1500);
+          const result = walkForward(history.filter(c => c.epoch + 60 <= Date.now() / 1000), payload.options || {});
+          ws.send(JSON.stringify({ type: 'laboratory_result', result: { ...result, symbol: payload.symbol, generatedAt: Date.now() } }));
+        } finally { session.laboratoryBusy = false; }
       } else if (type === 'stop_bot') {
         session.stopBot();
       } else if (type === 'update_settings') {
@@ -526,7 +543,7 @@ wss.on('connection', (ws) => {
       
     } catch (err) {
       console.error('[WS] Error processing message:', err);
-      ws.send(JSON.stringify({ type: 'error', message: 'Formato de mensagem inválido.' }));
+      ws.send(JSON.stringify({ type: 'error', message: err.message || 'Formato de mensagem inválido.' }));
     }
   });
   
@@ -545,6 +562,7 @@ wss.on('connection', (ws) => {
 setInterval(() => {
   const now = new Date();
   for (const session of sessions.values()) {
+    session.continuous.tick().catch(err => console.error('Continuous tick:', err.message));
     session.schedulerTick(now);
   }
 }, 5000);

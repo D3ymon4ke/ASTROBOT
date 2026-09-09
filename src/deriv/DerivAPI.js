@@ -23,6 +23,8 @@ export class DerivAPI {
     this.onCloudTradesSynced = () => {};
     this.onCloudReportsSynced = () => {};
     this.onCloudBackupReceived = () => {};
+    this.onLaboratoryResult = () => {};
+    this.onAutomationMessage = () => {};
   }
 
   log(message, type = 'info') {
@@ -45,8 +47,10 @@ export class DerivAPI {
     
     console.log(`[VPS WS] Connecting to ${vpsUrl}...`);
     this.ws = new WebSocket(vpsUrl);
+    const socket = this.ws;
 
     this.ws.onopen = () => {
+      if (this.ws !== socket) return;
       console.log('[VPS WS] Connected to VPS backend.');
       this.connected = true;
       this.onConnectionChange(true);
@@ -69,6 +73,7 @@ export class DerivAPI {
     };
 
     this.ws.onmessage = (event) => {
+      if (this.ws !== socket) return;
       try {
         const payload = JSON.parse(event.data);
         const type = payload.type;
@@ -95,7 +100,12 @@ export class DerivAPI {
         } else if (type === 'log') {
           this.onLogMessage(payload.log);
         } else if (type === 'error') {
+          this.onAutomationMessage(payload);
           this.onErrorReceived(payload.message);
+        } else if (type === 'laboratory_result') {
+          this.onLaboratoryResult(payload.result);
+        } else if (type === 'automation_result') {
+          this.onAutomationMessage(payload);
         }
       } catch (err) {
         console.error('[VPS WS] Error processing message:', err);
@@ -103,18 +113,20 @@ export class DerivAPI {
     };
 
     this.ws.onclose = () => {
+      if (this.ws !== socket) return;
       if (this.pingInterval) clearInterval(this.pingInterval);
       console.warn('[VPS WS] Connection closed. Reconnecting in 3 seconds...');
       this.connected = false;
       this.authorized = false;
       this.onConnectionChange(false);
       
-      setTimeout(() => {
+      this.reconnectTimer = setTimeout(() => {
         this.connectVps();
       }, 3000);
     };
 
     this.ws.onerror = (err) => {
+      if (this.ws !== socket) return;
       console.error('[VPS WS] WebSocket error:', err);
     };
   }
@@ -133,15 +145,22 @@ export class DerivAPI {
   }
 
   disconnect() {
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
+    clearTimeout(this.reconnectTimer);
+    clearInterval(this.pingInterval);
+    const socket = this.ws;
+    this.ws = null;
+    this.connected = false;
+    this.authorized = false;
+    socket?.close();
   }
 
   startBot() {
     this.send({ type: 'start_bot' });
   }
+
+  configureContinuous(config) { this.send({ type: 'continuous_config', config }); }
+  reconcileContinuous(contractId, source = 'continuous') { this.send({ type: 'continuous_reconcile', contractId, source }); }
+  runLaboratory(symbol, options) { this.send({ type: 'laboratory_run', symbol, options }); }
 
   stopBot() {
     this.send({ type: 'stop_bot' });
