@@ -64,9 +64,9 @@ test('recorder collects and quotes breakout without buying, deduplicating subseq
   session.derivAPI.sendRequest = async req => { calls.push(req); return req.proposal ? { proposal: { id: 'q', ask_price: .35, payout: .7 } } : { history: { times: [1800001801, 1800001802], prices: [100, 101] } }; };
   session.derivAPI.fetchCandleHistory = async () => bars();
   recorder.configure(true, ['R_100']); await recorder.tick();
-  assert.equal(recorder.state.ticks, 2); assert.equal(recorder.state.proposals, 1);
+  assert.equal(recorder.state.ticks, 2); assert.equal(recorder.state.proposals, 2);
   t.mock.timers.tick(15000); await recorder.tick();
-  assert.equal(recorder.state.ticks, 2); assert.equal(recorder.state.proposals, 1);
+  assert.equal(recorder.state.ticks, 2); assert.equal(recorder.state.proposals, 2);
   assert.ok(calls.every(r => !r.buy));
 });
 test('pausing during I/O prevents capture and proposal requests', async t => {

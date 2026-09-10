@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { ASSETS, cleanCandles } from './signals.js';
+import { studySignal, comparePullback } from './pullbackStudy.js';
 import { breakoutSignal } from './breakout.js';
 import { replayTicks } from './tickReplay.js';
 
@@ -12,7 +13,7 @@ export class ResearchRecorder {
     const mode = this.session.modeStates[this.session.activeMode];
     return mode.research ||= { enabled: false, symbols: ['R_100', '1HZ50V'], status: 'Desligado', ticks: 0, proposals: 0, lastEpoch: {}, seen: {}, lastCapture: 0, errors: 0 };
   }
-  snapshot() { return { ...this.state, lastEpoch: undefined, seen: undefined, version: 1, retentionDays: 7, dailyLimitMB: 32 }; }
+  snapshot() { return { ...this.state, lastEpoch: undefined, seen: undefined, version: 1, experimentsVersion: 'pullback-study-v1', retentionDays: 7, dailyLimitMB: 32 }; }
   configure(enabled, symbols = this.state.symbols) {
     if (enabled === false) symbols = this.state.symbols;
     if (typeof enabled !== 'boolean' || !Array.isArray(symbols) || !symbols.length || symbols.length > 4 || symbols.some(s => !ASSETS.includes(s))) throw Error('Configuração do gravador inválida.');
@@ -50,10 +51,10 @@ export class ResearchRecorder {
     if (!quote?.id || ![stake, payout].every(Number.isFinite) || stake <= 0 || payout <= stake) return;
     try {
       this.append([{ kind: 'proposal', signalId: context.signalId, symbol: context.symbol, strategy: context.strategy, version: context.version,
-        direction: context.direction, durationMinutes: context.durationMinutes, score: context.score, stake, payout, requestedAt, receivedAt: Date.now(),
+        features: context.features, direction: context.direction, durationMinutes: context.durationMinutes, score: context.score, stake, payout, requestedAt, receivedAt: Date.now(),
         responseMs: Date.now() - requestedAt, eligible: context.score >= (context.config?.minScore ?? 60) && (payout - stake) / stake >= (context.config?.minPayout ?? .8)
           && Math.abs(stake - Number(context.config?.stake ?? .35)) <= .01 && Date.now() / 1000 - context.signalEpoch <= 25,
-        origin: context.strategy === 'breakout' ? 'candidate-observation' : 'continuous', quoteSpot: Number(quote.spot), quoteTime: Number(quote.spot_time) }]);
+        origin: context.strategy === 'breakout' || context.version === 'pullback-study-v1' ? 'candidate-observation' : 'continuous', quoteSpot: Number(quote.spot), quoteTime: Number(quote.spot_time) }]);
       this.state.proposals++;
     } catch (e) { this.fail(e); }
   }
@@ -67,7 +68,7 @@ export class ResearchRecorder {
       for (const symbol of s.symbols) {
         if (!s.enabled || this.destroyed || mode !== this.session.activeMode) break;
         const { history } = await api.sendRequest({ ticks_history: symbol, style: 'ticks', end: 'latest', count: 1000 });
-        if (this.destroyed || !s.enabled) break;
+        if (this.destroyed || !s.enabled || mode !== this.session.activeMode) break;
         if (!history?.times || !history?.prices || history.times.length !== history.prices.length) throw Error('Histórico de ticks inválido.');
         const cutoff = s.lastEpoch[symbol] ?? Date.now() / 1000 - 30;
         const ticks = history.times.map((epoch, i) => ({ kind: 'tick', symbol, epoch: Number(epoch), price: Number(history.prices[i]) }))
@@ -75,17 +76,20 @@ export class ResearchRecorder {
         this.append(ticks); s.ticks += ticks.length;
         if (ticks.length) s.lastEpoch[symbol] = ticks.at(-1).epoch;
         const candles = cleanCandles(await api.fetchCandleHistory(symbol, 60, 60), Date.now() / 1000);
-        if (this.destroyed || !s.enabled) break;
-        const signal = breakoutSignal(candles);
-        if (!signal || Date.now() / 1000 - signal.signalEpoch > 25 || s.seen[symbol] === signal.signalEpoch) continue;
-        s.seen[symbol] = signal.signalEpoch;
-        const context = { ...signal, symbol, signalId: `${mode}:${symbol}:breakout-v1:${signal.signalEpoch}`, durationMinutes: 1 };
-        this.decision({ ...context, kind: 'candidate', time: Date.now(), message: signal.reasons.join('; ') });
-        const requestedAt = Date.now();
-        const { proposal } = await api.sendRequest({ proposal: 1, amount: .35, basis: 'stake', contract_type: signal.direction, currency: this.session.accountCurrency || 'USD', underlying_symbol: symbol, duration: 1, duration_unit: 'm' });
-        if (!this.destroyed && s.enabled) this.proposal(context, proposal, requestedAt);
+        if (this.destroyed || !s.enabled || mode !== this.session.activeMode) break;
+        for (const signal of [breakoutSignal(candles), studySignal(candles)].filter(Boolean)) {
+          const key = symbol + ':' + signal.version;
+          if (Date.now() / 1000 - signal.signalEpoch > 25 || s.seen[key] === signal.signalEpoch) continue;
+          s.seen[key] = signal.signalEpoch;
+          const context = { ...signal, symbol, signalId: `${mode}:${symbol}:${signal.version}:${signal.signalEpoch}`, durationMinutes: 1 };
+          this.decision({ ...context, kind: 'candidate', time: Date.now(), message: signal.reasons.join('; ') });
+          const requestedAt = Date.now();
+          const { proposal } = await api.sendRequest({ proposal: 1, amount: .35, basis: 'stake', contract_type: signal.direction, currency: this.session.accountCurrency || 'USD', underlying_symbol: symbol, duration: 1, duration_unit: 'm' });
+          if (this.destroyed || !s.enabled || mode !== this.session.activeMode) break;
+          this.proposal(context, proposal, requestedAt);
+        }
       }
-      s.lastCapture = Date.now(); s.errors = 0; if (s.enabled) s.status = 'Gravando · rompimento em observação';
+      s.lastCapture = Date.now(); s.errors = 0; if (s.enabled) s.status = 'Gravando · rompimento e pullback em observação';
     } catch (e) { s.errors++; s.status = `Captura incompleta: ${e.message}`; if (s.errors >= 5 || /32 MB|ENOSPC|EACCES/.test(e.message)) this.fail(e); }
     finally { this.busy = false; if (!this.destroyed) { this.session.saveToFile(); this.session.syncToClients(); } }
   }
@@ -109,6 +113,6 @@ export class ResearchRecorder {
       try { for await (const line of lines) { if (!line.trim()) continue; try { const r = JSON.parse(line); if (r.symbol === symbol && (current === file || r.kind === 'tick' && r.epoch < Date.parse(nextDate) / 1000 + 360)) records.push(r); } catch { /* A writer may be completing the last record. */ } } }
       finally { lines.close(); input.destroy(); }
     }
-    return { ...replayTicks(records, options), symbol, date, accountMode, generatedAt: Date.now() };
+    return { ...replayTicks(records.filter(r => r.version !== 'pullback-study-v1'), options), comparison: comparePullback(records, options), symbol, date, accountMode, generatedAt: Date.now() };
   }
 }
