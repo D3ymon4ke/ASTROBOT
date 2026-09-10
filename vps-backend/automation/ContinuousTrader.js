@@ -180,9 +180,11 @@ export class ContinuousTrader {
             const reason = this.rejection(s.config.stake);
             if (reason) { this.event('filtered', reason, context); continue; }
           }
+          const requestedAt = Date.now();
           const response = await api.sendRequest({ proposal: 1, amount: s.config.stake, basis: 'stake', contract_type: signal.direction,
             currency: this.session.accountCurrency || 'USD', underlying_symbol: symbol, duration: s.config.durationMinutes, duration_unit: 'm' });
           const quote = response.proposal;
+          if (!this.destroyed) this.session.research?.proposal(context, quote, requestedAt);
           const price = Number(quote?.ask_price), payout = Number(quote?.payout);
           if (!quote?.id || !Number.isFinite(payout) || !(price > 0) || !(payout > price) || Math.abs(price - s.config.stake) > .01) { this.event('filtered', 'Proposta sem preço/payout válido', context); continue; }
           const ratio = (payout - price) / price;

@@ -244,7 +244,7 @@ app.post('/admin/action', (req, res) => {
     console.log(`[Admin] Delete session from memory requested for ${cleanEmail}`);
     const existingSession = sessions.get(cleanEmail);
     if (existingSession) {
-      if (existingSession.isRunning || existingSession.continuous.state.config.enabled || existingSession.continuous.state.position || existingSession.continuous.state.shadows.length || existingSession.continuous.busy) {
+      if (existingSession.isRunning || existingSession.continuous.state.config.enabled || existingSession.continuous.state.position || existingSession.continuous.state.shadows.length || existingSession.continuous.busy || existingSession.research.state.enabled || existingSession.research.busy) {
         return res.status(400).json({ error: 'Não é possível remover da memória um robô em operação.' });
       }
       existingSession.destroy();
@@ -500,18 +500,29 @@ wss.on('connection', (ws) => {
       } else if (type === 'continuous_config') {
         session.continuous.configure(payload.config);
         ws.send(JSON.stringify({ type: 'automation_result', message: 'Configuração aplicada na VPS.' }));
+      } else if (type === 'research_config') {
+        session.research.configure(payload.enabled, payload.symbols);
+        ws.send(JSON.stringify({ type: 'automation_result', message: 'Gravador atualizado. Nenhuma compra é habilitada pelo gravador.' }));
+      } else if (type === 'laboratory_ticks') {
+        if (session.laboratoryBusy) throw Error('Já existe uma avaliação em andamento.');
+        session.laboratoryBusy = true;
+        try {
+          const result = await session.research.replay(payload.date, payload.symbol, payload.options || {});
+          ws.send(JSON.stringify({ type: 'laboratory_result', result }));
+        } finally { session.laboratoryBusy = false; }
       } else if (type === 'continuous_reconcile') {
         if (payload.source && !['continuous', 'timeline'].includes(payload.source)) throw Error('Origem inválida.');
         await session.continuous.reconcile(payload.contractId, payload.source);
         ws.send(JSON.stringify({ type: 'automation_result', message: 'Contrato conciliado.' }));
       } else if (type === 'laboratory_run') {
+        const accountMode = session.activeMode;
         if (session.laboratoryBusy) throw Error('Já existe uma avaliação em andamento.');
         if (!['R_100', '1HZ50V', 'R_50', '1HZ100V'].includes(payload.symbol)) throw Error('Ativo inválido.');
         session.laboratoryBusy = true;
         try {
           const history = await session.derivAPI.fetchCandleHistory(payload.symbol, 60, 1500);
           const result = walkForward(history.filter(c => c.epoch + 60 <= Date.now() / 1000), payload.options || {});
-          ws.send(JSON.stringify({ type: 'laboratory_result', result: { ...result, symbol: payload.symbol, generatedAt: Date.now() } }));
+          ws.send(JSON.stringify({ type: 'laboratory_result', result: { ...result, accountMode, symbol: payload.symbol, generatedAt: Date.now() } }));
         } finally { session.laboratoryBusy = false; }
       } else if (type === 'stop_bot') {
         session.stopBot();
@@ -563,6 +574,7 @@ setInterval(() => {
   const now = new Date();
   for (const session of sessions.values()) {
     session.continuous.tick().catch(err => console.error('Continuous tick:', err.message));
+    session.research.tick().catch(err => console.error('Research tick:', err.message));
     session.schedulerTick(now);
   }
 }, 5000);

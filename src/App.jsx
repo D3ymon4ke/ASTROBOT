@@ -570,6 +570,7 @@ export default function App() {
   // Trading states
   const [isRunning, setIsRunning] = useState(false);
   const [continuousState, setContinuousState] = useState(null);
+  const [researchState, setResearchState] = useState(null);
   const [automationTab, setAutomationTab] = useState('timeline');
   const DEFAULT_SETTINGS = {
     symbol: 'R_100',
@@ -2050,6 +2051,7 @@ export default function App() {
 
     derivAPI.onSyncReceived = (sync) => {
       setContinuousState(sync.continuous || null);
+      setResearchState(sync.research || null);
       // Play win/loss sound if trades list grew, but only if we already had a first sync payload loaded
       const isFirstSync = !stateRef.current.hasReceivedSync;
       stateRef.current.hasReceivedSync = true;
@@ -6270,7 +6272,7 @@ export default function App() {
         if (activePage === 'automation') {
           return (
             <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
-              <AutomationWorkspace initialTab={automationTab} onTabChange={setAutomationTab} continuous={continuousState} timelineEnabled={schedulerState} timelineTrades={dbTrades} accountMode={isDemo ? 'demo' : 'real'}>
+              <AutomationWorkspace research={researchState} initialTab={automationTab} onTabChange={setAutomationTab} continuous={continuousState} timelineEnabled={schedulerState} timelineTrades={dbTrades} accountMode={isDemo ? 'demo' : 'real'}>
               <Scheduler
                 connected={connected}
                 schedulerState={schedulerState}

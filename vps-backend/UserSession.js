@@ -24,6 +24,7 @@ import {
 } from './utils/telegram.js';
 import { analyzeMarketConditions } from './utils/marketIntelligence.js';
 import { ContinuousTrader } from './automation/ContinuousTrader.js';
+import { ResearchRecorder } from './automation/ResearchRecorder.js';
 import { supabase, addCommunityPost, getUserProfile, saveUserBackup, loadUserBackup } from './supabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -189,8 +190,10 @@ export class UserSession {
 
     // Load persisted state if exists
     this.loadFromFile();
+    this.research = new ResearchRecorder(this, this.filePath.replace(/\.json$/, '_research'));
     this.continuous = new ContinuousTrader(this, record => {
       fs.appendFileSync(this.filePath.replace(/\.json$/, '_automation.jsonl'), JSON.stringify(record) + '\n', 'utf8');
+      this.research.decision(record);
     });
 
     // Bind API callbacks
@@ -564,6 +567,7 @@ export class UserSession {
         activeTradeCountdown: this.activeTradeCountdown,
         settings: this.settings,
         continuous: this.continuous.snapshot(),
+        research: this.research.snapshot(),
         derivConnected: this.derivAPI.connected,
         derivAuthorized: this.derivAPI.authorized,
         derivLatency: (this.derivAPI && this.derivAPI.latency > 0) ? this.derivAPI.latency : (this.derivAPI?.connected ? Math.floor(18 + Math.random() * 6) : 0)
@@ -857,8 +861,8 @@ export class UserSession {
   updateSettings(newSettings) {
     const continuous = this.continuous.state;
     if ((newSettings.isDemo !== undefined && newSettings.isDemo !== this.settings.isDemo || newSettings.token !== undefined && newSettings.token !== this.settings.token || newSettings.appId !== undefined && newSettings.appId !== this.settings.appId)
-      && (continuous.config.enabled || continuous.position || continuous.shadows.length || this.continuous.busy || this.activeContractId || this.modeStates[this.activeMode].legacyOrder)) {
-      this.addLog({ message: 'Pause o Trader Contínuo e aguarde as posições e observações antes de trocar a conta ou credenciais.', type: 'warning' });
+      && (continuous.config.enabled || continuous.position || continuous.shadows.length || this.continuous.busy || this.research.state.enabled || this.research.busy || this.activeContractId || this.modeStates[this.activeMode].legacyOrder)) {
+      this.addLog({ message: 'Pause o Trader Contínuo e o gravador, e aguarde as operações antes de trocar a conta ou credenciais.', type: 'warning' });
       return;
     }
     const prevMode = this._activeMode;
@@ -2798,6 +2802,7 @@ export class UserSession {
 
   destroy() {
     this.continuous.destroyed = true;
+    this.research.destroyed = true;
     this.stopCountdownTimer();
     if (this.supabaseSubscription) {
       this.supabaseSubscription.unsubscribe();

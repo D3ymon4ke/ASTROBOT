@@ -161,6 +161,8 @@ export class DerivAPI {
   configureContinuous(config) { this.send({ type: 'continuous_config', config }); }
   reconcileContinuous(contractId, source = 'continuous') { this.send({ type: 'continuous_reconcile', contractId, source }); }
   runLaboratory(symbol, options) { this.send({ type: 'laboratory_run', symbol, options }); }
+  configureResearch(enabled, symbols) { this.send({ type: 'research_config', enabled, symbols }); }
+  replayResearch(date, symbol, options) { this.send({ type: 'laboratory_ticks', date, symbol, options }); }
 
   stopBot() {
     this.send({ type: 'stop_bot' });

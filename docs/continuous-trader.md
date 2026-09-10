@@ -35,6 +35,20 @@ A exportação JSON contém as linhas carregadas e filtradas, métricas, estress
 
 ## Verificação e publicação
 
+### Base própria e rompimento em observação
+
+Em Laboratório, **Iniciar gravador e observação** habilita uma coleta independente na VPS. Os ativos são copiados da seleção do Trader Contínuo ao iniciar a coleta; não é necessário iniciar esse trader. O gravador consulta ticks a cada 15 segundos, registra propostas recebidas pelo contínuo e os motivos de suas decisões. Somente campos de pesquisa são gravados, sem tokens ou configurações de autenticação. Interrupções de rede podem produzir lacunas: a coleta não promete um histórico completo retroativo.
+
+O candidato `breakout-v1` exige compressão em seis velas M1 fechadas, canal com largura limitada em relação às 23 velas anteriores e fechamento fora do canal com corpo de pelo menos metade da amplitude da vela. Consulta uma proposta de USD 0,35 por um minuto; não compra. A estratégia está ausente da lista permitida para execução real. O payout mínimo indicativo é 80% líquido e o score mínimo é 60; a pontuação do candidato é 65 e não representa probabilidade.
+
+Os arquivos ficam em `data/session_*_research/demo-AAAA-MM-DD.jsonl` e `real-AAAA-MM-DD.jsonl`, com registros `tick`, `proposal` e `decision`. Há retenção dos sete dias UTC mais recentes e limite de 32 MB por dia/conta. Ao ultrapassar o limite, a coleta pausa e informa o motivo. A limpeza só remove arquivos com nomes pertencentes ao gravador. Os contadores exibidos são acumulados, não representam o volume retido. Inclua essa pasta em backups se precisar de retenção maior.
+
+**Reproduzir ticks** lê as propostas do dia selecionado e o payout que foi registrado. A entrada é o primeiro tick após o recebimento da proposta acrescido da latência hipotética; a saída é o primeiro tick após a duração a partir dessa entrada. O replay exige cobertura na entrada, saída e entre elas, conforme a tolerância de lacuna escolhida. Propostas rejeitadas, inválidas ou sem cobertura são contadas separadamente. Consulta também os primeiros minutos do dia seguinte para completar operações que cruzam meia-noite. Não usa propostas desse segundo dia para acrescentar operações.
+
+Essa análise é indicativa: não demonstra que a proposta teria permanecido disponível, não replica preços exatos de compra/liquidação e não aplica o orçamento compartilhado do motor real. Cada estratégia é reconstituída separadamente, com proibição de sobreposição dentro da mesma estratégia/versão/ativo. Use os filtros para comparar candidatas; a soma não é uma simulação de carteira executável. O replay por ticks avalia propostas já registradas, enquanto o teste de seleção cronológica por treino/teste permanece baseado em OHLC. A exportação da análise inclui resultados e motivos de exclusão; os ticks brutos ficam nos arquivos JSONL da VPS.
+
+Além dos módulos anteriores, a publicação deve incluir `automation/ResearchRecorder.js`, `automation/tickReplay.js` e `automation/breakout.js`.
+
 Instale as dependências da raiz e do backend (`npm ci` e `npm ci --prefix vps-backend`). Execute `npm test`, `npm run build` e `npm run lint`. Os testes usam API simulada e cobrem isolamento de contas, reservas concorrentes, pausas, respostas tardias, persistência, liquidação e causalidade do replay.
 
 Publique juntos `UserSession.js`, `server.js`, `deriv/DerivAPI.js` e a pasta `automation/` na VPS; o frontend usa o build Vite. A interface mantém controles indisponíveis enquanto a VPS não informa suporte à versão 1 do recurso. Faça backup antes da atualização e verifique contratos em andamento antes de reiniciar. Preserve `data/`, credenciais e certificados. A atualização não habilita compras por padrão.
