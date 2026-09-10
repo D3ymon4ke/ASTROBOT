@@ -29,7 +29,7 @@ import UserProfile from './components/UserProfile';
 import TrainingModule from './components/TrainingModule';
 import StrategyBuilder from './components/StrategyBuilder';
 import AdminGamificationEditor from './components/AdminGamificationEditor';
-import MethodTracker from './components/MethodTracker';
+import StrategyAudit from './components/StrategyAudit.jsx';
 import Landing3DCard from './components/Landing3DCard';
 import HeroSection from './components/landing/HeroSection';
 import AIWorkflowSection from './components/landing/AIWorkflowSection';
@@ -4852,16 +4852,7 @@ export default function App() {
               }}
             >
               <ShieldCheck size={13} style={{ color: '#10b981' }} />
-              <span>Laboratório & Validador</span>
-              <span style={{
-                background: 'linear-gradient(135deg, #10b981 0%, #38bdf8 100%)',
-                color: '#022c22',
-                fontSize: '0.55rem',
-                fontWeight: '900',
-                padding: '1px 5px',
-                borderRadius: '8px',
-                textTransform: 'uppercase'
-              }}>NOVO</span>
+              <span>Análise de Estratégias</span>
             </button>
 
             {/* Automação */}
@@ -5560,54 +5551,7 @@ export default function App() {
         }
 
         if (activePage === 'validator') {
-          return (
-            <main style={{ padding: '1.5rem', flex: 1, overflowY: 'auto', maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
-              <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.3) 0%, rgba(56,189,248,0.2) 100%)', border: '1px solid #10b981', padding: '10px', borderRadius: '12px' }}>
-                    <ShieldCheck size={26} style={{ color: '#10b981' }} />
-                  </div>
-                  <div>
-                    <h1 style={{ margin: 0, fontSize: '1.45rem', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.5px' }}>
-                      Laboratório & Validador de Estratégias
-                    </h1>
-                    <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
-                      Área exclusiva para acompanhamento em tempo real da performance, auditoria de banca e blindagem do novo método.
-                    </p>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button className="workspace-button" onClick={() => { setAutomationTab('lab'); setActivePage('automation'); }}>Abrir pesquisa e teste cronológico</button>
-                  <button
-                    onClick={() => setActivePage('dashboard')}
-                    style={{
-                      background: 'rgba(139, 92, 246, 0.15)',
-                      border: '1px solid rgba(139, 92, 246, 0.4)',
-                      color: '#c084fc',
-                      padding: '8px 14px',
-                      borderRadius: '10px',
-                      fontSize: '0.78rem',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <Layers size={14} /> Voltar ao Dashboard
-                  </button>
-                </div>
-              </div>
-
-              <MethodTracker
-                trades={dbTrades && dbTrades.length > 0 ? dbTrades : trades}
-                isDemo={isDemo}
-                settings={settings}
-                isStandalonePage={true}
-              />
-            </main>
-          );
+          return <StrategyAudit key={isDemo ? 'demo' : 'real'} trades={dbTrades?.length ? dbTrades : trades} continuous={continuousState} isDemo={isDemo} connected={connected} onResearch={() => { setAutomationTab('lab'); setActivePage('automation'); }} />;
         }
 
         if (activePage === 'reports') {
@@ -6776,7 +6720,8 @@ export default function App() {
               { id: 'dashboard', label: 'Dashboard Principal', icon: Layers, color: '#a78bfa' },
               { id: 'automation', label: 'Operações & Robô VPS', icon: Zap, color: '#10b981' },
               { id: 'scanner', label: 'Scanner IA & Gráficos', icon: Sparkles, color: '#38bdf8' },
-              { id: 'strategies', label: 'Catálogo de Estratégias', icon: Brain, color: '#c084fc' },
+              { id: 'validator', label: 'Análise de Estratégias', icon: ShieldCheck },
+                { id: 'strategies', label: 'Catálogo de Estratégias', icon: Brain, color: '#c084fc' },
               { id: 'planning', label: 'Planejamento & Risco', icon: Target, color: '#f59e0b' },
               { id: 'history', label: 'Histórico de Operações', icon: Clock, color: '#94a3b8' },
               { id: 'reports', label: 'Relatórios Mensais', icon: Coins, color: '#34d399' },
