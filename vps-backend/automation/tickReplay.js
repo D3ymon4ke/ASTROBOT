@@ -17,7 +17,7 @@ export function replayTicks(records, options = {}) {
     if (!q.eligible) { excluded.rejected++; continue; }
     if (![q.receivedAt, q.stake, q.payout, q.durationMinutes].every(Number.isFinite) || q.stake <= 0 || q.payout <= q.stake || q.durationMinutes < 1 || q.durationMinutes > 5 || !['CALL', 'PUT'].includes(q.direction)) { excluded.invalid++; continue; }
     const ticks = bySymbol.get(q.symbol) || [], entryTime = (q.receivedAt + latencyMs) / 1000;
-    const key = `${q.symbol}:${q.strategy}:${q.version}`;
+    const key = `${q.symbol}:${q.strategy}:${q.version}:${q.durationMinutes}`;
     if ((occupied.get(key) || 0) > entryTime) { excluded.overlap++; continue; }
     const i = lowerBound(ticks, entryTime), entry = ticks[i];
     if (!entry || entry.epoch - entryTime > maxGapSeconds) { excluded.missingEntry++; continue; }

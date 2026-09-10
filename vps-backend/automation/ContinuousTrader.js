@@ -30,7 +30,7 @@ export class ContinuousTrader {
     const s = this.state;
     return { ...s, events: s.events.slice(-80), trades: s.trades.slice(-1000), shadows: s.shadows.length,
       legacyOrder: this.session.modeStates[this.session.activeMode].legacyOrder || null,
-      seen: undefined, legacyIds: undefined, serverTime: Date.now(), scope: 'current-account', version: 1 };
+      seen: undefined, legacyIds: undefined, serverTime: Date.now(), scope: 'current-account', observationVersion: 'observe-v2', observationStrategies: ['mhi', 'pullback', 'breakout'], version: 1 };
   }
   configure(patch) {
     const s = this.state;
@@ -136,15 +136,15 @@ export class ContinuousTrader {
     for (const p of s.shadows.slice(0, 4)) {
       if (now < p.expiry + 3) continue;
       const { history } = await this.session.derivAPI.sendRequest({ ticks_history: p.symbol, style: 'ticks', start: p.expiry, end: p.expiry + 5, count: 20 });
-      if (this.destroyed) return;
-      const index = history?.times?.findIndex(t => Number(t) >= p.expiry);
-      const exit = index >= 0 ? Number(history.prices[index]) : NaN;
+      if (this.destroyed || s !== this.state) return;
+      const index = history?.times?.findIndex(t => Number.isFinite(Number(t)) && Number(t) >= p.expiry && Number(t) <= p.expiry + 5);
+      const exit = index >= 0 ? Number(history.prices?.[index]) : NaN;
       if (!Number.isFinite(exit)) {
         if (now - p.expiry > 600) { s.shadows = s.shadows.filter(x => x.signalId !== p.signalId); this.event('unresolved', 'Observação sem tick de saída; excluída das métricas', p); }
         continue;
       }
       const win = p.direction === 'CALL' ? exit > p.entry : exit < p.entry;
-      const trade = { ...p, id: p.signalId, source: 'continuous', execution: 'observe', timestamp: Date.now(), profit: win ? p.payout - p.stake : -p.stake, exitPrice: exit, indicative: true };
+      const trade = { ...p, id: p.signalId, source: 'continuous', execution: 'observe', timestamp: Date.now(), observationVersion: 'observe-v2', exitEpoch: Number(history.times[index]), profit: win ? p.payout - p.stake : -p.stake, exitPrice: exit, indicative: true };
       s.trades.push(trade); s.trades = s.trades.slice(-2000); s.shadows = s.shadows.filter(x => x.signalId !== p.signalId);
       this.event('observed', 'Resultado indicativo por ticks, sem compra', trade);
     }
@@ -162,7 +162,10 @@ export class ContinuousTrader {
       if (Date.now() - s.lastScan < 15000) return;
       if (this.session.accountCurrency && this.session.accountCurrency !== 'USD') throw Error('Trader contínuo requer conta em USD.');
       s.lastScan = Date.now(); s.status = 'Observando ativos'; s.markets = [];
-      for (const symbol of s.config.symbols) {
+      const offset = (s.scanCursor || 0) % s.config.symbols.length;
+      const orderedSymbols = [...s.config.symbols.slice(offset), ...s.config.symbols.slice(0, offset)];
+      s.scanCursor = (offset + 1) % s.config.symbols.length;
+      for (const symbol of orderedSymbols) {
         if (this.destroyed || mode !== this.session.activeMode || !s.config.enabled) break;
         const candles = cleanCandles(await api.fetchCandleHistory(symbol, 60, 200), Date.now() / 1000);
         const age = Date.now() / 1000 - Number(candles.at(-1)?.epoch + 60);
@@ -193,8 +196,8 @@ export class ContinuousTrader {
           if (this.destroyed || !s.config.enabled || mode !== this.session.activeMode || Date.now() / 1000 - signal.signalEpoch > 25) continue;
           if (s.config.execution === 'observe') {
             const entry = Number(quote.spot), spotTime = Number(quote.spot_time);
-            if (!Number.isFinite(entry) || !Number.isFinite(spotTime) || Math.abs(Date.now() / 1000 - spotTime) > 10) { this.event('filtered', 'Proposta sem tick recente para observação', context); continue; }
-            s.shadows.push({ ...context, stake: price, payout, entry, expiry: spotTime + s.config.durationMinutes * 60 });
+            if (!Number.isFinite(entry) || !Number.isFinite(spotTime) || Date.now() / 1000 - spotTime > 10 || spotTime > Date.now() / 1000 + 1) { this.event('filtered', 'Proposta sem tick recente para observação', context); continue; }
+            s.shadows.push({ ...context, stake: price, payout, entry, entryEpoch: spotTime, requestedAt, quoteReceivedAt: Date.now(), observationVersion: 'observe-v2', expiry: spotTime + s.config.durationMinutes * 60 });
             s.shadows = s.shadows.slice(-100); s.lastEntry = Date.now(); this.event('signal', 'Sinal registrado em observação', { ...context, price, payout });
           } else {
             const reason = this.rejection(price);

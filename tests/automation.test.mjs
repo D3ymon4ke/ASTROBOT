@@ -186,3 +186,24 @@ test('late response after disconnect stays isolated from legacy callbacks', asyn
   api.handleMessage({ req_id: sent.req_id, msg_type: 'buy', buy: { contract_id: 123 } });
   assert.equal(late, 1);
 });
+
+test('breakout can be configured for observation but never live',()=>{
+ assert.deepEqual(validateConfig({execution:'observe',strategies:['breakout']}).strategies,['breakout']);
+ assert.throws(()=>validateConfig({execution:'live',strategies:['breakout']}),/observação/);
+});
+test('scanner rotates asset priority instead of always favoring the first symbol',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:1800000005000});
+ const {trader,session}=fixture(),order=[];
+ trader.configure({enabled:true});session.derivAPI.fetchCandleHistory=async s=>{order.push(s);return [];};
+ await trader.tick();t.mock.timers.tick(15000);await trader.tick();
+ assert.deepEqual(order,['R_100','1HZ50V','1HZ50V','R_100']);
+});
+test('observation rejects an exit tick outside the permitted expiry window',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:200000});
+ const {trader,session}=fixture();
+ trader.state.shadows.push({signalId:'bad',symbol:'R_100',expiry:100,entry:100,direction:'CALL',stake:.35,payout:.7});
+ session.derivAPI.sendRequest=async()=>({history:{times:[120],prices:[200]}});
+ await trader.settleShadows();assert.equal(trader.state.trades.length,0);assert.equal(trader.state.shadows.length,1);
+ session.derivAPI.sendRequest=async()=>({history:{times:[102],prices:[101]}});
+ await trader.settleShadows();assert.equal(trader.state.trades.length,1);assert.equal(trader.state.trades[0].exitEpoch,102);
+});

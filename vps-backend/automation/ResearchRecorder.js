@@ -1,3 +1,4 @@
+import { directionBenchmark } from './directionBenchmark.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -51,7 +52,7 @@ export class ResearchRecorder {
     if (!quote?.id || ![stake, payout].every(Number.isFinite) || stake <= 0 || payout <= stake) return;
     try {
       this.append([{ kind: 'proposal', signalId: context.signalId, symbol: context.symbol, strategy: context.strategy, version: context.version,
-        features: context.features, direction: context.direction, durationMinutes: context.durationMinutes, score: context.score, stake, payout, requestedAt, receivedAt: Date.now(),
+        pairId: context.pairId, benchmark: !!context.benchmark, features: context.features, direction: context.direction, durationMinutes: context.durationMinutes, score: context.score, stake, payout, requestedAt, receivedAt: Date.now(),
         responseMs: Date.now() - requestedAt, eligible: context.score >= (context.config?.minScore ?? 60) && (payout - stake) / stake >= (context.config?.minPayout ?? .8)
           && Math.abs(stake - Number(context.config?.stake ?? .35)) <= .01 && Date.now() / 1000 - context.signalEpoch <= 25,
         origin: context.strategy === 'breakout' || context.version === 'pullback-study-v1' ? 'candidate-observation' : 'continuous', quoteSpot: Number(quote.spot), quoteTime: Number(quote.spot_time) }]);
@@ -81,12 +82,19 @@ export class ResearchRecorder {
           const key = symbol + ':' + signal.version;
           if (Date.now() / 1000 - signal.signalEpoch > 25 || s.seen[key] === signal.signalEpoch) continue;
           s.seen[key] = signal.signalEpoch;
-          const context = { ...signal, symbol, signalId: `${mode}:${symbol}:${signal.version}:${signal.signalEpoch}`, durationMinutes: 1 };
-          this.decision({ ...context, kind: 'candidate', time: Date.now(), message: signal.reasons.join('; ') });
-          const requestedAt = Date.now();
-          const { proposal } = await api.sendRequest({ proposal: 1, amount: .35, basis: 'stake', contract_type: signal.direction, currency: this.session.accountCurrency || 'USD', underlying_symbol: symbol, duration: 1, duration_unit: 'm' });
-          if (this.destroyed || !s.enabled || mode !== this.session.activeMode) break;
-          this.proposal(context, proposal, requestedAt);
+          for (const durationMinutes of signal.strategy === 'breakout' ? [1, 3] : [1]) {
+            const pairId = `${mode}:${symbol}:${signal.version}:${signal.signalEpoch}:${durationMinutes}`;
+            for (const benchmark of [false, true]) {
+              if (this.destroyed || !s.enabled || mode !== this.session.activeMode) break;
+              const context = { ...signal, symbol, pairId, benchmark, signalId: pairId + (benchmark ? ':opposite' : ':signal'), durationMinutes,
+                direction: benchmark ? (signal.direction === 'CALL' ? 'PUT' : 'CALL') : signal.direction };
+              this.decision({ ...context, kind: 'candidate', time: Date.now(), message: benchmark ? 'Referência contrária pareada' : signal.reasons.join('; ') });
+              const requestedAt = Date.now();
+              const { proposal } = await api.sendRequest({ proposal: 1, amount: .35, basis: 'stake', contract_type: context.direction, currency: this.session.accountCurrency || 'USD', underlying_symbol: symbol, duration: durationMinutes, duration_unit: 'm' });
+              if (this.destroyed || !s.enabled || mode !== this.session.activeMode) break;
+              this.proposal(context, proposal, requestedAt);
+            }
+          }
         }
       }
       s.lastCapture = Date.now(); s.errors = 0; if (s.enabled) s.status = 'Gravando · rompimento e pullback em observação';
@@ -113,6 +121,6 @@ export class ResearchRecorder {
       try { for await (const line of lines) { if (!line.trim()) continue; try { const r = JSON.parse(line); if (r.symbol === symbol && (current === file || r.kind === 'tick' && r.epoch < Date.parse(nextDate) / 1000 + 360)) records.push(r); } catch { /* A writer may be completing the last record. */ } } }
       finally { lines.close(); input.destroy(); }
     }
-    return { ...replayTicks(records.filter(r => r.version !== 'pullback-study-v1'), options), comparison: comparePullback(records, options), symbol, date, accountMode, generatedAt: Date.now() };
+    return { ...replayTicks(records.filter(r => !r.benchmark && r.version !== 'pullback-study-v1'), options), comparison: comparePullback(records, options), directionBenchmark: directionBenchmark(records, options), symbol, date, accountMode, generatedAt: Date.now() };
   }
 }

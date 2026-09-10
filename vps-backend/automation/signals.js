@@ -1,3 +1,4 @@
+import { breakoutSignal } from './breakout.js';
 export const STRATEGY_VERSION = 'continuous-v1';
 export const ASSETS = ['R_100', '1HZ50V', 'R_50', '1HZ100V'];
 export const STRATEGIES = ['mhi', 'pullback'];
@@ -13,7 +14,7 @@ export function validateConfig(patch, previous = DEFAULT_CONTINUOUS) {
   const result = { ...previous };
   for (const key of Object.keys(DEFAULT_CONTINUOUS)) if (key in patch) result[key] = patch[key];
   if (typeof result.enabled !== 'boolean' || !['observe', 'live'].includes(result.execution)) throw Error('Modo inválido.');
-  for (const [key, allowed] of [['symbols', ASSETS], ['strategies', STRATEGIES]]) {
+  for (const [key, allowed] of [['symbols', ASSETS], ['strategies', [...STRATEGIES, 'breakout']]]) {
     if (!Array.isArray(result[key]) || !result[key].length || result[key].length > allowed.length || result[key].some(x => !allowed.includes(x))) throw Error(`Seleção inválida: ${key}`);
     result[key] = [...new Set(result[key])];
   }
@@ -21,6 +22,7 @@ export function validateConfig(patch, previous = DEFAULT_CONTINUOUS) {
     if (!Number.isFinite(Number(result[key])) || Number(result[key]) < min || Number(result[key]) > max) throw Error(`Valor inválido: ${key}`);
     result[key] = Number(result[key]);
   }
+  if (result.execution === 'live' && result.strategies.includes('breakout')) throw Error('Rompimento disponível somente em observação.');
   if (!Number.isInteger(result.maxPositions) || !Number.isInteger(result.durationMinutes)) throw Error('Posições e duração devem ser inteiros.');
   if (result.stake > result.maxExposure || result.stake > result.dailyLossLimit) throw Error('A entrada excede o orçamento de risco.');
   return result;
@@ -39,6 +41,7 @@ function ema(values, period) {
 
 // Scores express rule confluence, NEVER a calibrated win probability.
 export function signalFor(candles, strategy) {
+  if (strategy === 'breakout') return breakoutSignal(candles);
   if (candles.length < 30) return null;
   const recent = candles.slice(-30);
   if (recent.some((c, i) => i && c.epoch - recent[i - 1].epoch !== 60)) return null;

@@ -10,7 +10,7 @@ export function studySignal(candles) {
   return { ...signal, version: EXPERIMENT_VERSION, features: { bodyRange: Math.abs(last.close-last.open)/range, strongTrend: signal.reasons.includes('Separação das médias') } };
 }
 export function comparePullback(records, options) {
-  const quotes = [...new Map(records.filter(r=>r.kind==='proposal' && r.version===EXPERIMENT_VERSION).map(r=>[r.signalId,r])).values()];
+  const quotes = [...new Map(records.filter(r=>r.kind==='proposal' && !r.benchmark && r.version===EXPERIMENT_VERSION).map(r=>[r.signalId,r])).values()];
   const ticks = records.filter(r=>r.kind==='tick');
   const variants = [
     ['baseline','Pullback de referência',q=>q.score>=60 && (q.payout-q.stake)/q.stake>=.8],
