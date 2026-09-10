@@ -158,6 +158,7 @@ export class DerivAPI {
     this.send({ type: 'start_bot' });
   }
 
+  configureFakegale(config) { this.send({ type: 'fakegale_config', config }); }
   configureContinuous(config) { this.send({ type: 'continuous_config', config }); }
   reconcileContinuous(contractId, source = 'continuous') { this.send({ type: 'continuous_reconcile', contractId, source }); }
   runLaboratory(symbol, options) { this.send({ type: 'laboratory_run', symbol, options }); }

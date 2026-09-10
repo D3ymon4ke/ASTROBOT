@@ -244,7 +244,7 @@ app.post('/admin/action', (req, res) => {
     console.log(`[Admin] Delete session from memory requested for ${cleanEmail}`);
     const existingSession = sessions.get(cleanEmail);
     if (existingSession) {
-      if (existingSession.isRunning || existingSession.continuous.state.config.enabled || existingSession.continuous.state.position || existingSession.continuous.state.shadows.length || existingSession.continuous.busy || existingSession.research.state.enabled || existingSession.research.busy) {
+      if (existingSession.isRunning || existingSession.continuous.state.config.enabled || existingSession.continuous.state.position || existingSession.continuous.state.shadows.length || existingSession.continuous.busy || existingSession.research.state.enabled || existingSession.research.busy || existingSession.fakegale.state.config.enabled || existingSession.fakegale.state.pending.length || existingSession.fakegale.busy) {
         return res.status(400).json({ error: 'Não é possível remover da memória um robô em operação.' });
       }
       existingSession.destroy();
@@ -497,6 +497,9 @@ wss.on('connection', (ws) => {
       
       if (type === 'start_bot') {
         session.startBot();
+      } else if (type === 'fakegale_config') {
+        session.fakegale.configure(payload.config);
+        ws.send(JSON.stringify({ type: 'automation_result', message: 'Fakegale V2 atualizado: somente simulação.' }));
       } else if (type === 'continuous_config') {
         session.continuous.configure(payload.config);
         ws.send(JSON.stringify({ type: 'automation_result', message: 'Configuração aplicada na VPS.' }));
@@ -574,6 +577,7 @@ setInterval(() => {
   const now = new Date();
   for (const session of sessions.values()) {
     session.continuous.tick().catch(err => console.error('Continuous tick:', err.message));
+    session.fakegale.tick().catch(err => console.error('Fakegale simulation:', err.message));
     session.research.tick().catch(err => console.error('Research tick:', err.message));
     session.schedulerTick(now);
   }
