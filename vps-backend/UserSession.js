@@ -1,3 +1,4 @@
+import { telegramPreference } from './utils/telegramTemplates.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -727,9 +728,7 @@ export class UserSession {
     if (!this.settings.telegramEnabled || !token || !this.settings.telegramChatId) return;
     
     // Check user preference filters
-    if (type === 'win' && !this.settings.telegramNotifWin) return;
-    if (type === 'loss' && !this.settings.telegramNotifLoss) return;
-    if (type === 'daily_summary' && !this.settings.telegramNotifDailySummary) return;
+    if (!telegramPreference(type, this.settings)) return;
 
     if (!this.telegramQueue) {
       this.telegramQueue = [];
@@ -768,7 +767,7 @@ export class UserSession {
     this.candles = []; // Clear candles for a fresh analysis start
     this.addLog({ message: 'INICIANDO OPERAÇÕES AUTOMÁTICAS', type: 'success' });
     
-    this.sendTelegramNotif('bot_started', `🤖 <b>ASTROBOT OPERANDO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ativo:</b> <code>${this.settings.symbol}</code>\n<b>Estratégia:</b> <code>${this.settings.selectedStrategy}</code>\n<b>Stake Inicial:</b> <code>$${this.settings.stakeValue}</code>\n<b>Saldo Inicial:</b> <code>$${parseFloat(this.balance).toFixed(2)}</code>`);
+    this.sendTelegramNotif('bot_started', `🤖 <b>ASTROBOT · Sessão iniciada</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ativo:</b> <code>${this.settings.symbol}</code>\n<b>Estratégia:</b> <code>${this.settings.selectedStrategy}</code>\n<b>Stake Inicial:</b> <code>$${this.settings.stakeValue}</code>\n<b>Saldo Inicial:</b> <code>$${parseFloat(this.balance).toFixed(2)}</code>`);
     
     // Ensure we are connected and authorized, or force resubscribe if already connected
     if (this.settings.token) {
@@ -791,7 +790,7 @@ export class UserSession {
     this.isRunning = false;
     this.addLog({ message: 'OPERAÇÕES AUTOMÁTICAS PARALISADAS', type: 'warning' });
     
-    this.sendTelegramNotif('bot_stopped', `🛑 <b>ASTROBOT PARADO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Saldo Final:</b> <code>$${parseFloat(this.balance).toFixed(2)}</code>\n<b>Resultado:</b> <code>$${(this.balance - this.initialBalance).toFixed(2)}</code>`);
+    this.sendTelegramNotif('bot_stopped', `🛑 <b>ASTROBOT · Sessão pausada</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Saldo Final:</b> <code>$${parseFloat(this.balance).toFixed(2)}</code>\n<b>Resultado:</b> <code>$${(this.balance - this.initialBalance).toFixed(2)}</code>`);
 
     // Record active cycle result before stopping
     if (this.activeCycleId) {
@@ -1162,7 +1161,7 @@ export class UserSession {
     const isCycleFakegale = !!(this.settings.enableFakegale || management === 'fakegale' || strategyId === 'fakegale');
     const mgmtDisplay = isCycleFakegale ? '🧪 Fakegale (G1 Sniper)' : management === 'sorosgale' ? '🚀 Sorosgale' : management === 'fixed' ? 'Mão Fixa' : 'Martingale';
 
-    this.sendTelegramNotif('cycle_started', `📅 <b>CICLO AGENDADO INICIADO</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ciclo:</b> <code>${cycle.name}</code>\n<b>Estratégia:</b> <code>${strategyId}</code>\n<b>Gerenciamento:</b> <code>${mgmtDisplay}</code>\n<b>Stake:</b> <code>$${parseFloat(stake).toFixed(2)}</code>\n<b>Stop Loss:</b> <code>$${parseFloat(stopLoss).toFixed(2)}</code>\n<b>Take Profit:</b> <code>$${parseFloat(takeProfit).toFixed(2)}</code>`);
+    this.sendTelegramNotif('cycle_started', `📅 <b>ASTROBOT · Missão iniciada</b>\n━━━━━━━━━━━━━━━━━━━━━━\n<b>Ciclo:</b> <code>${cycle.name}</code>\n<b>Estratégia:</b> <code>${strategyId}</code>\n<b>Gerenciamento:</b> <code>${mgmtDisplay}</code>\n<b>Stake:</b> <code>$${parseFloat(stake).toFixed(2)}</code>\n<b>Stop Loss:</b> <code>$${parseFloat(stopLoss).toFixed(2)}</code>\n<b>Take Profit:</b> <code>$${parseFloat(takeProfit).toFixed(2)}</code>`);
 
     // Ensure we are connected and authorized, or force resubscribe if already connected
     if (this.settings.token) {

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Send, CheckCircle, AlertCircle, HelpCircle, Save, Bell, Shield, TrendingUp, Info } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Save } from 'lucide-react';
 import { sendTelegramMessage } from '../utils/telegram';
 import { derivAPI } from '../deriv/DerivAPI';
-import Switch from './Switch';
+import './TelegramConfig.css';
 
 export default function TelegramConfig({
   settings,
@@ -47,7 +47,7 @@ export default function TelegramConfig({
     const saved = localStorage.getItem('astrobot_telegram_config');
     if (saved) {
       try {
-        return { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved); return { ...DEFAULT_CONFIG, ...parsed, notifications: { ...DEFAULT_CONFIG.notifications, ...parsed.notifications } };
       } catch (e) {
         // ignore
       }
@@ -55,16 +55,21 @@ export default function TelegramConfig({
     return DEFAULT_CONFIG;
   });
 
+  const dirty = useRef(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null); // { success: boolean, message: string }
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [useOfficial, setUseOfficial] = useState(!config.token);
 
   useEffect(() => {
-    if (settings) {
+    if (settings && !dirty.current) {
       setConfig(prev => {
         const updated = { ...prev };
         let changed = false;
+        const mapping={win:'Win',loss:'Loss',daily_summary:'DailySummary',bot_started:'BotStarted',bot_stopped:'BotStopped',take_profit:'TakeProfit',stop_loss:'StopLoss',opportunity_found:'Opportunity',order_executed:'Order',cycle_started:'Cycle'};
+        updated.notifications={...prev.notifications};
+        for(const [key,suffix] of Object.entries(mapping)){const value=settings['telegramNotif'+suffix];if(typeof value==='boolean' && value!==prev.notifications[key]){updated.notifications[key]=value;changed=true;}}
+
         
         if (settings.telegramEnabled !== undefined && settings.telegramEnabled !== prev.enabled) {
           updated.enabled = settings.telegramEnabled;
@@ -116,15 +121,18 @@ export default function TelegramConfig({
   };
 
   const handleToggleActive = () => {
+    dirty.current = true;
     setConfig(prev => ({ ...prev, enabled: !prev.enabled }));
   };
 
   const handleInputChange = (e) => {
+    dirty.current = true;
     const { name, value } = e.target;
     setConfig(prev => ({ ...prev, [name]: value }));
   };
 
   const handleNotificationToggle = (key) => {
+    dirty.current = true;
     setConfig(prev => ({
       ...prev,
       notifications: {
@@ -135,6 +143,7 @@ export default function TelegramConfig({
   };
 
   const handleSave = () => {
+    dirty.current = false;
     localStorage.setItem('astrobot_telegram_config', JSON.stringify(config));
     
     // Push Telegram settings to VPS backend (mapped to the field names UserSession.js uses)
@@ -219,489 +228,20 @@ export default function TelegramConfig({
     if (!isConfigured) {
       return { label: 'AGUARDANDO CONFIGURAÇÃO', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', border: 'rgba(245, 158, 11, 0.3)' };
     }
-    return { label: 'INTEGRAÇÃO ATIVA (24H)', color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)' };
+    return { label: 'CONFIGURADO', color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)' };
   };
 
   const status = getStatusDetails();
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      
-      {/* Top Banner Status */}
-      <div className="glass-panel" style={{
-        padding: '1.25rem',
-        background: 'rgba(14, 11, 24, 0.6)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '1rem',
-        borderRadius: '16px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '10px',
-            background: 'rgba(59, 130, 246, 0.1)',
-            border: '1px solid rgba(59, 130, 246, 0.25)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#3b82f6'
-          }}>
-            <Send size={20} />
-          </div>
-          <div>
-            <h2 style={{ fontSize: '1rem', fontWeight: '800', margin: 0, color: 'white' }}>INTEGRAÇÃO TELEGRAM REMOTE</h2>
-            <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>Monitore e comande o robô pelo celular mesmo em segundo plano</span>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{
-            fontSize: '0.65rem',
-            fontWeight: '900',
-            padding: '4px 10px',
-            borderRadius: '20px',
-            background: status.bg,
-            border: `1px solid ${status.border}`,
-            color: status.color,
-            letterSpacing: '0.5px'
-          }}>
-            {status.label}
-          </span>
-          <Switch checked={config.enabled} onChange={handleToggleActive} />
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '1.25rem' }} className="planning-grid">
-        
-        {/* Left Column: API Settings & Notification Toggles */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          
-           {/* Credentials Card */}
-          <div className="glass-panel" style={{ padding: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
-            <h3 style={{ fontSize: '0.8rem', fontWeight: '800', color: 'white', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Shield size={14} style={{ color: 'var(--primary-light)' }} /> DADOS DE CONEXÃO DO BOT
-            </h3>
-
-            {/* Tabs for Bot Mode */}
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '1.25rem' }}>
-              <button
-                type="button"
-                onClick={() => setUseOfficial(true)}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  fontSize: '0.72rem',
-                  fontWeight: '800',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  border: useOfficial ? '1px solid var(--primary-light)' : '1px solid rgba(255, 255, 255, 0.08)',
-                  background: useOfficial ? 'rgba(139, 92, 246, 0.15)' : 'rgba(0, 0, 0, 0.2)',
-                  color: useOfficial ? 'white' : '#94A3B8',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                🤖 Bot Oficial ASTROBOT®
-              </button>
-              <button
-                type="button"
-                onClick={() => setUseOfficial(false)}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  fontSize: '0.72rem',
-                  fontWeight: '800',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  border: !useOfficial ? '1px solid var(--primary-light)' : '1px solid rgba(255, 255, 255, 0.08)',
-                  background: !useOfficial ? 'rgba(139, 92, 246, 0.15)' : 'rgba(0, 0, 0, 0.2)',
-                  color: !useOfficial ? 'white' : '#94A3B8',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                ⚙️ Bot Personalizado
-              </button>
-            </div>
-
-            {useOfficial ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', textAlign: 'center', padding: '0.5rem 0' }}>
-                <div style={{
-                  width: '60px',
-                  height: '60px',
-                  borderRadius: '50%',
-                  background: 'rgba(59, 130, 246, 0.1)',
-                  border: '1px solid rgba(59, 130, 246, 0.3)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#3b82f6',
-                  fontSize: '1.8rem'
-                }}>
-                  🤖
-                </div>
-                
-                <div>
-                  <h4 style={{ color: 'white', margin: '0 0 6px 0', fontSize: '0.85rem', fontWeight: '700' }}>Vincular Bot Oficial ASTROBOT®</h4>
-                  <p style={{ color: '#cbd5e1', fontSize: '0.72rem', margin: 0, lineHeight: '1.4' }}>
-                    Clique no botão abaixo para abrir o Telegram e iniciar a conversa com o nosso bot oficial. Ele vinculará sua conta instantaneamente.
-                  </p>
-                </div>
-
-                <a
-                  href={getTelegramLink()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="action-button-glow"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '0.65rem 1.5rem',
-                    fontSize: '0.78rem',
-                    fontWeight: '800',
-                    color: 'white',
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                    borderRadius: '8px',
-                    textDecoration: 'none',
-                    boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
-                    cursor: 'pointer',
-                    marginTop: '0.5rem'
-                  }}
-                >
-                  <Send size={14} /> Começar no Telegram
-                </a>
-
-                {config.chatId ? (
-                  <div style={{
-                    marginTop: '0.5rem',
-                    width: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '10px'
-                  }}>
-                    <div style={{
-                      padding: '0.5rem 1rem',
-                      borderRadius: '8px',
-                      background: 'rgba(16, 185, 129, 0.08)',
-                      border: '1px solid rgba(16, 185, 129, 0.25)',
-                      color: '#10b981',
-                      fontSize: '0.72rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}>
-                      <CheckCircle size={14} /> <b>Status:</b> Telegram Conectado (ID: {config.chatId})
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleDisconnectOfficial}
-                      style={{
-                        padding: '4px 12px',
-                        fontSize: '0.65rem',
-                        fontWeight: '700',
-                        color: '#ef4444',
-                        background: 'rgba(239, 68, 68, 0.1)',
-                        border: '1px solid rgba(239, 68, 68, 0.2)',
-                        borderRadius: '6px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Desvincular Telegram
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{
-                    marginTop: '0.5rem',
-                    padding: '0.5rem 1rem',
-                    borderRadius: '8px',
-                    background: 'rgba(245, 158, 11, 0.08)',
-                    border: '1px solid rgba(245, 158, 11, 0.25)',
-                    color: '#f59e0b',
-                    fontSize: '0.72rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}>
-                    <AlertCircle size={14} /> <b>Status:</b> Aguardando Clique/Início no Telegram
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div>
-                    <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>TELEGRAM BOT TOKEN</label>
-                    <input
-                      type="password"
-                      name="token"
-                      value={config.token}
-                      onChange={handleInputChange}
-                      placeholder="Ex: 123456789:ABCdefGhIJKlmNoPQ..."
-                      style={{
-                        fontSize: '0.78rem',
-                        padding: '0.55rem',
-                        background: '#09090f',
-                        color: 'white',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '8px',
-                        width: '100%'
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '6px', letterSpacing: '0.5px' }}>SEU TELEGRAM CHAT ID</label>
-                    <input
-                      type="text"
-                      name="chatId"
-                      value={config.chatId}
-                      onChange={handleInputChange}
-                      placeholder="Ex: 987654321"
-                      style={{
-                        fontSize: '0.78rem',
-                        padding: '0.55rem',
-                        background: '#09090f',
-                        color: 'white',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '8px',
-                        width: '100%'
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={handleTestConnection}
-                    disabled={testing}
-                    className="action-button-glow"
-                    style={{
-                      padding: '0.55rem 1rem',
-                      fontSize: '0.75rem',
-                      fontWeight: '800',
-                      color: 'white',
-                      background: 'rgba(59, 130, 246, 0.12)',
-                      border: '1px solid rgba(59, 130, 246, 0.4)',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    {testing ? 'Testando...' : 'Testar Conexão'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    style={{
-                      padding: '0.55rem 1.25rem',
-                      fontSize: '0.75rem',
-                      fontWeight: '800',
-                      color: 'white',
-                      background: saveSuccess ? 'rgba(16, 185, 129, 0.15)' : 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
-                      border: saveSuccess ? '1px solid var(--success)' : 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      boxShadow: saveSuccess ? 'none' : '0 0 12px rgba(139, 92, 246, 0.3)',
-                      transition: 'all 0.25s ease'
-                    }}
-                  >
-                    <Save size={13} /> {saveSuccess ? 'Salvo!' : 'Salvar Dados'}
-                  </button>
-                </div>
-
-                {testResult && (
-                  <div style={{
-                    marginTop: '0.5rem',
-                    padding: '0.5rem 0.75rem',
-                    borderRadius: '6px',
-                    fontSize: '0.7rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    background: testResult.success ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                    border: testResult.success ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)',
-                    color: testResult.success ? '#10b981' : '#ef4444'
-                  }}>
-                    {testResult.success ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-                    {testResult.message}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Central de Notificações Checklist */}
-          <div className="glass-panel" style={{ padding: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px' }}>
-            <h3 style={{ fontSize: '0.8rem', fontWeight: '800', color: 'white', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Bell size={14} style={{ color: 'var(--primary-light)' }} /> CENTRAL DE NOTIFICAÇÕES SELETIVA
-            </h3>
-
-            {/* Config Sections */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-              
-              {/* Group 1: Trading & Signals */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <span style={{ fontSize: '0.62rem', fontWeight: '900', color: 'var(--primary-light)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>📊 Operações & Sinais</span>
-                
-                {[
-                  { key: 'opportunity_found', label: 'Entrada encontrada' },
-                  { key: 'order_executed', label: 'Ordem executada' },
-                  { key: 'win', label: 'Operação WIN' },
-                  { key: 'loss', label: 'Operação LOSS' },
-                  { key: 'g1', label: 'Martingale Nível G1' },
-                  { key: 'g2', label: 'Martingale Nível G2' }
-                ].map(item => (
-                  <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
-                    <span style={{ color: '#cbd5e1' }}>{item.label}</span>
-                    <Switch showStatus={false} scale={0.85} checked={config.notifications[item.key]} onChange={() => handleNotificationToggle(item.key)} />
-                  </div>
-                ))}
-              </div>
-
-              {/* Group 2: Cycles & Engine status */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <span style={{ fontSize: '0.62rem', fontWeight: '900', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>⚙️ Automação & IA</span>
-                
-                {[
-                  { key: 'cycle_started', label: 'Ciclo iniciado (Scheduler)' },
-                  { key: 'cycle_finished', label: 'Ciclo finalizado (Scheduler)' },
-                  { key: 'bot_started', label: 'Bot iniciado' },
-                  { key: 'bot_stopped', label: 'Bot desligado' },
-                  { key: 'recall_triggered', label: 'Acionamento Recall Engine' },
-                  { key: 'recall_win', label: 'Recuperação WIN no Recall' },
-                  { key: 'recall_loss', label: 'Loss na Shadow Account' }
-                ].map(item => (
-                  <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
-                    <span style={{ color: '#cbd5e1' }}>{item.label}</span>
-                    <Switch showStatus={false} scale={0.85} checked={config.notifications[item.key]} onChange={() => handleNotificationToggle(item.key)} />
-                  </div>
-                ))}
-              </div>
-
-              {/* Group 3: Financial & Targets */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '0.85rem' }}>
-                <span style={{ fontSize: '0.62rem', fontWeight: '900', color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>🏆 Alvos de Segurança</span>
-                
-                {[
-                  { key: 'take_profit', label: 'Meta diária atingida' },
-                  { key: 'stop_loss', label: 'Stop Loss atingido' },
-                  { key: 'stop_gain', label: 'Stop Gain atingido' },
-                  { key: 'deriv_connected', label: 'Deriv conectada' },
-                  { key: 'deriv_disconnected', label: 'Deriv desconectada' }
-                ].map(item => (
-                  <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
-                    <span style={{ color: '#cbd5e1' }}>{item.label}</span>
-                    <Switch showStatus={false} scale={0.85} checked={config.notifications[item.key]} onChange={() => handleNotificationToggle(item.key)} />
-                  </div>
-                ))}
-              </div>
-
-              {/* Group 4: Summaries & Critical Alerts */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '0.85rem' }}>
-                <span style={{ fontSize: '0.62rem', fontWeight: '900', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>⚠️ Alertas e Resumos</span>
-                
-                {[
-                  { key: 'daily_summary', label: 'Resumo Diário Automático' },
-                  { key: 'weekly_summary', label: 'Resumo Semanal' },
-                  { key: 'monthly_summary', label: 'Resumo Mensal' },
-                  { key: 'system_alerts', label: 'Alertas do sistema' },
-                  { key: 'critical_errors', label: 'Erros críticos de saldo' }
-                ].map(item => (
-                  <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
-                    <span style={{ color: '#cbd5e1' }}>{item.label}</span>
-                    <Switch showStatus={false} scale={0.85} checked={config.notifications[item.key]} onChange={() => handleNotificationToggle(item.key)} />
-                  </div>
-                ))}
-              </div>
-
-            </div>
-          </div>
-
-        </div>
-
-        {/* Right Column: Instructions & Commands Guide */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          
-          {/* Quick Guide */}
-          <div className="glass-panel" style={{ padding: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px', fontSize: '0.72rem' }}>
-            <h3 style={{ fontSize: '0.8rem', fontWeight: '800', color: 'white', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Info size={14} style={{ color: 'var(--primary-light)' }} /> COMO CONFIGURAR?
-            </h3>
-            <ol style={{ paddingLeft: '1.1rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: '8px', margin: 0 }}>
-              <li>Abra o Telegram e pesquise por <code>@BotFather</code>.</li>
-              <li>Envie <code>/newbot</code> e siga as instruções para criar seu bot e obter o <b>Token</b>.</li>
-              <li>Inicie uma conversa com o seu bot recém-criado clicando no link gerado.</li>
-              <li>Para descobrir seu <b>Chat ID</b>, pesquise por <code>@userinfobot</code> no Telegram e envie qualquer mensagem. Ele responderá com o ID numérico.</li>
-              <li>Cole as credenciais aqui, salve e clique em <b>Testar Conexão</b>!</li>
-            </ol>
-          </div>
-
-          {/* Interactive Keyboard & Commands Guide */}
-          <div className="glass-panel" style={{ padding: '1.25rem', background: 'rgba(14, 11, 24, 0.5)', borderRadius: '16px', fontSize: '0.72rem' }}>
-            <h3 style={{ fontSize: '0.8rem', fontWeight: '800', color: 'white', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <TrendingUp size={14} style={{ color: 'var(--primary-light)' }} /> BOTÕES DO TELEGRAM
-            </h3>
-            <span style={{ color: '#94A3B8', display: 'block', marginBottom: '0.75rem', fontSize: '0.65rem' }}>Ao receber qualquer mensagem, o bot disponibilizará um menu de acesso rápido no seu celular:</span>
-            
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '6px',
-              background: '#09090f',
-              padding: '8px',
-              borderRadius: '8px',
-              border: '1px solid rgba(255,255,255,0.03)',
-              fontFamily: 'var(--font-mono)'
-            }}>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '4px 6px', borderRadius: '4px', textAlign: 'center', color: '#10b981' }}>▶ Iniciar Bot</div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '4px 6px', borderRadius: '4px', textAlign: 'center', color: '#f59e0b' }}>⏸ Pausar</div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '4px 6px', borderRadius: '4px', textAlign: 'center', color: '#ef4444' }}>⛔ Parar</div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '4px 6px', borderRadius: '4px', textAlign: 'center', color: 'white' }}>📈 Relatório</div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '4px 6px', borderRadius: '4px', textAlign: 'center', color: 'white' }}>📊 Scanner</div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '4px 6px', borderRadius: '4px', textAlign: 'center', color: 'white' }}>💰 Saldo</div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '4px 6px', borderRadius: '4px', textAlign: 'center', color: 'white' }}>📅 Ciclos</div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '4px 6px', borderRadius: '4px', textAlign: 'center', color: '#8b5cf6' }}>⚙ Config</div>
-            </div>
-
-            <span style={{ color: '#94A3B8', display: 'block', marginTop: '1rem', marginBottom: '0.5rem', fontSize: '0.65rem' }}>Lista de comandos disponíveis por texto:</span>
-            <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px', paddingRight: '4px' }} className="modules-scrollbar">
-              {[
-                { cmd: '/status', desc: 'Verifica status geral' },
-                { cmd: '/startbot', desc: 'Inicia operação do bot' },
-                { cmd: '/stopbot', desc: 'Pára operação do bot' },
-                { cmd: '/pause', desc: 'Pausa as operações' },
-                { cmd: '/resume', desc: 'Retoma do ponto pausado' },
-                { cmd: '/saldo', desc: 'Consulta saldo em dólares' },
-                { cmd: '/lucro', desc: 'Retorna placar e lucros' },
-                { cmd: '/scanner', desc: 'Sinais ativos dos ativos' },
-                { cmd: '/ciclos', desc: 'Verifica ciclos do Scheduler' },
-                { cmd: '/estrategias', desc: 'Assertividade do catálogo' },
-                { cmd: '/relatorio', desc: 'Gera relatório completo' },
-                { cmd: '/help', desc: 'Lista os comandos' }
-              ].map(c => (
-                <div key={c.cmd} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem' }}>
-                  <code style={{ color: 'var(--primary-light)' }}>{c.cmd}</code>
-                  <span style={{ color: 'var(--text-muted)' }}>{c.desc}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
-  );
+  const choices = [['win','Resultados positivos'],['loss','Resultados negativos'],['daily_summary','Resumo diário'],['bot_started','Sessão iniciada'],['bot_stopped','Sessão pausada'],['take_profit','Meta atingida'],['stop_loss','Limite de perda'],['opportunity_found','Sinais identificados'],['order_executed','Ordens enviadas'],['cycle_started','Eventos das missões']];
+  return <div className="telegram-workspace">
+    <section className="tg-status"><div><span className="tg-eyebrow">CANAL DE OPERAÇÕES</span><h3>Notificações com contexto.</h3><p>Conexão, resultados e eventos da sessão em um único canal.</p></div><label className="tg-toggle"><input type="checkbox" checked={config.enabled} onChange={handleToggleActive}/>Ativar notificações</label><span className="tg-badge">{status.label}</span></section>
+    <div className="tg-columns"><section className="tg-card"><h3>Conectar ao Telegram</h3><div className="tg-tabs"><button aria-pressed={useOfficial} onClick={()=>{dirty.current=true;setUseOfficial(true);setConfig(p=>({...p,token:''}));}}>Bot oficial</button><button aria-pressed={!useOfficial} onClick={()=>{dirty.current=true;setUseOfficial(false);}}>Bot próprio</button></div>
+      {useOfficial ? <><p>Abra o bot oficial e conclua a vinculação da conta. O Chat ID recebido identifica o destino dos avisos.</p><a className="tg-button" href={getTelegramLink()} target="_blank" rel="noreferrer">Abrir bot oficial ↗</a>{config.chatId && <button className="tg-button" onClick={handleDisconnectOfficial}>Desvincular canal</button>}</> : <><p>Use as credenciais do seu bot. O token fica oculto neste formulário.</p><label>Token do bot<input type="password" autoComplete="off" name="token" value={config.token} onChange={handleInputChange} placeholder="Token fornecido pelo BotFather" /></label></>}
+      <label>Chat ID<input name="chatId" value={config.chatId} onChange={handleInputChange} placeholder="Identificador do chat ou grupo" /></label><p className="tg-note">“Configurado” indica que os campos necessários estão preenchidos; não comprova entrega de mensagens.</p>
+      {!useOfficial && <button className="tg-button" disabled={testing || !config.token || !config.chatId} onClick={handleTestConnection}>{testing?'Enviando…':'Enviar mensagem de teste'}</button>}{testResult && <p role="status">{testResult.message}</p>}
+    </section><section className="tg-card"><h3>Prévia de mensagem</h3><p>Exemplo ilustrativo de um resultado da sessão.</p><div className="tg-preview"><b>ASTROBOT · Resultado da sessão</b><span>Resultado líquido: +USD 0,31</span><span>Saldo informado: USD 100,31</span><small>Contrato liquidado · agenda / manual</small></div><h3>Controle remoto</h3><p>Os comandos existentes continuam disponíveis no bot. Iniciar uma sessão pelo Telegram pode gerar compras conforme a configuração da conta.</p><p className="tg-note">Os avisos abaixo se referem à sessão e às missões. Observações do Trader Contínuo ficam no laboratório.</p></section></div>
+    <section className="tg-card"><h3>Escolha o que receber</h3><p>As alterações são aplicadas ao salvar. Resultados, ordens e sinais são eventos distintos.</p><div className="tg-preferences">{choices.map(([key,label])=><label key={key}><input type="checkbox" checked={config.notifications[key] ?? true} onChange={()=>handleNotificationToggle(key)}/>{label}</label>)}</div></section>
+    <footer className="tg-footer"><p role="status">{saveSuccess?'Configuração salva e enviada para sincronização.':'Salve para aplicar as alterações ao canal.'}</p><button className="tg-button tg-primary" onClick={handleSave}><Save size={16}/>Salvar configurações</button></footer>
+  </div>;
 }

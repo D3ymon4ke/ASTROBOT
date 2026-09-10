@@ -1,0 +1,13 @@
+const escape = v => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+const usd = n => Number.isFinite(Number(n)) ? `USD ${Number(n).toFixed(2)}` : 'Não informado';
+const message = (title,rows,note) => `<b>ASTROBOT · ${title}</b>\n\n` + rows.map(([k,v])=>`${k}: <code>${escape(v)}</code>`).join('\n') + (note ? `\n\n<i>${escape(note)}</i>` : '');
+export const formatWinMessage = (profit,balance) => message('Resultado positivo',[['Resultado líquido',usd(profit)],['Saldo informado',usd(balance)]],'Contrato liquidado · sessão / agenda');
+export const formatLossMessage = (loss,balance,nextGaleLevel=0,nextStake=0) => message('Resultado negativo',[['Resultado líquido',usd(-Math.abs(loss))],['Saldo informado',usd(balance)],...(nextGaleLevel>0 && nextStake>0 ? [['Próximo nível previsto',`G${nextGaleLevel}`],['Entrada prevista',usd(nextStake)]] : [])],'Contrato liquidado. Uma próxima entrada depende das regras e limites da sessão.');
+export const formatOpportunityFound = (symbol,strategy,direction,_score,stake,time) => message('Sinal identificado',[['Ativo',symbol],['Estratégia',strategy],['Direção',direction],['Entrada prevista',usd(stake)],['Horário informado',time]],'Sinal das regras configuradas; não confirma uma compra nem uma probabilidade de acerto.');
+export const formatOrderExecuted = (symbol,direction,stake,strategy='') => message('Ordem enviada',[['Ativo',symbol],['Direção',direction],['Entrada',usd(stake)],...(strategy?[['Estratégia',strategy]]:[])],'Acompanhe a confirmação e o resultado do contrato no sistema.');
+export const formatTakeProfitMessage = (profit,count,winRate,session='Principal') => message('Meta da sessão atingida',[['Sessão',session],['Resultado',usd(profit)],['Contratos',count],['Acerto observado',Number.isFinite(Number(winRate))?`${Number(winRate).toFixed(1)}%`:'—']],'Verifique o estado da sessão e das demais automações no painel.');
+export const formatStopLossMessage = (loss,count,winRate,session='Principal') => message('Limite de perda atingido',[['Sessão',session],['Resultado',usd(-Math.abs(loss))],['Contratos',count],['Acerto observado',Number.isFinite(Number(winRate))?`${Number(winRate).toFixed(1)}%`:'—']],'Verifique o estado da sessão e das demais automações no painel.');
+export function telegramPreference(type,settings) {
+ const fields={win:'Win',loss:'Loss',daily_summary:'DailySummary',bot_started:'BotStarted',bot_stopped:'BotStopped',take_profit:'TakeProfit',stop_loss:'StopLoss',opportunity:'Opportunity',opportunity_found:'Opportunity',order_executed:'Order',cycle_started:'Cycle',cycle_finished:'Cycle'};
+ return !fields[type] || settings['telegramNotif'+fields[type]] !== false;
+}

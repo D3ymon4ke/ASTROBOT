@@ -19,7 +19,7 @@ import DownloadsEditor from './components/DownloadsEditor';
 import Reports from './components/Reports';
 import NeuralLoader from './components/NeuralLoader';
 import StrategiesCatalog from './components/StrategiesCatalog';
-import Planning from './components/Planning';
+import Navigation from './components/Navigation.jsx';
 import Strands from './components/Strands';
 import LightPillar from './components/LightPillar';
 import TelegramConfig from './components/TelegramConfig';
@@ -341,7 +341,7 @@ export default function App() {
 
   // Mobile Responsiveness Detector
   const [isMobile, setIsMobile] = useState(() => {
-    return typeof window !== 'undefined' && window.innerWidth <= 768;
+    return typeof window !== 'undefined' && window.innerWidth <= 1024;
   });
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [showSessionResultsModal, setShowSessionResultsModal] = useState(false);
@@ -349,7 +349,7 @@ export default function App() {
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768);
+      setIsMobile(window.innerWidth <= 1024);
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
@@ -822,7 +822,7 @@ export default function App() {
           '2': 'automation',
           '3': 'strategies',
           '4': 'scanner',
-          '5': 'planning',
+          '5': 'reports',
           '6': 'reports',
           '7': 'settings',
           '8': 'telegram',
@@ -4798,293 +4798,7 @@ export default function App() {
           </div>
 
           {/* Nav links with Unified Dropdowns (hidden on mobile via CSS class) */}
-          <nav className="desktop-nav-links" style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', position: 'relative' }}>
-            {/* Dashboard */}
-            <button
-              onClick={() => {
-                setActivePage('dashboard');
-                setIsAnalysisDropdownOpen(false);
-                setIsManagementDropdownOpen(false);
-                setIsProfileDropdownOpen(false);
-              }}
-              style={{
-                background: activePage === 'dashboard' ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
-                border: 'none',
-                color: activePage === 'dashboard' ? 'var(--primary-light)' : 'var(--text-secondary)',
-                borderBottom: activePage === 'dashboard' ? '2px solid var(--primary-light)' : '2px solid transparent',
-                padding: '0.5rem 0.6rem',
-                fontSize: '0.8rem',
-                fontWeight: activePage === 'dashboard' ? '700' : '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                borderRadius: '6px 6px 0 0',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-              }}
-            >
-              <Layers size={13} />
-              <span>Dashboard</span>
-            </button>
-
-            {/* Validador $100 (Página Exclusiva) */}
-            <button
-              onClick={() => {
-                setActivePage('validator');
-                setIsAnalysisDropdownOpen(false);
-                setIsManagementDropdownOpen(false);
-                setIsProfileDropdownOpen(false);
-              }}
-              style={{
-                background: activePage === 'validator' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                border: 'none',
-                color: activePage === 'validator' ? '#34d399' : 'var(--text-secondary)',
-                borderBottom: activePage === 'validator' ? '2px solid #10b981' : '2px solid transparent',
-                padding: '0.5rem 0.6rem',
-                fontSize: '0.8rem',
-                fontWeight: activePage === 'validator' ? '700' : '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                borderRadius: '6px 6px 0 0',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-              }}
-            >
-              <ShieldCheck size={13} style={{ color: '#10b981' }} />
-              <span>Análise de Estratégias</span>
-            </button>
-
-            {/* Automação */}
-            <button
-              onClick={() => {
-                setActivePage('automation');
-                setIsAnalysisDropdownOpen(false);
-                setIsManagementDropdownOpen(false);
-                setIsProfileDropdownOpen(false);
-              }}
-              style={{
-                background: (activePage === 'automation' || activePage === 'scheduler') ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
-                border: 'none',
-                color: (activePage === 'automation' || activePage === 'scheduler') ? 'var(--primary-light)' : 'var(--text-secondary)',
-                borderBottom: (activePage === 'automation' || activePage === 'scheduler') ? '2px solid var(--primary-light)' : '2px solid transparent',
-                padding: '0.5rem 0.6rem',
-                fontSize: '0.8rem',
-                fontWeight: (activePage === 'automation' || activePage === 'scheduler') ? '700' : '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                borderRadius: '6px 6px 0 0',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-              }}
-            >
-              <Calendar size={13} />
-              <span>Automação</span>
-            </button>
-
-            {/* Estratégias */}
-            <button
-              onClick={() => {
-                setActivePage('strategies');
-                setIsAnalysisDropdownOpen(false);
-                setIsManagementDropdownOpen(false);
-                setIsProfileDropdownOpen(false);
-              }}
-              style={{
-                background: activePage === 'strategies' ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
-                border: 'none',
-                color: activePage === 'strategies' ? 'var(--primary-light)' : 'var(--text-secondary)',
-                borderBottom: activePage === 'strategies' ? '2px solid var(--primary-light)' : '2px solid transparent',
-                padding: '0.5rem 0.6rem',
-                fontSize: '0.8rem',
-                fontWeight: activePage === 'strategies' ? '700' : '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                borderRadius: '6px 6px 0 0',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-              }}
-            >
-              <Sparkles size={13} />
-              <span>Estratégias</span>
-            </button>
-
-            {/* DROPDOWN 2: Gerenciamento & Relatórios (Planejamento + Relatórios + Telegram) */}
-            <div style={{ position: 'relative' }}>
-              <button
-                onClick={() => {
-                  setIsManagementDropdownOpen(!isManagementDropdownOpen);
-                  setIsAnalysisDropdownOpen(false);
-                  setIsProfileDropdownOpen(false);
-                }}
-                style={{
-                  background: (activePage === 'planning' || activePage === 'notes' || activePage === 'reports' || activePage === 'telegram') ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
-                  border: 'none',
-                  color: (activePage === 'planning' || activePage === 'notes' || activePage === 'reports' || activePage === 'telegram') ? 'var(--primary-light)' : 'var(--text-secondary)',
-                  borderBottom: (activePage === 'planning' || activePage === 'notes' || activePage === 'reports' || activePage === 'telegram') ? '2px solid var(--primary-light)' : '2px solid transparent',
-                  padding: '0.5rem 0.6rem',
-                  fontSize: '0.8rem',
-                  fontWeight: (activePage === 'planning' || activePage === 'notes' || activePage === 'reports' || activePage === 'telegram') ? '700' : '500',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  borderRadius: '6px 6px 0 0',
-                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                }}
-              >
-                <Target size={13} />
-                <span>Gerenciamento & Relatórios</span>
-                <ChevronDown size={12} style={{ transform: isManagementDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
-              </button>
-
-              {isManagementDropdownOpen && (
-                <div className="glass-panel" style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  width: '215px',
-                  zIndex: 1100,
-                  padding: '0.4rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.25rem',
-                  background: 'rgba(14, 11, 24, 0.95)',
-                  border: '1px solid rgba(139, 92, 246, 0.25)',
-                  borderRadius: '8px',
-                  boxShadow: '0 10px 40px rgba(0, 0, 0, 0.6)'
-                }}>
-                  <button
-                    onClick={() => {
-                      setActivePage('planning');
-                      setIsManagementDropdownOpen(false);
-                    }}
-                    style={{
-                      background: activePage === 'planning' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
-                      border: 'none',
-                      color: activePage === 'planning' ? 'var(--primary-light)' : 'white',
-                      padding: '8px 10px',
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <Target size={13} style={{ color: '#f59e0b' }} />
-                    <span>Planejamento & Martingale</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setActivePage('notes');
-                      setIsManagementDropdownOpen(false);
-                    }}
-                    style={{
-                      background: activePage === 'notes' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
-                      border: 'none',
-                      color: activePage === 'notes' ? 'var(--primary-light)' : 'white',
-                      padding: '8px 10px',
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <StickyNote size={13} style={{ color: '#8b5cf6' }} />
-                    <span>Anotações & Ideias</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setActivePage('reports');
-                      setIsManagementDropdownOpen(false);
-                    }}
-                    style={{
-                      background: activePage === 'reports' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
-                      border: 'none',
-                      color: activePage === 'reports' ? 'var(--primary-light)' : 'white',
-                      padding: '8px 10px',
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <TrendingUp size={13} style={{ color: '#10b981' }} />
-                    <span>Relatórios Mensais</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setActivePage('telegram');
-                      setIsManagementDropdownOpen(false);
-                    }}
-                    style={{
-                      background: activePage === 'telegram' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
-                      border: 'none',
-                      color: activePage === 'telegram' ? 'var(--primary-light)' : 'white',
-                      padding: '8px 10px',
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <Send size={13} style={{ color: '#38bdf8' }} />
-                    <span>Telegram Notificações</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Admin (if Admin) */}
-            {isAdminLoggedIn && (
-              <button
-                onClick={() => {
-                  setActivePage('admin');
-                  setIsAnalysisDropdownOpen(false);
-                  setIsManagementDropdownOpen(false);
-                  setIsProfileDropdownOpen(false);
-                }}
-                style={{
-                  background: activePage === 'admin' ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
-                  border: 'none',
-                  color: activePage === 'admin' ? 'var(--primary-light)' : 'var(--text-secondary)',
-                  borderBottom: activePage === 'admin' ? '2px solid var(--primary-light)' : '2px solid transparent',
-                  padding: '0.5rem 0.6rem',
-                  fontSize: '0.8rem',
-                  fontWeight: activePage === 'admin' ? '700' : '500',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  borderRadius: '6px 6px 0 0',
-                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                }}
-              >
-                <ShieldCheck size={13} />
-                <span>Admin</span>
-              </button>
-            )}
-          </nav>
+          <Navigation page={activePage} admin={isAdminLoggedIn} onNavigate={page => { setActivePage(page); setIsProfileDropdownOpen(false); setIsManagementDropdownOpen(false); }} />
         </div>
 
         {/* Right: Balance, Account Type, Notifications, Profile Dropdown */}
@@ -5569,32 +5283,6 @@ export default function App() {
           );
         }
 
-        if (activePage === 'planning' || activePage === 'notes') {
-          return (
-            <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
-              <Planning
-                dbTrades={dbTrades}
-                planningState={planning}
-                initialViewMode={activePage === 'notes' ? 'notes' : 'overview'}
-                onUpdatePlanning={(newPlanning) => {
-                  setPlanning(newPlanning);
-                  if (newPlanning.goals) localStorage.setItem('astrobot_planning_goals', JSON.stringify(newPlanning.goals));
-                  if (newPlanning.notes) localStorage.setItem('astrobot_user_notes', JSON.stringify(newPlanning.notes));
-                  if (newPlanning.milestones) localStorage.setItem('astrobot_planning_milestones', JSON.stringify(newPlanning.milestones));
-                  if (newPlanning.simulator) localStorage.setItem('astrobot_planning_simulator', JSON.stringify(newPlanning.simulator));
-
-                  derivAPI.updatePlanning(newPlanning);
-                  syncSettingsToDb({ planning: newPlanning });
-                }}
-                onClearDb={() => {
-                  clearDbTrades(isDemo);
-                  setDbTrades([]);
-                }}
-              />
-            </main>
-          );
-        }
-
         if (activePage === 'automation') {
           return (
             <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
@@ -5682,8 +5370,8 @@ export default function App() {
             <main style={{ padding: '1.25rem 2rem', flex: 1, overflowY: 'auto' }}>
               <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 <div>
-                  <h2 style={{ fontSize: '1.6rem', fontWeight: '800', margin: 0, background: 'linear-gradient(to right, white, var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Telegram Remote</h2>
-                  <p style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '4px' }}>Monitore e controle o ASTROBOT pelo celular, 24 horas por dia.</p>
+                  <h2 style={{ fontSize: '1.6rem', fontWeight: '800', margin: 0, background: 'linear-gradient(to right, white, var(--primary-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Central de notificações</h2>
+                  <p style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '4px' }}>Configure seu canal, escolha os avisos e acompanhe a operação pelo Telegram.</p>
                 </div>
                 <TelegramConfig
                   settings={settings}
@@ -6603,9 +6291,9 @@ export default function App() {
         </button>
 
         <button
-          className={`mobile-nav-item ${activePage === 'planning' || activePage === 'reports' ? 'active' : ''}`}
+          className={`mobile-nav-item ${activePage === 'reports' ? 'active' : ''}`}
           onClick={() => {
-            setActivePage('planning');
+            setActivePage('reports');
             setIsMobileDrawerOpen(false);
           }}
         >
@@ -6722,7 +6410,6 @@ export default function App() {
               { id: 'scanner', label: 'Scanner IA & Gráficos', icon: Sparkles, color: '#38bdf8' },
               { id: 'validator', label: 'Análise de Estratégias', icon: ShieldCheck },
                 { id: 'strategies', label: 'Catálogo de Estratégias', icon: Brain, color: '#c084fc' },
-              { id: 'planning', label: 'Planejamento & Risco', icon: Target, color: '#f59e0b' },
               { id: 'history', label: 'Histórico de Operações', icon: Clock, color: '#94a3b8' },
               { id: 'reports', label: 'Relatórios Mensais', icon: Coins, color: '#34d399' },
               { id: 'community', label: 'Comunidade & Ranking', icon: Users, color: '#f472b6' },
