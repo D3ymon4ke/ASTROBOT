@@ -93,10 +93,29 @@ export function runMACrossoverBacktest(candles, maxMartingale = 0) {
   return { winRate, totalTrades: total, wins, losses, signals };
 }
 
+// MHI uses closed, consecutive one-minute candles only.
+function validMhiRange(candles, start, end) {
+  if (start < 0 || end >= candles.length) return false;
+  for (let i = start; i <= end; i++) {
+    const c = candles[i];
+    if (!c || !Number.isFinite(c.epoch) || c.epoch % 60 !== 0 ||
+        !Number.isFinite(c.open) || !Number.isFinite(c.close) ||
+        (i > start && c.epoch !== candles[i - 1].epoch + 60)) return false;
+  }
+  return true;
+}
+
+function summarizeMhi(signals) {
+  const wins = signals.filter(s => s.result === 'WIN').length;
+  const directWins = signals.filter(s => s.result === 'WIN' && s.steps === 0).length;
+  const totalTrades = signals.length;
+  return { winRate: totalTrades ? wins / totalTrades * 100 : 0,
+    totalTrades, wins, losses: totalTrades - wins, signals, directWins,
+    directWinRate: totalTrades ? directWins / totalTrades * 100 : 0 };
+}
+
 export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority', variant = 1, useTrendFilter = false) {
-  if (candles.length < 10) return { winRate: 0, totalTrades: 0, wins: 0, losses: 0, signals: [] };
-  let wins = 0;
-  let losses = 0;
+  if (!candles || candles.length < 10) return summarizeMhi([]);
   const signals = [];
   const cycles = {};
   const ema20 = useTrendFilter ? calculateEMA(candles, 20) : null;
@@ -105,16 +124,15 @@ export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority', va
     const c = candles[i];
     const date = new Date(c.epoch * 1000);
     const minute = date.getMinutes();
-    const cycleStartMinute = minute - (minute % 5);
-    const cycleId = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${cycleStartMinute}`;
+    const cycleId = Math.floor(c.epoch / 300) * 300;
     if (!cycles[cycleId]) cycles[cycleId] = [];
     cycles[cycleId].push({ candle: c, index: i, minutePos: minute % 5 });
   }
   
-  const cycleIds = Object.keys(cycles).sort();
+  const cycleIds = Object.keys(cycles).map(Number).sort((a, b) => a - b);
   for (let cIdx = 0; cIdx < cycleIds.length - 1; cIdx++) {
     const currentCycle = cycles[cycleIds[cIdx]];
-    const nextCycle = cycles[cycleIds[cycleIds.indexOf(cycleIds[cIdx]) + 1]];
+    const nextCycle = cycles[cycleIds[cIdx] + 300];
     if (!nextCycle) continue;
 
     const c3 = currentCycle.find(item => item.minutePos === 2);
@@ -143,7 +161,7 @@ export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority', va
     
     const targetMinutePos = variant === 2 ? 1 : variant === 3 ? 2 : 0;
     const targetEntry = nextCycle.find(item => item.minutePos === targetMinutePos);
-    if (!targetEntry) continue;
+    if (!targetEntry || !validMhiRange(candles, c3.index, targetEntry.index)) continue;
 
     if (useTrendFilter && ema20) {
       const emaVal = ema20[targetEntry.index - 1];
@@ -155,9 +173,7 @@ export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority', va
     }
     
     const evaluation = evaluateTrade(candles, targetEntry.index, direction, maxMartingale);
-    if (evaluation.result !== 'PENDING') {
-      const isWin = evaluation.result === 'WIN';
-      if (isWin) wins++; else losses++;
+    if (evaluation.result !== 'PENDING' && validMhiRange(candles, targetEntry.index, targetEntry.index + evaluation.steps)) {
       signals.push({
         epoch: targetEntry.candle.epoch,
         time: new Date(targetEntry.candle.epoch * 1000).toLocaleTimeString(),
@@ -168,9 +184,7 @@ export function runMHIBacktest(candles, maxMartingale = 0, mode = 'minority', va
       });
     }
   }
-  const total = wins + losses;
-  const winRate = total > 0 ? (wins / total) * 100 : 0;
-  return { winRate, totalTrades: total, wins, losses, signals };
+  return summarizeMhi(signals);
 }
 
 /**
@@ -1159,32 +1173,34 @@ export function getBestMHIStrategy(candles, maxMartingale = 0) {
  * Evaluates the dynamic MHI decision at each 5m cycle across MHI 1, 2 and 3.
  */
 export function runMHIAutoBacktest(candles, maxMartingale = 0) {
-  if (!candles || candles.length < 10) return { winRate: 0, totalTrades: 0, wins: 0, losses: 0, signals: [] };
-
-  const res1Min = runMHIBacktest(candles, maxMartingale, 'minority', 1);
-  const res1Maj = runMHIBacktest(candles, maxMartingale, 'majority', 1);
-  const res2Min = runMHIBacktest(candles, maxMartingale, 'minority', 2);
-  const res2Maj = runMHIBacktest(candles, maxMartingale, 'majority', 2);
-  const res3Min = runMHIBacktest(candles, maxMartingale, 'minority', 3);
-  const res3Maj = runMHIBacktest(candles, maxMartingale, 'majority', 3);
-
-  const best1 = res1Maj.winRate > res1Min.winRate ? res1Maj : res1Min;
-  const best2 = res2Maj.winRate > res2Min.winRate ? res2Maj : res2Min;
-  const best3 = res3Maj.winRate > res3Min.winRate ? res3Maj : res3Min;
-
-  const allSignals = [...best1.signals, ...best2.signals, ...best3.signals]
-    .sort((a, b) => a.epoch - b.epoch);
-
-  let wins = 0;
-  let losses = 0;
-  allSignals.forEach(s => {
-    if (s.result === 'WIN') wins++;
-    else if (s.result === 'LOSS') losses++;
-  });
-
-  const total = wins + losses;
-  const winRate = total > 0 ? (wins / total) * 100 : 0;
-  return { winRate, totalTrades: total, wins, losses, signals: allSignals };
+  if (!candles || candles.length < 10) return summarizeMhi([]);
+  // Precompute outcomes, but only expose outcomes closed before each decision.
+  const histories = [1, 2, 3].map(variant => ['minority', 'majority'].map(mode =>
+    runMHIBacktest(candles, maxMartingale, mode, variant).signals));
+  const signals = [];
+  for (let i = 5; i < candles.length; i++) {
+    if (!validMhiRange(candles, i - 5, i)) continue;
+    const position = Math.floor(candles[i].epoch / 60) % 5;
+    if (position > 2) continue;
+    const rates = histories[position].map(history => {
+      const settled = i < 10 ? [] : history.filter(s => s.candleIndex + s.steps < i);
+      return summarizeMhi(settled).winRate;
+    });
+    const mode = rates[1] > rates[0] ? 'majority' : 'minority';
+    const id = 'mhi_' + (position ? (position + 1) + '_' : '') + mode;
+    const signal = computeRawLiveSignal(id, candles.slice(0, i), maxMartingale);
+    if (!signal) continue;
+    const evaluation = evaluateTrade(candles, i, signal.direction, maxMartingale);
+    if (evaluation.result === 'PENDING') break;
+    if (!validMhiRange(candles, i, i + evaluation.steps)) continue;
+    signals.push({ epoch: candles[i].epoch,
+      time: new Date(candles[i].epoch * 1000).toLocaleTimeString(),
+      direction: signal.direction, result: evaluation.result, steps: evaluation.steps,
+      candleIndex: i, detectedMhiPattern: id });
+    // One position at a time, including its recovery candles.
+    i += evaluation.steps;
+  }
+  return summarizeMhi(signals);
 }
 
 /**
@@ -1346,6 +1362,8 @@ export function evaluateNeuralOpportunity(candles, strategiesStats, minWinRateTh
 
 function computeRawLiveSignal(strategyId, candles, maxMartingale = 0) {
   if (candles.length < 5) return null;
+  if ((strategyId.startsWith('mhi_') || strategyId === 'fakegale') &&
+      !validMhiRange(candles, candles.length - 5, candles.length - 1)) return null;
   const lastIndex = candles.length - 1;
   const lastCandle = candles[lastIndex];
   const date = new Date(lastCandle.epoch * 1000);
