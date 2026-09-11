@@ -1,6 +1,7 @@
 import FakegalePanel from './FakegalePanel.jsx';
+import DigitLabPanel from './DigitLabPanel.jsx';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Calendar, FlaskConical, Play, Pause, Save, Download, ShieldCheck } from 'lucide-react';
+import { Activity, Calendar, FlaskConical, Cpu, Play, Pause, Save, Download, ShieldCheck } from 'lucide-react';
 import { derivAPI } from '../deriv/DerivAPI';
 import { ASSETS, DEFAULT_CONTINUOUS, validateConfig } from '../../vps-backend/automation/signals.js';
 import { summarize, stressTest, walkForward } from '../../vps-backend/automation/research.js';
@@ -31,7 +32,7 @@ function Equity({ rows }) {
   return <div className="aut-equity"><div><b>Curva de resultado</b><span>{money(low)} a {money(high)}</span></div>{rows.length ? <svg viewBox="0 0 800 190" role="img" aria-label={`Curva de resultado de ${rows.length} contratos. Resultado final ${money(m.net)}`}><line x1="20" x2="780" y1={160 + low / span * 135} y2={160 + low / span * 135} stroke="#ffffff20" /><polyline points={points} fill="none" stroke={m.net < 0 ? '#fb8b9e' : '#a998f5'} strokeWidth="2.5" /></svg> : <p>Os resultados aparecerão após as primeiras liquidações.</p>}</div>;
 }
 
-export default function AutomationWorkspace({ children, continuous, research, fakegale, timelineEnabled, timelineTrades = [], accountMode = 'demo', initialTab = 'timeline', onTabChange }) {
+export default function AutomationWorkspace({ children, continuous, research, fakegale, digitLab, timelineEnabled, timelineTrades = [], accountMode = 'demo', initialTab = 'timeline', onTabChange }) {
   const [tab, updateTab] = useState(initialTab);
   const setTab = value => { updateTab(value); onTabChange?.(value); };
   const [draft, setDraft] = useState({ ...DEFAULT_CONTINUOUS });
@@ -93,11 +94,12 @@ export default function AutomationWorkspace({ children, continuous, research, fa
   };
   return <div className="aut-workspace">
     <nav className="aut-tabs" aria-label="Áreas de automação">{[
-      ['timeline', Calendar, 'Linha do tempo'], ['continuous', Activity, 'Trader contínuo'], ['fakegale', FlaskConical, 'Contínuo Fakegale V2'], ['lab', FlaskConical, 'Laboratório']
+      ['timeline', Calendar, 'Linha do tempo'], ['continuous', Activity, 'Trader contínuo'], ['fakegale', FlaskConical, 'Contínuo Fakegale V2'], ['digitlab', Cpu, 'Laboratório de Dígitos'], ['lab', FlaskConical, 'Laboratório']
     ].map(([id, Icon, label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}<span className="aut-account">{accountMode === 'demo' ? 'CONTA DEMO' : 'CONTA REAL'}</span></nav>
     {notice && <p className="aut-notice" role="status">{notice}</p>}
     {tab === 'timeline' && children}
     {tab === 'fakegale' && <FakegalePanel key={accountMode} state={fakegale} available={available && fakegale?.simulationOnly} pending={pending} onConfigure={config => { setPending(true); derivAPI.configureFakegale(config); }} />}
+    {tab === 'digitlab' && <DigitLabPanel key={accountMode} state={digitLab} available={available && digitLab?.simulationOnly} pending={pending} onConfigure={config => { setPending(true); derivAPI.configureDigitLab(config); }} />}
     {tab === 'continuous' && <>
       <div className="workspace-heading"><div><span className="workspace-eyebrow">AUTOMAÇÃO / MONITORAMENTO CONTÍNUO</span><h1>O mercado não para<span>.</span></h1><p>Scanner na VPS, independente da agenda. A execução respeita a exposição compartilhada.</p></div><span className={'workspace-status ' + (continuous?.config?.enabled ? 'is-online' : '')}><i />{continuous?.status || 'Aguardando VPS'}</span></div>
       {!available && <p className="aut-notice">Conecte-se à VPS com suporte ao Trader Contínuo para salvar ou iniciar. Esta tela não executa ordens no navegador.</p>}
@@ -129,7 +131,10 @@ export default function AutomationWorkspace({ children, continuous, research, fa
       <section className="aut-card"><h2>Decisões do trader</h2><p>Cada avaliação informa seu motivo. Nenhum critério é reduzido por tempo sem operar.</p><div className="aut-events">{[...(continuous?.events || [])].reverse().map((e, i) => <div key={e.time + ':' + i}><time>{new Date(e.time).toLocaleTimeString()}</time><b>{e.symbol || e.kind}</b><span>{e.message}</span>{e.score != null && <small>{e.score} pts</small>}</div>)}{!continuous?.events?.length && <p>Aguardando a primeira avaliação.</p>}</div></section>
     </>}
     {tab === 'lab' && <>
-      <section className="aut-card"><h2>Fakegale V2 · laboratório ao vivo</h2><p>{fakegale?.status || 'Aguardando VPS'} · modalidade independente, somente simulada.</p><button className="workspace-button" onClick={() => setTab('fakegale')}>Abrir gráfico do Fakegale V2</button></section>
+      <div className="aut-columns">
+        <section className="aut-card"><h2>Fakegale V2 · laboratório ao vivo</h2><p>{fakegale?.status || 'Aguardando VPS'} · modalidade MHI independente, somente simulada.</p><button className="workspace-button" onClick={() => setTab('fakegale')}>Abrir gráfico do Fakegale V2</button></section>
+        <section className="aut-card"><h2>Laboratório de Dígitos Quantum · QD-Differ</h2><p>{digitLab?.status || 'Aguardando VPS'} · 90% probabilidade matemática, detecção de anomalias.</p><button className="workspace-button" onClick={() => setTab('digitlab')}>Abrir Laboratório de Dígitos</button></section>
+      </div>
 
       <div className="workspace-heading"><div><span className="workspace-eyebrow">PESQUISA / VALIDAÇÃO</span><h1>Laboratório de estratégias<span>.</span></h1><p>Separe evidência, simulação e execução antes de decidir.</p></div><button className="workspace-button" onClick={() => download('astrobot-laboratorio.json', { accountMode, source, rows, metrics: summarize(rows), stress, walkForward: labResult, events: continuous?.events || [] })}><Download size={15} />Exportar análise</button></div>
       <ResearchPanel research={research} available={available} pending={pending} busy={labBusy} symbols={draft.symbols} symbol={labSymbol} onSymbol={setLabSymbol} result={labResult}

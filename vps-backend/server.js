@@ -500,6 +500,9 @@ wss.on('connection', (ws) => {
       } else if (type === 'fakegale_config') {
         session.fakegale.configure(payload.config);
         ws.send(JSON.stringify({ type: 'automation_result', message: 'Fakegale V2 atualizado: somente simulação.' }));
+      } else if (type === 'digit_config') {
+        session.digitLab.configure(payload.config);
+        ws.send(JSON.stringify({ type: 'automation_result', message: 'Laboratório de Dígitos atualizado: somente simulação.' }));
       } else if (type === 'continuous_config') {
         session.continuous.configure(payload.config);
         ws.send(JSON.stringify({ type: 'automation_result', message: 'Configuração aplicada na VPS.' }));
@@ -578,6 +581,7 @@ setInterval(() => {
   for (const session of sessions.values()) {
     session.continuous.tick().catch(err => console.error('Continuous tick:', err.message));
     session.fakegale.tick().catch(err => console.error('Fakegale simulation:', err.message));
+    session.digitLab.tick().catch(err => console.error('DigitLab tick:', err.message));
     session.research.tick().catch(err => console.error('Research tick:', err.message));
     session.schedulerTick(now);
   }

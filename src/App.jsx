@@ -572,6 +572,7 @@ export default function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [continuousState, setContinuousState] = useState(null);
   const [fakegaleState, setFakegaleState] = useState(null);
+  const [digitLabState, setDigitLabState] = useState(null);
   const [researchState, setResearchState] = useState(null);
   const [automationTab, setAutomationTab] = useState('timeline');
   const DEFAULT_SETTINGS = {
@@ -2055,6 +2056,7 @@ export default function App() {
       setContinuousState(sync.continuous || null);
       setResearchState(sync.research || null);
       setFakegaleState(sync.fakegale || null);
+      setDigitLabState(sync.digitLab || null);
       // Play win/loss sound if trades list grew, but only if we already had a first sync payload loaded
       const isFirstSync = !stateRef.current.hasReceivedSync;
       stateRef.current.hasReceivedSync = true;
@@ -5288,7 +5290,7 @@ export default function App() {
         if (activePage === 'automation') {
           return (
             <main style={{ padding: '1.25rem', flex: 1, overflowY: 'auto' }}>
-              <AutomationWorkspace fakegale={fakegaleState} research={researchState} initialTab={automationTab} onTabChange={setAutomationTab} continuous={continuousState} timelineEnabled={schedulerState} timelineTrades={dbTrades} accountMode={isDemo ? 'demo' : 'real'}>
+              <AutomationWorkspace digitLab={digitLabState} fakegale={fakegaleState} research={researchState} initialTab={automationTab} onTabChange={setAutomationTab} continuous={continuousState} timelineEnabled={schedulerState} timelineTrades={dbTrades} accountMode={isDemo ? 'demo' : 'real'}>
               <Scheduler
                 connected={connected}
                 schedulerState={schedulerState}
