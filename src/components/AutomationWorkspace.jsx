@@ -99,7 +99,7 @@ export default function AutomationWorkspace({ children, continuous, research, fa
     {notice && <p className="aut-notice" role="status">{notice}</p>}
     {tab === 'timeline' && children}
     {tab === 'fakegale' && <FakegalePanel key={accountMode} state={fakegale} available={available && fakegale?.simulationOnly} pending={pending} onConfigure={config => { setPending(true); derivAPI.configureFakegale(config); }} />}
-    {tab === 'digitlab' && <DigitLabPanel key={accountMode} state={digitLab} available={available && digitLab?.simulationOnly} pending={pending} onConfigure={config => { setPending(true); derivAPI.configureDigitLab(config); }} />}
+    {tab === 'digitlab' && <DigitLabPanel key={accountMode} state={digitLab} available={derivAPI.connected || !!digitLab} pending={pending} onConfigure={config => { setPending(true); derivAPI.configureDigitLab(config); }} />}
     {tab === 'continuous' && <>
       <div className="workspace-heading"><div><span className="workspace-eyebrow">AUTOMAÇÃO / MONITORAMENTO CONTÍNUO</span><h1>O mercado não para<span>.</span></h1><p>Scanner na VPS, independente da agenda. A execução respeita a exposição compartilhada.</p></div><span className={'workspace-status ' + (continuous?.config?.enabled ? 'is-online' : '')}><i />{continuous?.status || 'Aguardando VPS'}</span></div>
       {!available && <p className="aut-notice">Conecte-se à VPS com suporte ao Trader Contínuo para salvar ou iniciar. Esta tela não executa ordens no navegador.</p>}

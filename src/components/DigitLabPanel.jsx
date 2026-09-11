@@ -210,7 +210,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
           <div className="aut-actions">
             <button
               className="workspace-button"
-              disabled={!available || pending || !dirty || !!state?.pending?.length}
+              disabled={pending || (!dirty && !!state?.config) || !!state?.pending?.length}
               onClick={() => apply(draft)}
             >
               <Save size={15} /> Salvar Parâmetros
@@ -218,12 +218,12 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
 
             <button
               className="workspace-button workspace-button-primary"
-              disabled={!available || pending}
+              disabled={pending}
               onClick={() =>
                 apply(
                   state?.config?.enabled
                     ? { enabled: false }
-                    : { ...(dirty ? draft : {}), enabled: true }
+                    : { ...(dirty ? draft : (state?.config || draft)), enabled: true }
                 )
               }
             >
@@ -233,6 +233,11 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
           </div>
 
           {error && <p role="alert" style={{ color: '#fb7185', marginTop: '8px' }}>{error}</p>}
+          {!state && (
+            <p style={{ fontSize: '12px', color: '#fbbf24', marginTop: '10px' }}>
+              💡 <b>Aviso:</b> Se a VPS estiver em execução no servidor remoto, execute <code>git pull</code> e reinicie o processo do Node (ex: <code>pm2 restart</code>) para que a VPS ative o motor de dígitos em tempo real.
+            </p>
+          )}
         </section>
 
         {/* HEATMAP & DIGIT DISTRIBUTION */}
