@@ -11,18 +11,18 @@ export const QUANTUM_DEFAULTS = Object.freeze({
   enabled: false,
   symbols: ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_25', '1HZ25V'],
   stake: 1.0,
-  multiplier: 2.1, // Recovery multiplier for ~95% payout CALL/PUT contracts
+  multiplier: 2.1,
   maxGale: 1,
   cycleBudget: 25.0,
   minPayout: 0.85,
   minScore: 75,
-  durationMinutes: 1,
-  sessionTarget: 5.00, // Profit target per micro-session in USD
-  cooldownMinutes: 30, // Cooldown in minutes after hitting sessionTarget
-  enableFakegaleLoss: true // Virtual loss gate before simulated entry
+  durationTicks: 5,
+  virtualLossesRequired: 2, // Requires 2 consecutive virtual losses before opening trade
+  sessionTarget: 5.00,
+  cooldownMinutes: 30
 });
 
-export const DIGIT_DEFAULTS = QUANTUM_DEFAULTS; // Backward compatibility
+export const DIGIT_DEFAULTS = QUANTUM_DEFAULTS;
 
 export function validateDigitConfig(patch, previous = QUANTUM_DEFAULTS) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
@@ -47,7 +47,8 @@ export function validateDigitConfig(patch, previous = QUANTUM_DEFAULTS) {
     ['cycleBudget', 0.35, 500],
     ['minPayout', 0.50, 1.20],
     ['minScore', 50, 95],
-    ['durationMinutes', 1, 5],
+    ['durationTicks', 5, 60],
+    ['virtualLossesRequired', 0, 5],
     ['sessionTarget', 0.05, 100],
     ['cooldownMinutes', 1, 360]
   ]) {
@@ -55,10 +56,6 @@ export function validateDigitConfig(patch, previous = QUANTUM_DEFAULTS) {
     if (!Number.isFinite(c[k]) || c[k] < min || c[k] > max) {
       throw Error(`Valor inválido para o parâmetro: ${k}`);
     }
-  }
-
-  if (typeof c.enableFakegaleLoss !== 'boolean') {
-    c.enableFakegaleLoss = Boolean(c.enableFakegaleLoss);
   }
 
   return c;
@@ -71,7 +68,7 @@ export class DigitTrader {
     this.destroyed = false;
     this.lastPoll = 0;
     this.candleCache = {}; // symbol -> [{ open, high, low, close, epoch }]
-    this.virtualTriggers = {}; // symbol -> count of virtual observations
+    this.virtualPipeline = {}; // symbol -> { losses: number, pending: object|null }
   }
 
   get state() {
@@ -81,7 +78,7 @@ export class DigitTrader {
       status: 'Desligado',
       sessionProfit: 0,
       cooldownUntil: 0,
-      matrix: {}, // symbol -> { trend, score, rsi, atr, lastUpdate }
+      matrix: {}, // symbol -> { trend, score, rsi, atr, lastUpdate, virtualLosses }
       pending: [],
       trades: [],
       distribution: {},
@@ -104,7 +101,16 @@ export class DigitTrader {
       sessionProfit: s.sessionProfit || 0,
       cooldownUntil: s.cooldownUntil || 0,
       cooldownRemainingSec,
-      matrix: s.matrix || {},
+      matrix: Object.fromEntries(
+        (s.config.symbols || []).map(sym => [
+          sym,
+          {
+            ...(s.matrix?.[sym] || {}),
+            virtualLosses: this.virtualPipeline[sym]?.losses || 0,
+            virtualRequired: s.config.virtualLossesRequired || 2
+          }
+        ])
+      ),
       pending: (s.pending || []).map(p => ({
         id: p.id,
         symbol: p.symbol,
@@ -113,30 +119,9 @@ export class DigitTrader {
         stage: p.stage,
         rule: p.rule,
         score: p.score,
-        waitingFreshTrigger: Boolean(p.waitingFreshTrigger),
-        phase: p.waitingFreshTrigger
-          ? 'Gale Inteligente: aguardando novo gatilho'
-          : p.quote
-          ? 'Aguardando fechamento da vela M1'
-          : 'Cotando proposta'
+        durationTicks: p.durationTicks || 5,
+        phase: p.quote ? 'Aguardando 5 ticks de saída (Sniper)' : 'Cotando proposta'
       })),
-      distribution: Object.fromEntries(
-        (s.config.symbols || []).map(sym => [
-          sym,
-          {
-            sampleSize: (this.candleCache[sym] || []).length,
-            counts: Array(10).fill(0),
-            percentages: Array(10).fill(0),
-            chiSquare: 0,
-            entropy: 1.0,
-            ranked: [],
-            hotDigits: [],
-            coldDigits: [],
-            lastDigits: [],
-            quantum: s.matrix?.[sym] || null
-          }
-        ])
-      ),
       trades: (s.trades || []).slice(-1000),
       events: (s.events || []).slice(-30),
       simulationOnly: true
@@ -170,8 +155,8 @@ export class DigitTrader {
     s.sessionProfit = 0;
     s.cooldownUntil = 0;
     this.candleCache = {};
-    this.virtualTriggers = {};
-    this.event('Laboratório Quântico resetado para início limpo.');
+    this.virtualPipeline = {};
+    this.event('Laboratório Sniper resetado para início limpo.');
     this.save();
   }
 
@@ -185,7 +170,7 @@ export class DigitTrader {
       throw Error('Aguarde as simulações pendentes antes de alterar parâmetros.');
     }
     s.config = validateDigitConfig(patch, s.config);
-    s.status = s.config.enabled ? 'Analisando confluência de velas M1 na VPS' : 'Pausado';
+    s.status = s.config.enabled ? 'Sniper Quântico ativo (Fakegale 2 Losses)' : 'Pausado';
     if (s.config.enabled && !this.session.derivAPI.connected) {
       this.session.connectDeriv();
     }
@@ -200,7 +185,7 @@ export class DigitTrader {
 
   async tick() {
     const s = this.state, api = this.session.derivAPI;
-    if (this.busy || this.destroyed || (!s.config.enabled && !s.pending.length) || Date.now() - this.lastPoll < 2500) return;
+    if (this.busy || this.destroyed || (!s.config.enabled && !s.pending.length) || Date.now() - this.lastPoll < 2000) return;
     if (!api.connected || !api.authorized) {
       s.status = 'Aguardando conexão Deriv';
       return;
@@ -211,12 +196,13 @@ export class DigitTrader {
       const remSec = Math.ceil((s.cooldownUntil - Date.now()) / 1000);
       const min = Math.floor(remSec / 60);
       const sec = remSec % 60;
-      s.status = `Cooldown ativo (${min}m ${sec}s restantes) · Lucro da sessão protegido`;
+      s.status = `Cooldown ativo (${min}m ${sec}s restantes) · Meta de $${s.config.sessionTarget.toFixed(2)} protegida`;
       return;
     } else if (s.cooldownUntil && s.cooldownUntil <= Date.now()) {
       s.cooldownUntil = 0;
       this.candleCache = {};
-      this.event('Cooldown concluído. Retomando varredura quântica de velas M1.');
+      this.virtualPipeline = {};
+      this.event('Cooldown concluído. Retomando varredura quântica.');
     }
 
     this.busy = true;
@@ -229,17 +215,12 @@ export class DigitTrader {
         throw Error('Simulação requer propostas em USD.');
       }
 
-      // Step 1: Process pending operations
+      // Step 1: Process pending real simulated operations (5 Ticks Sniper)
       for (const p of [...s.pending]) {
         if (!valid()) return;
 
-        // If waiting for fresh trigger on Gale 1, don't execute quote yet
-        if (p.waitingFreshTrigger) {
-          continue;
-        }
-
         if (p.quote) {
-          // Check for contract expiry (M1 candle completion)
+          // Check for contract expiry (5 ticks / ~10 seconds)
           if (Date.now() / 1000 < p.expiry + 1) continue;
 
           const { history } = await api.sendRequest({
@@ -258,8 +239,8 @@ export class DigitTrader {
             .sort((a, b) => a.epoch - b.epoch);
 
           if (!points.length) {
-            if (Date.now() / 1000 - p.expiry > 45) {
-              this.finish(p, 'Excluído: tick de saída M1 indisponível');
+            if (Date.now() / 1000 - p.expiry > 30) {
+              this.finish(p, 'Excluído: tick de saída sniper indisponível');
             }
             continue;
           }
@@ -279,6 +260,7 @@ export class DigitTrader {
             stage: p.stage,
             rule: p.rule,
             score: p.score,
+            durationTicks: p.durationTicks || 5,
             stake: p.quote.stake,
             payout: p.quote.payout,
             profit: Number(profit.toFixed(2)),
@@ -295,7 +277,8 @@ export class DigitTrader {
           s.sessionProfit = Number(((s.sessionProfit || 0) + row.profit).toFixed(2));
 
           if (win) {
-            this.finish(p, `Vitória no ${p.direction} (${p.rule}) · +$${row.profit.toFixed(2)} (${p.symbol})`);
+            this.finish(p, `🎯 Vitória Sniper ${p.direction} (${p.symbol}) · +$${row.profit.toFixed(2)}`);
+            this.virtualPipeline[p.symbol] = { losses: 0, pending: null };
 
             // Micro-session profit target check
             if (s.sessionProfit >= s.config.sessionTarget) {
@@ -303,20 +286,20 @@ export class DigitTrader {
               const lockedProfit = s.sessionProfit;
               s.sessionProfit = 0;
               this.candleCache = {};
-              this.event(`🎯 Meta da micro-sessão batida (+${lockedProfit.toFixed(2)} USD)! Cooldown de ${s.config.cooldownMinutes} min ativado.`);
+              this.virtualPipeline = {};
+              this.event(`🏆 Meta da micro-sessão batida (+${lockedProfit.toFixed(2)} USD)! Entrando em Cooldown de ${s.config.cooldownMinutes} min.`);
             }
             continue;
           } else {
-            // Loss occurred -> apply Intelligent Gale 1
             if (p.stage < s.config.maxGale) {
               p.stage++;
               p.quote = null;
-              p.waitingFreshTrigger = true;
               p.scheduled = Date.now() / 1000 + 1;
-              this.event(`Loss no ${p.direction} (${p.symbol}). Gale Inteligente ativado: aguardando nova retração/gatilho antes do Gale ${p.stage}.`, p);
+              this.event(`Loss no Sniper ${p.direction} (${p.symbol}). Preparando Gale ${p.stage} (recuperação 2.1x).`, p);
               continue;
             } else {
               this.finish(p, `Ciclo encerrado em loss no Gale ${p.stage} (${p.symbol})`);
+              this.virtualPipeline[p.symbol] = { losses: 0, pending: null };
               continue;
             }
           }
@@ -327,7 +310,7 @@ export class DigitTrader {
           continue;
         }
 
-        // Request proposal for next stage (Payout ~95%)
+        // Request proposal for 5 ticks Sniper (Payout ~95%)
         const stake = Math.round(s.config.stake * (s.config.multiplier ** p.stage) * 100) / 100;
         if ((p.spent || 0) + stake > s.config.cycleBudget + 1e-9) {
           this.finish(p, 'Excluído: orçamento do ciclo excedido');
@@ -341,8 +324,8 @@ export class DigitTrader {
           contract_type: p.direction === 'CALL' ? 'CALL' : 'PUT',
           currency: 'USD',
           underlying_symbol: p.symbol,
-          duration: s.config.durationMinutes || 1,
-          duration_unit: 'm'
+          duration: p.durationTicks || 5,
+          duration_unit: 't'
         };
 
         const response = await api.sendRequest(proposalReq);
@@ -355,23 +338,59 @@ export class DigitTrader {
         const epoch = Number(q?.spot_time);
 
         if (!q?.id || ![price, payout, entry, epoch].every(Number.isFinite) || Math.abs(price - stake) > 0.01 || payout <= price) {
-          this.finish(p, 'Excluído: proposta M1 inválida ou rejeitada');
+          this.finish(p, 'Excluído: proposta Sniper inválida ou rejeitada');
           continue;
         }
 
         p.spent = (p.spent || 0) + price;
         p.quote = { stake: price, payout, entry, epoch };
-        p.expiry = epoch + (s.config.durationMinutes || 1) * 60;
-        this.event(`Entrada simulada M1 ${p.direction} (Score: ${p.score}%, Stake: $${price}) em ${p.symbol}`, p);
+        p.expiry = epoch + (p.durationTicks || 5) * 2; // ~2s per tick
+        this.event(`Entrada simulada Sniper 5 Ticks: ${p.direction} (Score: ${p.score}%, Stake: $${price}) em ${p.symbol}`, p);
       }
 
-      // Step 2: Scan active symbols for Quantum Trend Signals on M1 candles
-      if (s.config.enabled && (!s.cooldownUntil || s.cooldownUntil <= Date.now())) {
+      // Step 2: Scan active symbols, evaluate Virtual Pipeline & Trigger Real Entries
+      if (s.config.enabled && !s.pending.length && (!s.cooldownUntil || s.cooldownUntil <= Date.now())) {
         s.matrix ||= {};
 
         for (const symbol of s.config.symbols) {
-          if (!valid() || !s.config.enabled) break;
+          if (!valid() || !s.config.enabled || s.pending.length) break;
 
+          this.virtualPipeline[symbol] ||= { losses: 0, pending: null };
+          const vState = this.virtualPipeline[symbol];
+
+          // 2.1: Settle existing virtual pending order for this symbol
+          if (vState.pending) {
+            if (Date.now() / 1000 >= vState.pending.expiryEpoch) {
+              const { history } = await api.sendRequest({
+                ticks_history: symbol,
+                style: 'ticks',
+                count: 5,
+                end: 'latest'
+              });
+              if (!valid() || !s.config.enabled) break;
+
+              const latestPrice = Number(history?.prices?.at(-1));
+              if (Number.isFinite(latestPrice)) {
+                const vWin = vState.pending.direction === 'CALL'
+                  ? (latestPrice > vState.pending.entryPrice)
+                  : (latestPrice < vState.pending.entryPrice);
+
+                if (vWin) {
+                  vState.losses = 0;
+                  this.event(`Fakegale: Vitória virtual em ${symbol} (${vState.pending.direction}). Pipeline resetado.`);
+                } else {
+                  vState.losses++;
+                  this.event(`Fakegale: Derrota virtual (${vState.losses}/${s.config.virtualLossesRequired}) em ${symbol}.`);
+                }
+                vState.pending = null;
+              }
+            } else {
+              // Still waiting for virtual expiry
+              continue;
+            }
+          }
+
+          // 2.2: Scan M1 candles for new quantum setup
           const candlesResp = await api.sendRequest({
             ticks_history: symbol,
             style: 'candles',
@@ -392,9 +411,7 @@ export class DigitTrader {
 
           this.candleCache[symbol] = candles;
 
-          const analysis = analyzeQuantumTrend(candles, symbol, {
-            minCandles: 30
-          });
+          const analysis = analyzeQuantumTrend(candles, symbol, { minCandles: 30 });
 
           s.matrix[symbol] = {
             trend: analysis.trend,
@@ -409,48 +426,36 @@ export class DigitTrader {
           };
 
           if (analysis.signal && analysis.score >= s.config.minScore) {
-            // Check if there is an existing pending trade waiting for fresh trigger on this symbol
-            const pendingGale = s.pending.find(p => p.symbol === symbol && p.waitingFreshTrigger);
-            if (pendingGale) {
-              pendingGale.waitingFreshTrigger = false;
-              pendingGale.direction = analysis.direction;
-              pendingGale.rule = analysis.rule;
-              pendingGale.score = analysis.score;
-              this.event(`Gale Inteligente acionado em ${symbol}: novo gatilho ${analysis.direction} (${analysis.rule} · Score ${analysis.score}%). Executando Gale ${pendingGale.stage}.`, pendingGale);
-              break;
+            const reqLosses = s.config.virtualLossesRequired ?? 2;
+
+            if (vState.losses < reqLosses) {
+              // Open Virtual Simulated Trade (Fakegale Filter)
+              vState.pending = {
+                entryPrice: analysis.indicators.currentPrice,
+                direction: analysis.direction,
+                rule: analysis.rule,
+                expiryEpoch: Math.floor(Date.now() / 1000) + 10 // 10s (5 ticks)
+              };
+              this.event(`Fakegale: Testando gatilho virtual em ${symbol} (${analysis.direction} · ${analysis.rule}). Perdas acumuladas: ${vState.losses}/${reqLosses}`);
+              continue;
             }
 
-            if (s.pending.length) continue;
-
-            // Fakegale Virtual Loss Filter (if enabled)
-            if (s.config.enableFakegaleLoss) {
-              const currentVCount = this.virtualTriggers[symbol] || 0;
-              if (currentVCount === 0) {
-                this.virtualTriggers[symbol] = 1;
-                this.event(`Filtro Fakegale: Gatilho virtual observado em ${symbol} (${analysis.direction} · ${analysis.rule}). Aguardando confirmação.`, {
-                  symbol
-                });
-                continue;
-              }
-              // Reset virtual trigger count once consumed
-              this.virtualTriggers[symbol] = 0;
-            }
-
+            // GATING SATISFIED: 2 Virtual Losses occurred! Execute Real Simulated Trade
             const id = `${mode}:${symbol}:${analysis.direction}:${Date.now()}`;
             s.pending.push({
               id,
               symbol,
               contractType: analysis.direction === 'CALL' ? 'CALL' : 'PUT',
               direction: analysis.direction,
+              durationTicks: analysis.durationTicks || 5,
               stage: 0,
-              rule: analysis.rule,
+              rule: `${analysis.rule} (Fakegale 2L Gate)`,
               score: analysis.score,
               scheduled: Date.now() / 1000,
               accumulatedProfit: 0,
-              quote: null,
-              waitingFreshTrigger: false
+              quote: null
             });
-            this.event(`Gatilho Quântico M1 em ${symbol}: ${analysis.direction} (${analysis.rule} · Score: ${analysis.score}%)`, {
+            this.event(`🎯 SNIPER DISPARADO em ${symbol}: ${analysis.direction} após ${vState.losses} perdas virtuais!`, {
               symbol
             });
             break;
@@ -465,16 +470,16 @@ export class DigitTrader {
         s.status = `Cooldown ativo (${Math.floor(remSec / 60)}m restantes) · Lucro protegido`;
       } else {
         s.status = s.config.enabled
-          ? `Monitorando ${s.config.symbols.length} ativos em M1 · QT-Matrix V2`
-          : s.pending.length ? 'Pausado · liquidando simulações pendentes' : 'Pausado';
+          ? `Sniper Quântico ativo · Varrendo 6 ativos com Fakegale 2L`
+          : s.pending.length ? 'Pausado · liquidando simulações' : 'Pausado';
       }
 
     } catch (err) {
       s.errors++;
-      s.status = `Falha no motor quântico: ${err.message}`;
+      s.status = `Falha no Sniper Quântico: ${err.message}`;
       if (s.errors >= 5) {
         s.config.enabled = false;
-        this.event('Laboratório Quântico pausado após falhas consecutivas');
+        this.event('Laboratório Sniper pausado após falhas consecutivas');
       }
     } finally {
       this.busy = false;

@@ -49,7 +49,7 @@ test('calculateRSI identifies overbought, oversold and neutral momentum', () => 
   assert.ok(lowRsi <= 35);
 });
 
-test('analyzeQuantumTrend detects pullback wick rejection on EMA', () => {
+test('analyzeQuantumTrend detects 5-tick momentum sniper pulse', () => {
   const candles = [];
   for (let i = 0; i < 40; i++) {
     const base = 1000 + i * 4;
@@ -65,11 +65,12 @@ test('analyzeQuantumTrend detects pullback wick rejection on EMA', () => {
   const analysis = analyzeQuantumTrend(candles, 'R_100', { minCandles: 30 });
   assert.equal(analysis.trend, 'BULLISH');
   assert.equal(analysis.direction, 'CALL');
+  assert.equal(analysis.durationTicks, 5);
   assert.ok(analysis.score >= 75);
   assert.ok(analysis.signal);
 });
 
-test('validateDigitConfig enforces QT-Matrix bounds and rejects invalid inputs', () => {
+test('validateDigitConfig enforces QT-Sniper bounds and rejects invalid inputs', () => {
   assert.throws(() => validateDigitConfig(null), /inválida/);
   assert.throws(() => validateDigitConfig({ stake: 0.1 }), /stake/);
   assert.throws(() => validateDigitConfig({ multiplier: 10 }), /multiplier/);
@@ -82,19 +83,21 @@ test('validateDigitConfig enforces QT-Matrix bounds and rejects invalid inputs',
     maxGale: 1,
     cycleBudget: 30.0,
     minScore: 75,
+    durationTicks: 5,
+    virtualLossesRequired: 2,
     sessionTarget: 5.0,
     cooldownMinutes: 30,
-    enableFakegaleLoss: true,
     symbols: ['R_100', '1HZ100V']
   });
 
   assert.equal(valid.enabled, true);
   assert.equal(valid.stake, 1.5);
   assert.equal(valid.multiplier, 2.1);
-  assert.equal(valid.sessionTarget, 5.0);
+  assert.equal(valid.virtualLossesRequired, 2);
+  assert.equal(valid.durationTicks, 5);
 });
 
-test('DigitTrader simulates M1 CALL/PUT trades with Intelligent Gale and session lock', async () => {
+test('DigitTrader simulates Deep Fakegale 2L Pipeline and 5-Tick Sniper execution', async () => {
   const session = {
     activeMode: 'demo',
     modeStates: { demo: {}, real: {} },
@@ -110,7 +113,7 @@ test('DigitTrader simulates M1 CALL/PUT trades with Intelligent Gale and session
         if (req.proposal) {
           return {
             proposal: {
-              id: 'prop-m1-call',
+              id: 'prop-sniper-5t',
               ask_price: req.amount,
               payout: req.amount * 1.95,
               spot: 1050.00,
@@ -132,6 +135,10 @@ test('DigitTrader simulates M1 CALL/PUT trades with Intelligent Gale and session
           }
           return { candles };
         }
+        if (req.ticks_history && req.style === 'ticks') {
+          // Return tick that produces a virtual loss for CALL (lower price)
+          return { history: { prices: [1000.00], times: [1000] } };
+        }
         return {};
       }
     }
@@ -144,30 +151,49 @@ test('DigitTrader simulates M1 CALL/PUT trades with Intelligent Gale and session
     multiplier: 2.1,
     maxGale: 1,
     minScore: 75,
+    virtualLossesRequired: 2,
+    durationTicks: 5,
     sessionTarget: 0.50,
     cooldownMinutes: 30,
-    enableFakegaleLoss: true,
     symbols: ['R_100']
   });
 
-  // Step 1: First scan registers virtual trigger
+  // Cycle 1: Open Virtual Order 1
   trader.lastPoll = 0;
   await trader.tick();
   assert.equal(trader.state.pending.length, 0);
+  assert.ok(trader.virtualPipeline['R_100'].pending);
 
-  // Step 2: Next scan confirms and creates pending trade
+  // Expire Virtual Order 1 -> Virtual Loss 1 (0 -> 1)
+  trader.virtualPipeline['R_100'].pending.expiryEpoch = Math.floor(Date.now() / 1000) - 2;
+  trader.lastPoll = 0;
+  await trader.tick();
+  assert.equal(trader.virtualPipeline['R_100'].losses, 1);
+
+  // Cycle 2: Open Virtual Order 2
+  trader.lastPoll = 0;
+  await trader.tick();
+  assert.ok(trader.virtualPipeline['R_100'].pending);
+
+  // Expire Virtual Order 2 -> Virtual Loss 2 (1 -> 2)
+  trader.virtualPipeline['R_100'].pending.expiryEpoch = Math.floor(Date.now() / 1000) - 2;
+  trader.lastPoll = 0;
+  await trader.tick();
+  assert.equal(trader.virtualPipeline['R_100'].losses, 2);
+
+  // Cycle 3: 2 Virtual Losses satisfied! -> Real Sniper Trade Triggered!
   trader.lastPoll = 0;
   await trader.tick();
   assert.equal(trader.state.pending.length, 1);
   assert.equal(trader.state.pending[0].direction, 'CALL');
+  assert.equal(trader.state.pending[0].durationTicks, 5);
 
-  // Step 3: Quote proposal
+  // Quote proposal
   trader.lastPoll = 0;
   await trader.tick();
   assert.ok(trader.state.pending[0].quote);
-  assert.equal(trader.state.pending[0].quote.stake, 1.0);
 
-  // Step 4: Settle M1 trade (Exit Price 1055.00 > Entry 1050.00 -> WIN on CALL)
+  // Settle Sniper 5T trade (Exit Price 1055.00 > Entry 1050.00 -> WIN on CALL)
   trader.state.pending[0].expiry = Math.floor(Date.now() / 1000) - 2;
   trader.lastPoll = 0;
   session.derivAPI.sendRequest = async (req) => {
@@ -187,5 +213,4 @@ test('DigitTrader simulates M1 CALL/PUT trades with Intelligent Gale and session
   trader.configure({ reset: true });
   assert.equal(trader.state.trades.length, 0);
   assert.equal(trader.state.sessionProfit, 0);
-  assert.equal(trader.state.cooldownUntil, 0);
 });

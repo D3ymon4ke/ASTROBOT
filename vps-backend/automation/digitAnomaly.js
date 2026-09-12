@@ -1,5 +1,5 @@
-export const QUANTUM_VERSION = 'qt-matrix-v2';
-export const QUANTUM_ASSETS = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_25', '1HZ25V', 'R_10', '1HZ10V', 'R_50', '1HZ50V'];
+export const QUANTUM_VERSION = 'qt-sniper-v1';
+export const QUANTUM_ASSETS = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_25', '1HZ25V', 'R_10', '1HZ10V'];
 export const DIGIT_ASSETS = QUANTUM_ASSETS;
 export const DIGIT_VERSION = QUANTUM_VERSION;
 
@@ -94,8 +94,7 @@ export function calculateRSI(prices = [], period = 14) {
 }
 
 /**
- * Multi-Factor Precision Trend & Pullback Analyzer for M1 Candles.
- * Incorporates Anti-Exhaustion RSI filters, EMA Ribbon (9/21/50), and Wick Rejection.
+ * Quantum Momentum Sniper & Pullback Analyzer.
  * @param {Array<{open: number, high: number, low: number, close: number, epoch: number}>} candles 
  * @param {string} symbol 
  * @param {object} config 
@@ -107,7 +106,7 @@ export function analyzeQuantumTrend(candles = [], symbol = 'R_100', config = {})
       signal: false,
       trend: 'NEUTRAL',
       score: 0,
-      reason: `Amostragem de velas M1 insuficiente (${candles?.length || 0}/${minCandles})`
+      reason: `Amostragem de velas insuficiente (${candles?.length || 0}/${minCandles})`
     };
   }
 
@@ -127,90 +126,83 @@ export function analyzeQuantumTrend(candles = [], symbol = 'R_100', config = {})
   const rsi = calculateRSI(closes, 14);
   const atr = calculateATR(validCandles, 14);
 
-  // Determine Directional Trend Regime
+  // Determine Directional Trend
   let trend = 'NEUTRAL';
   let trendScore = 50;
 
-  const isBullishAlignment = ema9 > ema21 && ema21 > ema50;
-  const isBearishAlignment = ema9 < ema21 && ema21 < ema50;
+  const isBullish = ema9 > ema21 && ema21 > ema50;
+  const isBearish = ema9 < ema21 && ema21 < ema50;
 
-  if (isBullishAlignment) {
+  if (isBullish) {
     trend = 'BULLISH';
     trendScore = 75;
-  } else if (isBearishAlignment) {
+  } else if (isBearish) {
     trend = 'BEARISH';
     trendScore = 75;
   }
 
-  // Price Action & Candle Geometry
   const lastCandle = validCandles.at(-1);
-  const prevCandle = validCandles.at(-2);
-  const range = (lastCandle.high - lastCandle.low) || 1e-5;
   const isGreen = lastCandle.close >= lastCandle.open;
   const isRed = lastCandle.close <= lastCandle.open;
-
-  const lowerWick = Math.min(lastCandle.open, lastCandle.close) - lastCandle.low;
-  const upperWick = lastCandle.high - Math.max(lastCandle.open, lastCandle.close);
-  const lowerWickRatio = lowerWick / range;
-  const upperWickRatio = upperWick / range;
 
   let signal = false;
   let direction = null; // 'CALL' or 'PUT'
   let rule = '';
   let score = 0;
+  let durationTicks = 5; // Default 5 ticks for sniper pulse
   const reasons = [];
 
-  // Strategy 1: Pullback & Wick Rejection on EMA Support/Resistance (HIGH ACCURACY SETUP)
-  const isPullbackBullish = isBullishAlignment && (lastCandle.low <= ema9 || lastCandle.low <= ema21) && lastCandle.close >= ema9 && isGreen;
-  const isPullbackBearish = isBearishAlignment && (lastCandle.high >= ema9 || lastCandle.high >= ema21) && lastCandle.close <= ema9 && isRed;
-
-  if (isPullbackBullish && rsi >= 40 && rsi <= 80) {
-    // Healthy pullback in uptrend without extreme exhaustion
+  // Setup 1: 5-Tick High-Velocity Momentum Pulse (Rompimento Explosivo)
+  if (isBullish && isGreen && currentPrice >= ema9 && rsi >= 45) {
     signal = true;
     direction = 'CALL';
-    rule = 'pullback_ema_rejection';
-    score = 92;
+    rule = 'momentum_sniper_5t';
+    score = 90;
+    durationTicks = 5;
     reasons.push(
-      `Retração (Pullback) compradora confirmada na EMA 9/21`,
-      `Rejeição de pavio inferior (${(lowerWickRatio * 100).toFixed(0)}%) com fechamento verde`,
-      `RSI saudável em ${rsi} (zona perfeita sem sobrecompra)`,
-      `Volatilidade ATR: ${atr}`
+      `Pulso de Momentum de Alta em ${symbol} (EMA 9 > 21 > 50)`,
+      `Aceleração de rompimento comprador (5 Ticks / 10s)`,
+      `RSI saudável em ${rsi}`
     );
-  } else if (isPullbackBearish && rsi <= 60 && rsi >= 20) {
-    // Healthy pullback in downtrend without extreme exhaustion
+  } else if (isBearish && isRed && currentPrice <= ema9 && rsi <= 55) {
     signal = true;
     direction = 'PUT';
-    rule = 'pullback_ema_rejection';
-    score = 92;
+    rule = 'momentum_sniper_5t';
+    score = 90;
+    durationTicks = 5;
     reasons.push(
-      `Retração (Pullback) vendedora confirmada na EMA 9/21`,
-      `Rejeição de pavio superior (${(upperWickRatio * 100).toFixed(0)}%) com fechamento vermelho`,
-      `RSI saudável em ${rsi} (zona perfeita sem sobrevenda)`,
-      `Volatilidade ATR: ${atr}`
+      `Pulso de Momentum de Baixa em ${symbol} (EMA 9 < 21 < 50)`,
+      `Aceleração de rompimento vendedor (5 Ticks / 10s)`,
+      `RSI saudável em ${rsi}`
     );
   }
 
-  // Strategy 2: Controlled Breakout Expansion
+  // Setup 2: EMA 21 Pullback Rejection (M1 Retração)
   if (!signal) {
-    if (isBullishAlignment && isGreen && currentPrice >= ema9 && rsi >= 45) {
+    const isPullbackBullish = isBullish && (lastCandle.low <= ema9 || lastCandle.low <= ema21) && lastCandle.close >= ema9 && isGreen;
+    const isPullbackBearish = isBearish && (lastCandle.high >= ema9 || lastCandle.high >= ema21) && lastCandle.close <= ema9 && isRed;
+
+    if (isPullbackBullish && rsi >= 40 && rsi <= 70) {
       signal = true;
       direction = 'CALL';
-      rule = 'ema_ribbon_breakout';
-      score = 85;
+      rule = 'pullback_ema_rejection';
+      score = 88;
+      durationTicks = 5;
       reasons.push(
-        `Alinhamento de Alta EMA Ribbon (EMA9 > EMA21 > EMA50)`,
-        `Preço em aceleração acima da EMA9`,
-        `RSI em aceleração controlada (${rsi})`
+        `Retração compradora confirmada na EMA 9/21`,
+        `Rejeição de suporte com fechamento verde`,
+        `RSI em nível de suporte (${rsi})`
       );
-    } else if (isBearishAlignment && isRed && currentPrice <= ema9 && rsi <= 55) {
+    } else if (isPullbackBearish && rsi <= 60 && rsi >= 30) {
       signal = true;
       direction = 'PUT';
-      rule = 'ema_ribbon_breakout';
-      score = 85;
+      rule = 'pullback_ema_rejection';
+      score = 88;
+      durationTicks = 5;
       reasons.push(
-        `Alinhamento de Baixa EMA Ribbon (EMA9 < EMA21 < EMA50)`,
-        `Preço em aceleração abaixo da EMA9`,
-        `RSI em aceleração controlada (${rsi})`
+        `Retração vendedora confirmada na EMA 9/21`,
+        `Rejeição de resistência com fechamento vermelho`,
+        `RSI em nível de resistência (${rsi})`
       );
     }
   }
@@ -219,6 +211,7 @@ export function analyzeQuantumTrend(candles = [], symbol = 'R_100', config = {})
     signal,
     direction,
     contractType: direction === 'CALL' ? 'CALL' : direction === 'PUT' ? 'PUT' : 'CALL',
+    durationTicks,
     trend,
     score: score || trendScore,
     rule: rule || 'neutral_scan',
@@ -236,7 +229,7 @@ export function analyzeQuantumTrend(candles = [], symbol = 'R_100', config = {})
 }
 
 /**
- * Backward compatibility alias for digit anomaly callers.
+ * Backward compatibility aliases.
  */
 export function extractLastDigit(price, symbol = 'R_100') {
   if (price == null || !Number.isFinite(Number(price))) return 0;

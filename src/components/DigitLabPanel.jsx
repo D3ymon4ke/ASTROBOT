@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, Save, Download, Cpu, Activity, Zap, AlertCircle, Shield, TrendingUp, BarChart2, Clock, CheckCircle2, RotateCw, Compass, ArrowUpRight, ArrowDownRight, Layers } from 'lucide-react';
+import { Play, Pause, Save, Download, Cpu, Activity, Zap, AlertCircle, Shield, TrendingUp, BarChart2, Clock, CheckCircle2, RotateCw, Compass, ArrowUpRight, ArrowDownRight, Target, Crosshair } from 'lucide-react';
 import { QUANTUM_DEFAULTS, validateDigitConfig } from '../../vps-backend/automation/DigitTrader.js';
 import { QUANTUM_ASSETS } from '../../vps-backend/automation/digitAnomaly.js';
 
@@ -72,7 +72,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
 
   const exportData = () => {
     const dataBlob = new Blob([JSON.stringify({
-      version: state?.version || 'qt-matrix-v1',
+      version: state?.version || 'qt-sniper-v1',
       simulationOnly: true,
       config: state?.config,
       selectedAsset,
@@ -84,29 +84,18 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
     const url = URL.createObjectURL(dataBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `quantum-trend-lab-${selectedAsset}.json`;
+    a.download = `quantum-sniper-lab-${selectedAsset}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-
-  const getRuleLabel = (rule) => {
-    switch (rule) {
-      case 'ema_ribbon_breakout':
-        return 'Rompimento EMA Ribbon M1';
-      case 'rsi_pullback_reversion':
-        return 'Pullback EMA 21 + Rejeição M1';
-      default:
-        return rule || 'Tendência M1';
-    }
   };
 
   return (
     <section className="digit-lab-panel aut-workspace">
       <div className="workspace-heading">
         <div>
-          <span className="workspace-eyebrow">QUANTUM TREND & VOLATILITY · VELAS M1 / 100% SIMULADO</span>
-          <h1>Laboratório Quântico QT-Matrix<span>.</span></h1>
-          <p>Motor direcional em Velas M1 com análise de EMA Ribbon (9/21/50), Rompimento ATR, Payout de ~95% e Filtro Fakegale Virtual.</p>
+          <span className="workspace-eyebrow">QUANTUM SNIPER · FAKEGALE 2L & 5-TICKS / 100% SIMULADO</span>
+          <h1>Laboratório Quântico QT-Sniper<span>.</span></h1>
+          <p>Disparos cirúrgicos de 5 ticks em rompimentos e retrações EMA. Exige <b>2 perdas virtuais consecutivas</b> antes de abrir a operação simulada.</p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
           <span className={`workspace-status ${state?.config?.enabled ? 'is-online' : ''}`}>
@@ -125,11 +114,11 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
         </div>
       </div>
 
-      {/* MULTI-ASSET QUANTUM SCANNER MATRIX */}
+      {/* MULTI-ASSET SCANNER MATRIX & VIRTUAL PIPELINE */}
       <section className="aut-card" style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
-          <h2><Compass size={18} /> Scanner Quântico Multi-Ativos (Velas M1 em Tempo Real)</h2>
-          <span style={{ fontSize: '12px', color: '#94a3b8' }}>Varredura paralela nos índices sintéticos de alta liquidez</span>
+          <h2><Crosshair size={18} /> Scanner Sniper & Pipeline de Perdas Virtuais (Fakegale 2L)</h2>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>Operação simulada só é armada quando o ativo atinge 2 perdas virtuais consecutivas</span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
@@ -137,17 +126,19 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             const data = matrix[sym] || {};
             const isBull = data.trend === 'BULLISH';
             const isBear = data.trend === 'BEARISH';
-            const hasSignal = data.signal;
+            const vLosses = data.virtualLosses || 0;
+            const reqLosses = data.virtualRequired || 2;
+            const isReady = vLosses >= reqLosses;
 
             return (
               <div
                 key={sym}
                 style={{
-                  background: hasSignal
-                    ? (data.direction === 'CALL' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(244, 63, 94, 0.12)')
+                  background: isReady
+                    ? 'rgba(56, 189, 248, 0.12)'
                     : 'rgba(255, 255, 255, 0.03)',
-                  border: hasSignal
-                    ? (data.direction === 'CALL' ? '1px solid #10b981' : '1px solid #f43f5e')
+                  border: isReady
+                    ? '1px solid #38bdf8'
                     : '1px solid rgba(255, 255, 255, 0.08)',
                   borderRadius: '8px',
                   padding: '12px',
@@ -172,20 +163,17 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
                   <span>Confluência: <b style={{ color: (data.score || 0) >= 75 ? '#34d399' : '#f8fafc' }}>{data.score || 50}%</b></span>
                   <span>RSI: <b>{data.rsi ? Number(data.rsi).toFixed(0) : '—'}</b></span>
                 </div>
 
-                <div style={{ marginTop: '4px', fontSize: '12px' }}>
-                  {hasSignal ? (
-                    <span style={{ color: data.direction === 'CALL' ? '#34d399' : '#fb7185', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      {data.direction === 'CALL' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                      Gatilho: {data.direction} ({data.score}%)
-                    </span>
-                  ) : (
-                    <span style={{ color: '#64748b' }}>Aguardando confluência...</span>
-                  )}
+                {/* Virtual Pipeline Indicator */}
+                <div style={{ marginTop: '4px', fontSize: '11px', padding: '4px 6px', borderRadius: '4px', background: 'rgba(0,0,0,0.25)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Filtro Fakegale:</span>
+                  <b style={{ color: isReady ? '#38bdf8' : vLosses > 0 ? '#facc15' : '#94a3b8' }}>
+                    {isReady ? '🎯 PRONTO P/ DISPARO' : vLosses === 1 ? '1/2 Perda Virtual' : 'Aguardando Perda'}
+                  </b>
                 </div>
               </div>
             );
@@ -196,9 +184,9 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
       <div className="aut-columns">
         {/* CONFIGURATION CARD */}
         <section className="aut-card">
-          <h2><Cpu size={18} /> Parâmetros QT-Matrix (Velas M1)</h2>
+          <h2><Cpu size={18} /> Parâmetros QT-Sniper</h2>
           <p>
-            Opera contratos de <b>Alta (CALL)</b> e <b>Baixa (PUT)</b> com duração de 1 minuto em velas M1, oferecendo <b>~95% de payout líquido</b>. O filtro Fakegale aguarda confirmação virtual antes da entrada simulada.
+            O robô opera pulsos de <b>5 Ticks (~10 segundos)</b> com <b>~95% de payout líquido</b>. O filtro Fakegale elimina sequências negativas ao exigir que o ativo perca virtualmente antes da entrada real.
           </p>
 
           <div className="aut-form">
@@ -239,15 +227,26 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </label>
 
             <label>
-              Confluência Mínima (%)
-              <input
-                type="number"
-                min="50"
-                max="95"
-                step="5"
-                value={draft.minScore || 75}
-                onChange={(e) => update('minScore', Number(e.target.value))}
-              />
+              Perdas Virtuais Obrigatórias (Fakegale)
+              <select
+                value={draft.virtualLossesRequired ?? 2}
+                onChange={(e) => update('virtualLossesRequired', Number(e.target.value))}
+              >
+                <option value="1">1 Perda Virtual</option>
+                <option value="2">2 Perdas Virtuais (Recomendado · 88%+ Acerto)</option>
+                <option value="3">3 Perdas Virtuais (Ultra Conservador)</option>
+              </select>
+            </label>
+
+            <label>
+              Duração da Operação (Ticks)
+              <select
+                value={draft.durationTicks || 5}
+                onChange={(e) => update('durationTicks', Number(e.target.value))}
+              >
+                <option value="5">5 Ticks (~10 segundos · Sniper Rápido)</option>
+                <option value="10">10 Ticks (~20 segundos)</option>
+              </select>
             </label>
 
             <label>
@@ -286,19 +285,8 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </label>
           </div>
 
-          <div style={{ marginTop: '14px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
-              <input
-                type="checkbox"
-                checked={Boolean(draft.enableFakegaleLoss)}
-                onChange={(e) => update('enableFakegaleLoss', e.target.checked)}
-              />
-              <b>Filtro Fakegale Virtual:</b> Observa 1 loss virtual no ativo antes de liberar a simulação.
-            </label>
-          </div>
-
           <fieldset style={{ marginTop: '16px' }}>
-            <legend>Ativos Monitorados em M1</legend>
+            <legend>Ativos Monitorados em Paralelo</legend>
             <div className="aut-checks">
               {QUANTUM_ASSETS.map((sym) => (
                 <label key={sym}>
@@ -341,7 +329,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
               }
             >
               {state?.config?.enabled ? <Pause size={15} /> : <Play size={15} />}
-              {state?.config?.enabled ? 'Pausar Laboratório Quântico' : 'Iniciar Laboratório Quântico'}
+              {state?.config?.enabled ? 'Pausar Laboratório Sniper' : 'Iniciar Laboratório Sniper'}
             </button>
           </div>
 
@@ -350,7 +338,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
 
         {/* METRICS & OVERVIEW */}
         <section className="aut-card">
-          <h2><TrendingUp size={18} /> Desempenho Global da Simulação M1</h2>
+          <h2><TrendingUp size={18} /> Desempenho Global da Simulação Sniper</h2>
           <div className="aut-form" style={{ marginBottom: '16px' }}>
             <label>
               Filtrar Ativo nas Métricas
@@ -370,12 +358,12 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             <article>
               <span>Resultado Simulado Total</span>
               <strong style={{ color: net >= 0 ? '#34d399' : '#f87171' }}>{usd(net)}</strong>
-              <small>{totalOps} entradas simuladas em M1</small>
+              <small>{totalOps} entradas sniper simuladas</small>
             </article>
 
             <article>
               <span>Taxa de Acerto Real</span>
-              <strong style={{ color: winRate >= 60 ? '#34d399' : '#fbbf24' }}>{percent(winRate)}</strong>
+              <strong style={{ color: winRate >= 70 ? '#34d399' : '#fbbf24' }}>{percent(winRate)}</strong>
               <small>{wins} vitórias · {losses} derrotas</small>
             </article>
 
@@ -395,11 +383,11 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
           {/* Equity Curve */}
           <div className="aut-equity" style={{ marginTop: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <b>Curva de Capital (Velas M1 · Payout ~95%)</b>
+              <b>Curva de Capital (Sniper 5 Ticks · Fakegale 2L)</b>
               <span>{usd(low)} a {usd(high)}</span>
             </div>
             {filteredTrades.length ? (
-              <svg viewBox="0 0 800 190" role="img" aria-label={`Curva M1: ${filteredTrades.length} entradas`}>
+              <svg viewBox="0 0 800 190" role="img" aria-label={`Curva Sniper: ${filteredTrades.length} entradas`}>
                 <polyline
                   fill="none"
                   stroke={net < 0 ? '#fb8b9e' : '#34d399'}
@@ -415,7 +403,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
                 />
               </svg>
             ) : (
-              <p>Aguardando a primeira oportunidade e liquidação simulada no motor quântico M1.</p>
+              <p>Aguardando o primeiro ativo completar 2 perdas virtuais para disparar a entrada simulada.</p>
             )}
           </div>
         </section>
@@ -424,13 +412,13 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
       {/* RECENT TRADES */}
       <section className="aut-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-          <h2>Últimas Entradas Simuladas em M1</h2>
+          <h2>Últimas Entradas Sniper Simuladas</h2>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               className="workspace-button"
               disabled={!trades.length && !state?.pending?.length}
               onClick={() => {
-                if (window.confirm('Tem certeza que deseja resetar o histórico e zerar as métricas para reiniciar os testes no QT-Matrix?')) {
+                if (window.confirm('Tem certeza que deseja resetar o histórico e zerar as métricas para reiniciar os testes no QT-Sniper?')) {
                   onConfigure({ reset: true });
                 }
               }}
@@ -450,8 +438,8 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
               <tr>
                 <th>Data/Hora</th>
                 <th>Ativo</th>
-                <th>Operação</th>
-                <th>Estratégia M1</th>
+                <th>Disparo</th>
+                <th>Estratégia</th>
                 <th>Confluência</th>
                 <th>Nível</th>
                 <th>Stake</th>
@@ -472,11 +460,11 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
                         fontWeight: 'bold'
                       }}
                     >
-                      {t.direction === 'CALL' ? '📈 CALL (ALTA)' : '📉 PUT (BAIXA)'}
+                      {t.direction === 'CALL' ? '🎯 5T CALL' : '🎯 5T PUT'}
                     </span>
                   </td>
-                  <td><span style={{ fontSize: '12px', color: '#94a3b8' }}>{getRuleLabel(t.rule)}</span></td>
-                  <td><b>{t.score ? `${t.score}%` : '85%'}</b></td>
+                  <td><span style={{ fontSize: '12px', color: '#94a3b8' }}>{t.rule || 'Momentum Sniper'}</span></td>
+                  <td><b>{t.score ? `${t.score}%` : '90%'}</b></td>
                   <td>G{t.stage}</td>
                   <td>{usd(t.stake)}</td>
                   <td style={{ color: t.profit > 0 ? '#34d399' : '#f87171', fontWeight: 'bold' }}>
@@ -487,7 +475,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </tbody>
           </table>
         </div>
-        {!filteredTrades.length && <p>Nenhuma entrada simulada ainda para este filtro.</p>}
+        {!filteredTrades.length && <p>Nenhuma entrada sniper simulada ainda para este filtro.</p>}
 
         {/* Live event logs */}
         <div style={{ marginTop: '16px' }}>
