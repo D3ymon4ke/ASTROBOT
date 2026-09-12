@@ -11,12 +11,13 @@ export const QUANTUM_DEFAULTS = Object.freeze({
   strategyMode: 'asymmetric_digits',
   symbols: ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_25', '1HZ25V'],
   stake: 1.0,
-  sorosEnabled: true, // Soros level 1 profit reinvestment (instead of destructive Martingale/D'Alembert)
+  sorosEnabled: false, // Fixed stake by default for predictable scalping
   cycleBudget: 15.0,
   minPayout: 0.20,
   minScore: 85,
-  sessionTarget: 2.50, // Micro-session scalp target ($2.50)
-  cooldownMinutes: 15  // 15m cooldown after hitting target
+  sessionTarget: 1.00,  // Fast scalp target ($1.00 USD)
+  sessionStopLoss: 1.50, // Short session stop loss ($1.50 USD)
+  cooldownMinutes: 10   // 10m pause to break market correlation
 });
 
 export const DIGIT_DEFAULTS = QUANTUM_DEFAULTS;
@@ -43,6 +44,7 @@ export function validateDigitConfig(patch, previous = QUANTUM_DEFAULTS) {
     ['minPayout', 0.10, 2.00],
     ['minScore', 50, 99],
     ['sessionTarget', 0.05, 100],
+    ['sessionStopLoss', 0.10, 100],
     ['cooldownMinutes', 1, 360]
   ]) {
     c[k] = Number(c[k]);
@@ -61,7 +63,7 @@ export class DigitTrader {
     this.destroyed = false;
     this.lastPoll = 0;
     this.tickCache = {};
-    this.sorosStage = 0; // 0 = base stake, 1 = soros reinvestment
+    this.sorosStage = 0;
     this.lastWinProfit = 0;
   }
 
@@ -70,7 +72,10 @@ export class DigitTrader {
       config: { ...QUANTUM_DEFAULTS },
       version: QUANTUM_VERSION,
       status: 'Desligado',
-      sessionProfit: 0,
+      sessionProfit: 0, // Current active micro-session profit
+      totalLockedProfit: 0, // Cumulative profit locked from won micro-sessions
+      sessionsWon: 0,
+      sessionsLost: 0,
       cooldownUntil: 0,
       sorosStage: 0,
       matrix: {},
@@ -94,6 +99,9 @@ export class DigitTrader {
       version: s.version,
       status: s.status,
       sessionProfit: s.sessionProfit || 0,
+      totalLockedProfit: s.totalLockedProfit || 0,
+      sessionsWon: s.sessionsWon || 0,
+      sessionsLost: s.sessionsLost || 0,
       cooldownRemainingSec,
       sorosStage: this.sorosStage || 0,
       matrix: s.matrix || {},
@@ -138,11 +146,14 @@ export class DigitTrader {
     s.events = [];
     s.pending = [];
     s.sessionProfit = 0;
+    s.totalLockedProfit = 0;
+    s.sessionsWon = 0;
+    s.sessionsLost = 0;
     s.cooldownUntil = 0;
     this.sorosStage = 0;
     this.lastWinProfit = 0;
     this.tickCache = {};
-    this.event('Laboratório Quântico QAP-V3.1 resetado para início limpo.');
+    this.event('Laboratório Quântico QAP-V3.2 resetado com novo sistema de Micro-Metas.');
     this.save();
   }
 
@@ -156,7 +167,7 @@ export class DigitTrader {
       throw Error('Aguarde as operações em curso antes de alterar parâmetros.');
     }
     s.config = validateDigitConfig(patch, s.config);
-    s.status = s.config.enabled ? 'QAP-V3.1 Ativo · Alta Rentabilidade (~42% Payout · 80%+ Acerto)' : 'Pausado';
+    s.status = s.config.enabled ? `Micro-Sessões Ativas (Meta: +$${s.config.sessionTarget.toFixed(2)} / Stop: -$${s.config.sessionStopLoss.toFixed(2)})` : 'Pausado';
     if (s.config.enabled && !this.session.derivAPI.connected) {
       this.session.connectDeriv();
     }
@@ -182,14 +193,14 @@ export class DigitTrader {
       const remSec = Math.ceil((s.cooldownUntil - Date.now()) / 1000);
       const min = Math.floor(remSec / 60);
       const sec = remSec % 60;
-      s.status = `Cooldown ativo (${min}m ${sec}s restantes) · Meta de $${s.config.sessionTarget.toFixed(2)} protegida`;
+      s.status = `⏳ Cooldown Ativo (${min}m ${sec}s restantes) · Lucro Travado: $${(s.totalLockedProfit || 0).toFixed(2)}`;
       return;
     } else if (s.cooldownUntil && s.cooldownUntil <= Date.now()) {
       s.cooldownUntil = 0;
       this.tickCache = {};
       this.sorosStage = 0;
       this.lastWinProfit = 0;
-      this.event('Cooldown concluído. Retomando micro-sessão de lucros.');
+      this.event('Nova Micro-Sessão iniciada! Buscando meta curta de +' + s.config.sessionTarget.toFixed(2) + ' USD.');
     }
 
     this.busy = true;
@@ -277,29 +288,44 @@ export class DigitTrader {
             if (s.config.sorosEnabled && this.sorosStage === 0) {
               this.sorosStage = 1;
               this.lastWinProfit = row.profit;
-              this.finish(p, `🎯 Vitória ${p.contractType} ${p.barrier ?? ''} (${p.symbol}) · +$${row.profit.toFixed(2)} · Ativando Soros N1`);
+              this.finish(p, `🎯 Vitória ${p.contractType} ${p.barrier ?? ''} (${p.symbol}) · +$${row.profit.toFixed(2)}`);
             } else {
               this.sorosStage = 0;
               this.lastWinProfit = 0;
-              this.finish(p, `🎯 Vitória ${p.contractType} ${p.barrier ?? ''} (${p.symbol}) · +$${row.profit.toFixed(2)} · Ciclo Concluído`);
+              this.finish(p, `🎯 Vitória ${p.contractType} ${p.barrier ?? ''} (${p.symbol}) · +$${row.profit.toFixed(2)}`);
             }
 
-            // Micro-session profit target check
+            // MICRO-SESSION PROFIT TARGET HIT: Lock profit and start cooldown!
             if (s.sessionProfit >= s.config.sessionTarget) {
               s.cooldownUntil = Date.now() + s.config.cooldownMinutes * 60 * 1000;
               const lockedProfit = s.sessionProfit;
+              s.totalLockedProfit = Number(((s.totalLockedProfit || 0) + lockedProfit).toFixed(2));
+              s.sessionsWon = (s.sessionsWon || 0) + 1;
               s.sessionProfit = 0;
               this.tickCache = {};
               this.sorosStage = 0;
               this.lastWinProfit = 0;
-              this.event(`🏆 Meta da micro-sessão batida (+${lockedProfit.toFixed(2)} USD)! Entrando em Cooldown de ${s.config.cooldownMinutes} min.`);
+              this.event(`🏆 META DA MICRO-SESSÃO BATIDA (+${lockedProfit.toFixed(2)} USD)! Total Travado no Banco: +$${s.totalLockedProfit.toFixed(2)} USD. Entrando em Cooldown de ${s.config.cooldownMinutes} min.`);
             }
             continue;
           } else {
-            // On loss: reset Soros to base stake (NEVER increase stake on loss!)
+            // Loss occurred
             this.sorosStage = 0;
             this.lastWinProfit = 0;
-            this.finish(p, `Loss em ${p.contractType} (${p.symbol}) · Dígito ${exitDigit} · Mantendo stake base fixo`);
+            this.finish(p, `Loss em ${p.contractType} (${p.symbol}) · Dígito ${exitDigit} · Saldo da sessão: ${s.sessionProfit > 0 ? '+' : ''}$${s.sessionProfit.toFixed(2)}`);
+
+            // MICRO-SESSION STOP LOSS HIT: Protect capital and start cooldown!
+            if (s.sessionProfit <= -s.config.sessionStopLoss) {
+              s.cooldownUntil = Date.now() + s.config.cooldownMinutes * 60 * 1000;
+              const lossAmt = Math.abs(s.sessionProfit);
+              s.totalLockedProfit = Number(((s.totalLockedProfit || 0) - lossAmt).toFixed(2));
+              s.sessionsLost = (s.sessionsLost || 0) + 1;
+              s.sessionProfit = 0;
+              this.tickCache = {};
+              this.sorosStage = 0;
+              this.lastWinProfit = 0;
+              this.event(`🛡️ STOP LOSS DE SESSÃO ATIVADO (-${lossAmt.toFixed(2)} USD). Protegendo banca de anomalias. Cooldown de ${s.config.cooldownMinutes} min.`);
+            }
             continue;
           }
         }
@@ -309,7 +335,7 @@ export class DigitTrader {
           continue;
         }
 
-        // Calculate Stake (Base stake or Soros reinvestment)
+        // Calculate Stake
         let currentStake = s.config.stake;
         if (s.config.sorosEnabled && this.sorosStage === 1 && this.lastWinProfit > 0) {
           currentStake = Math.round((s.config.stake + this.lastWinProfit) * 100) / 100;
@@ -418,7 +444,7 @@ export class DigitTrader {
       s.lastScan = Date.now();
       s.errors = 0;
       s.status = s.config.enabled
-        ? `QAP-V3.1 Ativo · Monitorando ${s.config.symbols.length} ativos (Rentabilidade ~42% Payout · 80%+ Acerto)`
+        ? `Micro-Sessões Ativas · Meta: +$${s.config.sessionTarget.toFixed(2)} (Sessões Vencidas: ${s.sessionsWon || 0} / Perdidas: ${s.sessionsLost || 0})`
         : s.pending.length ? 'Pausado · Finalizando operações' : 'Pausado';
 
     } catch (e) {

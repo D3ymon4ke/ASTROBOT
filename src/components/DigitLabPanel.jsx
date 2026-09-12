@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, Save, Download, Cpu, Activity, Zap, AlertCircle, Shield, TrendingUp, BarChart2, Clock, CheckCircle2, RotateCw, Compass, ArrowUpRight, ArrowDownRight, Target, Crosshair } from 'lucide-react';
+import { Play, Pause, Save, Download, Cpu, Activity, Zap, AlertCircle, Shield, TrendingUp, BarChart2, Clock, CheckCircle2, RotateCw, Compass, ArrowUpRight, ArrowDownRight, Target, Crosshair, Lock } from 'lucide-react';
 import { QUANTUM_DEFAULTS, validateDigitConfig } from '../../vps-backend/automation/DigitTrader.js';
 import { QUANTUM_ASSETS } from '../../vps-backend/automation/digitAnomaly.js';
 
@@ -66,25 +66,29 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
   const isCooldown = cooldownSec > 0;
   const cooldownMin = Math.floor(cooldownSec / 60);
   const cooldownSecRemainder = cooldownSec % 60;
-  const sessionTarget = state?.config?.sessionTarget || 5.00;
+  const sessionTarget = state?.config?.sessionTarget || 1.00;
+  const sessionStopLoss = state?.config?.sessionStopLoss || 1.50;
   const sessionProfit = state?.sessionProfit || 0;
+  const totalLockedProfit = state?.totalLockedProfit || 0;
+  const sessionsWon = state?.sessionsWon || 0;
+  const sessionsLost = state?.sessionsLost || 0;
   const matrix = state?.matrix || {};
 
   const exportData = () => {
     const dataBlob = new Blob([JSON.stringify({
-      version: state?.version || 'qap-v3',
+      version: state?.version || 'qap-v3.2',
       simulationOnly: true,
       config: state?.config,
       selectedAsset,
       matrix: state?.matrix,
       trades: filteredTrades,
-      metrics: { net, wins, losses, totalOps, winRate, drawdown, maxWinStreak }
+      metrics: { net, wins, losses, totalOps, winRate, drawdown, maxWinStreak, totalLockedProfit, sessionsWon, sessionsLost }
     }, null, 2)], { type: 'application/json' });
 
     const url = URL.createObjectURL(dataBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `quantum-asymmetric-lab-${selectedAsset}.json`;
+    a.download = `quantum-micro-scalp-lab-${selectedAsset}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -93,9 +97,9 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
     <section className="digit-lab-panel aut-workspace">
       <div className="workspace-heading">
         <div>
-          <span className="workspace-eyebrow">QUANTUM ASYMMETRIC ENGINE (QAP-V3) · ASSIMETRIA 80%+ / 100% SIMULADO</span>
-          <h1>Laboratório Quântico Asimétrico<span>.</span></h1>
-          <p>Exploração estatística de alta probabilidade base (<b>DIGITUNDER 8</b> e <b>DIGITOVER 1</b> com 80%+ de acerto) e recuperação suave D'Alembert.</p>
+          <span className="workspace-eyebrow">MICRO-SCALP SNIPER LOCK (QAP-V3.2) · METAS CURTAS & TRAVA DE BANCO</span>
+          <h1>Laboratório de Micro-Metas Quânticas<span>.</span></h1>
+          <p>Busca rápida de <b>+$1.00 USD por sessão</b> com trava imediata de lucro e <b>10 min de cooldown</b> para quebra de variância.</p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
           <span className={`workspace-status ${state?.config?.enabled ? 'is-online' : ''}`}>
@@ -103,12 +107,12 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
           </span>
           {isCooldown && (
             <span style={{ fontSize: '11px', background: 'rgba(234, 179, 8, 0.15)', color: '#facc15', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
-              ⏳ Cooldown Ativo: <b>{cooldownMin}m {cooldownSecRemainder}s</b> restantes (Meta Protegida)
+              ⏳ Cooldown Ativo: <b>{cooldownMin}m {cooldownSecRemainder}s</b> restantes (Lucro Seguro)
             </span>
           )}
           {state?.config?.enabled && !isCooldown && (
             <span style={{ fontSize: '11px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
-              🎯 Meta da Sessão: <b>{usd(sessionProfit)}</b> / {usd(sessionTarget)}
+              🎯 Meta da Micro-Sessão: <b>{usd(sessionProfit)}</b> / +{usd(sessionTarget)}
             </span>
           )}
         </div>
@@ -117,9 +121,9 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
       {/* MULTI-ASSET SCANNER MATRIX & DIGIT DISTRIBUTION */}
       <section className="aut-card" style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
-          <h2><Crosshair size={18} /> Scanner de Distribuição L100 & Assimetria Estatística (80%+)</h2>
+          <h2><Crosshair size={18} /> Scanner de Distribuição L100 & Alta Rentabilidade (~42% Payout)</h2>
           <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-            Varredura em tempo real dos 100 últimos dígitos por ativo
+            DIGITUNDER 7 e DIGITOVER 2 com precisão estatística L100
           </span>
         </div>
 
@@ -209,9 +213,9 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
       <div className="aut-grid">
         {/* CONTROLS */}
         <section className="aut-card">
-          <h2><Cpu size={18} /> Parâmetros QAP-V3 (Assimetria & D'Alembert)</h2>
+          <h2><Cpu size={18} /> Parâmetros de Micro-Sessão & Trava de Lucro</h2>
           <p style={{ fontSize: '12px', color: '#94a3b8', margin: '8px 0 16px' }}>
-            Operações em contratos de alta probabilidade natural (UNDER 8 / OVER 1 com 80%+). O D'Alembert suave substitui o Martingale destrutivo.
+            O robô opera com <b>Risco Fixo ($1.00)</b> e busca apenas <b>+$1.00 USD</b> por ciclo. Bateu a meta, congela o lucro e descansa 10 minutos.
           </p>
 
           <div className="aut-form">
@@ -228,41 +232,54 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </label>
 
             <label>
-              Gestão de Lucro (Soros Nível 1)
-              <select
-                value={draft.sorosEnabled ? 'true' : 'false'}
-                onChange={(e) => update('sorosEnabled', e.target.value === 'true')}
-              >
-                <option value="true">Soros N1 Ativo (Reinveste lucro do Win 1 · Seguro)</option>
-                <option value="false">Mão Fixa Estrita (Sem alteração de stake)</option>
-              </select>
-            </label>
-
-            <label>
-              Meta da Micro-Sessão Scalp (USD)
+              Meta da Micro-Sessão (USD · Trava de Lucro)
               <input
                 type="number"
-                min="0.5"
-                max="50"
-                step="0.5"
-                value={draft.sessionTarget || 2.50}
+                min="0.20"
+                max="20"
+                step="0.20"
+                value={draft.sessionTarget || 1.00}
                 onChange={(e) => update('sessionTarget', Number(e.target.value))}
               />
             </label>
+
             <label>
-              Tempo de Cooldown (minutos)
+              Stop Loss da Micro-Sessão (USD · Proteção)
+              <input
+                type="number"
+                min="0.50"
+                max="50"
+                step="0.50"
+                value={draft.sessionStopLoss || 1.50}
+                onChange={(e) => update('sessionStopLoss', Number(e.target.value))}
+              />
+            </label>
+
+            <label>
+              Tempo de Cooldown / Descompressão (minutos)
               <input
                 type="number"
                 min="1"
-                max="240"
+                max="120"
                 step="5"
-                value={draft.cooldownMinutes || 15}
+                value={draft.cooldownMinutes || 10}
                 onChange={(e) => update('cooldownMinutes', Number(e.target.value))}
               />
             </label>
 
             <label>
-              Teto de risco por ciclo (USD)
+              Gestão de Lucro (Soros Nível 1)
+              <select
+                value={draft.sorosEnabled ? 'true' : 'false'}
+                onChange={(e) => update('sorosEnabled', e.target.value === 'true')}
+              >
+                <option value="false">Mão Fixa Estrita (Recomendado · Risco Travado)</option>
+                <option value="true">Soros N1 Ativo (Reinveste lucro do Win 1)</option>
+              </select>
+            </label>
+
+            <label>
+              Teto de risco do ciclo (USD)
               <input
                 type="number"
                 min="1"
@@ -316,7 +333,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
               }
             >
               {state?.config?.enabled ? <Pause size={15} /> : <Play size={15} />}
-              {state?.config?.enabled ? 'Pausar Laboratório QAP' : 'Iniciar Laboratório QAP'}
+              {state?.config?.enabled ? 'Pausar Micro-Sessões' : 'Iniciar Micro-Sessões'}
             </button>
           </div>
 
@@ -325,7 +342,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
 
         {/* METRICS & OVERVIEW */}
         <section className="aut-card">
-          <h2><TrendingUp size={18} /> Desempenho Global da Simulação QAP-V3</h2>
+          <h2><TrendingUp size={18} /> Painel de Lucros Travados & Desempenho Global</h2>
           <div className="aut-form" style={{ marginBottom: '16px' }}>
             <label>
               Filtrar Ativo nas Métricas
@@ -343,14 +360,14 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
 
           <div className="aut-metrics">
             <div className="aut-metric">
-              <span className="aut-metric-label">Resultado Simulado Total</span>
+              <span className="aut-metric-label">Lucro Travado no Cofre</span>
               <span
                 className="aut-metric-value"
-                style={{ color: net >= 0 ? '#34d399' : '#fb7185' }}
+                style={{ color: totalLockedProfit >= 0 ? '#34d399' : '#fb7185' }}
               >
-                {usd(net)}
+                {usd(totalLockedProfit)}
               </span>
-              <span className="aut-metric-sub">{totalOps} entradas simuladas</span>
+              <span className="aut-metric-sub">{sessionsWon} sessões vencedoras · {sessionsLost} stops</span>
             </div>
 
             <div className="aut-metric">
@@ -371,16 +388,16 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </div>
 
             <div className="aut-metric">
-              <span className="aut-metric-label">Drawdown Máximo</span>
-              <span className="aut-metric-value" style={{ color: drawdown > 10 ? '#fb7185' : '#94a3b8' }}>{usd(drawdown)}</span>
-              <span className="aut-metric-sub">{state?.pending?.length || 0} ordens em andamento</span>
+              <span className="aut-metric-label">Sessão Atual / Saldo Total</span>
+              <span className="aut-metric-value" style={{ color: net >= 0 ? '#34d399' : '#fb7185' }}>{usd(net)}</span>
+              <span className="aut-metric-sub">Sessão: {usd(sessionProfit)} / +{usd(sessionTarget)}</span>
             </div>
           </div>
 
           {/* EQUITY CURVE SVG */}
           <div style={{ marginTop: '20px', background: 'rgba(15, 23, 42, 0.4)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px' }}>
-              <b>Curva de Capital (Assimetria QAP-V3)</b>
+              <b>Curva de Capital (Micro-Sessões QAP-V3.2)</b>
               <span style={{ color: '#94a3b8' }}>{usd(low)} a {usd(high)}</span>
             </div>
             {equityPoints.length > 1 ? (
@@ -409,13 +426,13 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
       {/* RECENT TRADES */}
       <section className="aut-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-          <h2>Últimas Entradas Assimétricas Simuladas</h2>
+          <h2>Últimas Entradas das Micro-Sessões</h2>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               className="workspace-button"
               disabled={!trades.length && !state?.pending?.length}
               onClick={() => {
-                if (window.confirm('Tem certeza que deseja resetar o histórico e zerar as métricas para reiniciar os testes no QAP-V3?')) {
+                if (window.confirm('Tem certeza que deseja resetar o histórico e zerar as métricas para reiniciar os testes no QAP-V3.2?')) {
                   onConfigure({ reset: true });
                 }
               }}

@@ -89,7 +89,7 @@ test('analyzeQuantumAsymmetricDigits triggers high-payout DIGITOVER 2 on high di
   assert.ok(analysis.score >= 85);
 });
 
-test('validateDigitConfig enforces QAP-V3.1 bounds and rejects invalid inputs', () => {
+test('validateDigitConfig enforces QAP-V3.2 bounds and rejects invalid inputs', () => {
   assert.throws(() => validateDigitConfig(null), /inválida/);
   assert.throws(() => validateDigitConfig({ stake: 0.1 }), /stake/);
   assert.throws(() => validateDigitConfig({ minScore: 40 }), /minScore/);
@@ -97,21 +97,23 @@ test('validateDigitConfig enforces QAP-V3.1 bounds and rejects invalid inputs', 
   const valid = validateDigitConfig({
     enabled: true,
     stake: 1.0,
-    sorosEnabled: true,
+    sorosEnabled: false,
     cycleBudget: 20.0,
     minScore: 85,
-    sessionTarget: 2.50,
-    cooldownMinutes: 15,
+    sessionTarget: 1.00,
+    sessionStopLoss: 1.50,
+    cooldownMinutes: 10,
     symbols: ['R_100', '1HZ100V']
   });
 
   assert.equal(valid.enabled, true);
   assert.equal(valid.stake, 1.0);
-  assert.equal(valid.sessionTarget, 2.50);
-  assert.equal(valid.cooldownMinutes, 15);
+  assert.equal(valid.sessionTarget, 1.00);
+  assert.equal(valid.sessionStopLoss, 1.50);
+  assert.equal(valid.cooldownMinutes, 10);
 });
 
-test('DigitTrader simulates QAP-V3.1 Execution with Fixed Stake and Soros N1', async () => {
+test('DigitTrader simulates QAP-V3.2 Micro-Session Target Lock and Cooldown', async () => {
   const mockSession = {
     activeMode: 'demo',
     accountCurrency: 'USD',
@@ -140,7 +142,7 @@ test('DigitTrader simulates QAP-V3.1 Execution with Fixed Stake and Soros N1', a
             proposal: {
               id: 'prop-123',
               ask_price: req.amount,
-              payout: req.amount * 1.42,
+              payout: req.amount * 1.50, // +$0.50 profit
               spot: 1000.02,
               spot_time: Math.floor(Date.now() / 1000)
             }
@@ -155,39 +157,44 @@ test('DigitTrader simulates QAP-V3.1 Execution with Fixed Stake and Soros N1', a
   trader.configure({
     enabled: true,
     stake: 1.0,
-    sorosEnabled: true,
+    sorosEnabled: false,
     symbols: ['R_100'],
-    sessionTarget: 2.50,
-    cooldownMinutes: 15
+    sessionTarget: 1.00,
+    sessionStopLoss: 1.50,
+    cooldownMinutes: 10
   });
 
   assert.equal(trader.state.config.enabled, true);
 
-  // Run tick to trigger scan and asymmetric entry
+  // Trade 1: Win +0.50
   trader.lastPoll = 0;
   await trader.tick();
-  assert.equal(trader.state.pending.length, 1);
-  assert.equal(trader.state.pending[0].contractType, 'DIGITUNDER');
-  assert.equal(trader.state.pending[0].barrier, 7);
-
-  // Quote proposal
   trader.lastPoll = 0;
   await trader.tick();
-  assert.ok(trader.state.pending[0].quote != null);
-  assert.equal(trader.state.pending[0].quote.stake, 1.0);
-
-  // Advance time and settle win
   trader.state.pending[0].expiry = Math.floor(Date.now() / 1000) - 2;
   trader.lastPoll = 0;
   await trader.tick();
 
   assert.equal(trader.state.trades.length, 1);
-  assert.ok(trader.state.trades[0].profit > 0);
-  assert.equal(trader.sorosStage, 1); // Soros Stage 1 activated
+  assert.equal(trader.state.sessionProfit, 0.50);
+  assert.equal(trader.state.sessionsWon, 0);
+
+  // Trade 2: Win +0.50 -> Total $1.00 (Hits target!)
+  trader.lastPoll = 0;
+  await trader.tick();
+  trader.state.pending[0].expiry = Math.floor(Date.now() / 1000) - 2;
+  trader.lastPoll = 0;
+  await trader.tick();
+
+  assert.equal(trader.state.trades.length, 2);
+  assert.equal(trader.state.sessionsWon, 1);
+  assert.equal(trader.state.totalLockedProfit, 1.00);
+  assert.ok(trader.state.cooldownUntil > Date.now()); // Cooldown triggered!
 
   // Test reset
   trader.reset();
   assert.equal(trader.state.trades.length, 0);
   assert.equal(trader.state.sessionProfit, 0);
-  assert.equal(trader.sorosStage, 0);
+  assert.equal(trader.state.totalLockedProfit, 0);
+  assert.equal(trader.state.sessionsWon, 0);
 });
