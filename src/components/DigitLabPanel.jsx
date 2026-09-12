@@ -228,42 +228,27 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </label>
 
             <label>
-              Incremento D'Alembert após Loss (USD)
-              <input
-                type="number"
-                min="0.1"
-                max="5"
-                step="0.1"
-                value={draft.dalembertIncrement || 0.50}
-                onChange={(e) => update('dalembertIncrement', Number(e.target.value))}
-              />
-            </label>
-
-            <label>
-              Passos Máximos de Recuperação D'Alembert
+              Gestão de Lucro (Soros Nível 1)
               <select
-                value={draft.maxLossRecoverySteps ?? 2}
-                onChange={(e) => update('maxLossRecoverySteps', Number(e.target.value))}
+                value={draft.sorosEnabled ? 'true' : 'false'}
+                onChange={(e) => update('sorosEnabled', e.target.value === 'true')}
               >
-                <option value="0">Sem Progressão (Mão Fixa)</option>
-                <option value="1">1 Passo (+0.50 USD)</option>
-                <option value="2">2 Passos (+1.00 USD Máx · Recomendado)</option>
-                <option value="3">3 Passos Conservadores</option>
+                <option value="true">Soros N1 Ativo (Reinveste lucro do Win 1 · Seguro)</option>
+                <option value="false">Mão Fixa Estrita (Sem alteração de stake)</option>
               </select>
             </label>
 
             <label>
-              Meta da Micro-Sessão (USD)
+              Meta da Micro-Sessão Scalp (USD)
               <input
                 type="number"
                 min="0.5"
                 max="50"
                 step="0.5"
-                value={draft.sessionTarget || 5.00}
+                value={draft.sessionTarget || 2.50}
                 onChange={(e) => update('sessionTarget', Number(e.target.value))}
               />
             </label>
-
             <label>
               Tempo de Cooldown (minutos)
               <input
@@ -271,7 +256,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
                 min="1"
                 max="240"
                 step="5"
-                value={draft.cooldownMinutes || 30}
+                value={draft.cooldownMinutes || 15}
                 onChange={(e) => update('cooldownMinutes', Number(e.target.value))}
               />
             </label>

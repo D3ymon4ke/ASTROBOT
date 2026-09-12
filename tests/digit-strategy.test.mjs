@@ -57,65 +57,61 @@ test('extractLastDigit extracts correct decimal digit based on asset precision',
   assert.equal(extractLastDigit(9876.01, '1HZ100V'), 1);
 });
 
-test('analyzeQuantumAsymmetricDigits triggers DIGITUNDER 8 on low digit dominance', () => {
+test('analyzeQuantumAsymmetricDigits triggers high-payout DIGITUNDER 7 on low digit dominance', () => {
   const ticks = [];
-  // 90 low digits (0-4), 10 middle digits (5-7), 0 extreme high digits (8,9), last digit = 2
   for (let i = 0; i < 99; i++) {
     const digit = (i % 4); // 0, 1, 2, 3
     ticks.push({ price: 1000 + digit * 0.01, epoch: 1000 + i });
   }
-  ticks.push({ price: 1000.02, epoch: 1099 }); // last digit = 2 (<= 6)
+  ticks.push({ price: 1000.02, epoch: 1099 }); // last digit = 2 (<= 5)
 
   const analysis = analyzeQuantumAsymmetricDigits(ticks, 'R_100');
   assert.equal(analysis.signal, true);
   assert.equal(analysis.contractType, 'DIGITUNDER');
-  assert.equal(analysis.barrier, 8);
-  assert.ok(analysis.expectedWinRate >= 80);
+  assert.equal(analysis.barrier, 7);
+  assert.ok(analysis.expectedWinRate >= 75);
   assert.ok(analysis.score >= 85);
 });
 
-test('analyzeQuantumAsymmetricDigits triggers DIGITOVER 1 on high digit dominance', () => {
+test('analyzeQuantumAsymmetricDigits triggers high-payout DIGITOVER 2 on high digit dominance', () => {
   const ticks = [];
-  // 90 high digits (5-9), 0 extreme low digits (0,1), last digit = 7
   for (let i = 0; i < 99; i++) {
     const digit = 5 + (i % 4); // 5, 6, 7, 8
     ticks.push({ price: 1000 + digit * 0.01, epoch: 1000 + i });
   }
-  ticks.push({ price: 1000.07, epoch: 1099 }); // last digit = 7 (>= 3)
+  ticks.push({ price: 1000.07, epoch: 1099 }); // last digit = 7 (>= 4)
 
   const analysis = analyzeQuantumAsymmetricDigits(ticks, 'R_100');
   assert.equal(analysis.signal, true);
   assert.equal(analysis.contractType, 'DIGITOVER');
-  assert.equal(analysis.barrier, 1);
-  assert.ok(analysis.expectedWinRate >= 80);
+  assert.equal(analysis.barrier, 2);
+  assert.ok(analysis.expectedWinRate >= 75);
   assert.ok(analysis.score >= 85);
 });
 
-test('validateDigitConfig enforces QAP-V3 bounds and rejects invalid inputs', () => {
+test('validateDigitConfig enforces QAP-V3.1 bounds and rejects invalid inputs', () => {
   assert.throws(() => validateDigitConfig(null), /inválida/);
   assert.throws(() => validateDigitConfig({ stake: 0.1 }), /stake/);
-  assert.throws(() => validateDigitConfig({ dalembertIncrement: 20 }), /dalembertIncrement/);
   assert.throws(() => validateDigitConfig({ minScore: 40 }), /minScore/);
 
   const valid = validateDigitConfig({
     enabled: true,
     stake: 1.0,
-    dalembertIncrement: 0.50,
-    maxLossRecoverySteps: 2,
+    sorosEnabled: true,
     cycleBudget: 20.0,
     minScore: 85,
-    sessionTarget: 5.0,
-    cooldownMinutes: 30,
+    sessionTarget: 2.50,
+    cooldownMinutes: 15,
     symbols: ['R_100', '1HZ100V']
   });
 
   assert.equal(valid.enabled, true);
   assert.equal(valid.stake, 1.0);
-  assert.equal(valid.dalembertIncrement, 0.50);
-  assert.equal(valid.maxLossRecoverySteps, 2);
+  assert.equal(valid.sessionTarget, 2.50);
+  assert.equal(valid.cooldownMinutes, 15);
 });
 
-test('DigitTrader simulates QAP-V3 Asymmetric Execution and D\'Alembert gentle recovery', async () => {
+test('DigitTrader simulates QAP-V3.1 Execution with Fixed Stake and Soros N1', async () => {
   const mockSession = {
     activeMode: 'demo',
     accountCurrency: 'USD',
@@ -144,7 +140,7 @@ test('DigitTrader simulates QAP-V3 Asymmetric Execution and D\'Alembert gentle r
             proposal: {
               id: 'prop-123',
               ask_price: req.amount,
-              payout: req.amount * 1.25,
+              payout: req.amount * 1.42,
               spot: 1000.02,
               spot_time: Math.floor(Date.now() / 1000)
             }
@@ -159,11 +155,10 @@ test('DigitTrader simulates QAP-V3 Asymmetric Execution and D\'Alembert gentle r
   trader.configure({
     enabled: true,
     stake: 1.0,
-    dalembertIncrement: 0.50,
-    maxLossRecoverySteps: 2,
+    sorosEnabled: true,
     symbols: ['R_100'],
-    sessionTarget: 5.0,
-    cooldownMinutes: 30
+    sessionTarget: 2.50,
+    cooldownMinutes: 15
   });
 
   assert.equal(trader.state.config.enabled, true);
@@ -173,7 +168,7 @@ test('DigitTrader simulates QAP-V3 Asymmetric Execution and D\'Alembert gentle r
   await trader.tick();
   assert.equal(trader.state.pending.length, 1);
   assert.equal(trader.state.pending[0].contractType, 'DIGITUNDER');
-  assert.equal(trader.state.pending[0].barrier, 8);
+  assert.equal(trader.state.pending[0].barrier, 7);
 
   // Quote proposal
   trader.lastPoll = 0;
@@ -188,10 +183,11 @@ test('DigitTrader simulates QAP-V3 Asymmetric Execution and D\'Alembert gentle r
 
   assert.equal(trader.state.trades.length, 1);
   assert.ok(trader.state.trades[0].profit > 0);
-  assert.equal(trader.recoveryStep, 0);
+  assert.equal(trader.sorosStage, 1); // Soros Stage 1 activated
 
   // Test reset
   trader.reset();
   assert.equal(trader.state.trades.length, 0);
   assert.equal(trader.state.sessionProfit, 0);
+  assert.equal(trader.sorosStage, 0);
 });

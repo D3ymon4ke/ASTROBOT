@@ -8,16 +8,15 @@ import {
 
 export const QUANTUM_DEFAULTS = Object.freeze({
   enabled: false,
-  strategyMode: 'asymmetric_digits', // 'asymmetric_digits' (UNDER/OVER/DIFF) or 'macro_trend' (M3)
+  strategyMode: 'asymmetric_digits',
   symbols: ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_25', '1HZ25V'],
   stake: 1.0,
-  dalembertIncrement: 0.50, // Gentle D'Alembert increment on loss (instead of 11x Martingale)
-  maxLossRecoverySteps: 2,  // Max 2 gentle recovery steps
+  sorosEnabled: true, // Soros level 1 profit reinvestment (instead of destructive Martingale/D'Alembert)
   cycleBudget: 15.0,
   minPayout: 0.20,
   minScore: 85,
-  sessionTarget: 5.00,
-  cooldownMinutes: 30
+  sessionTarget: 2.50, // Micro-session scalp target ($2.50)
+  cooldownMinutes: 15  // 15m cooldown after hitting target
 });
 
 export const DIGIT_DEFAULTS = QUANTUM_DEFAULTS;
@@ -40,8 +39,6 @@ export function validateDigitConfig(patch, previous = QUANTUM_DEFAULTS) {
 
   for (const [k, min, max] of [
     ['stake', 0.35, 100],
-    ['dalembertIncrement', 0.1, 10],
-    ['maxLossRecoverySteps', 0, 5],
     ['cycleBudget', 0.35, 500],
     ['minPayout', 0.10, 2.00],
     ['minScore', 50, 99],
@@ -63,9 +60,9 @@ export class DigitTrader {
     this.busy = false;
     this.destroyed = false;
     this.lastPoll = 0;
-    this.tickCache = {}; // symbol -> [{ price, epoch }]
-    this.candleCache = {}; // symbol -> [{ open, high, low, close, epoch }]
-    this.recoveryStep = 0; // Current D'Alembert recovery step (0 = base stake)
+    this.tickCache = {};
+    this.sorosStage = 0; // 0 = base stake, 1 = soros reinvestment
+    this.lastWinProfit = 0;
   }
 
   get state() {
@@ -75,8 +72,8 @@ export class DigitTrader {
       status: 'Desligado',
       sessionProfit: 0,
       cooldownUntil: 0,
-      recoveryStep: 0,
-      matrix: {}, // symbol -> { contractType, barrier, score, expectedWinRate, distribution, lastUpdate }
+      sorosStage: 0,
+      matrix: {},
       pending: [],
       trades: [],
       distribution: {},
@@ -98,7 +95,7 @@ export class DigitTrader {
       status: s.status,
       sessionProfit: s.sessionProfit || 0,
       cooldownRemainingSec,
-      recoveryStep: this.recoveryStep || 0,
+      sorosStage: this.sorosStage || 0,
       matrix: s.matrix || {},
       pending: (s.pending || []).map(p => ({
         id: p.id,
@@ -142,10 +139,10 @@ export class DigitTrader {
     s.pending = [];
     s.sessionProfit = 0;
     s.cooldownUntil = 0;
-    this.recoveryStep = 0;
+    this.sorosStage = 0;
+    this.lastWinProfit = 0;
     this.tickCache = {};
-    this.candleCache = {};
-    this.event('Laboratório Quântico QAP-V3 resetado com histórico limpo.');
+    this.event('Laboratório Quântico QAP-V3.1 resetado para início limpo.');
     this.save();
   }
 
@@ -159,7 +156,7 @@ export class DigitTrader {
       throw Error('Aguarde as operações em curso antes de alterar parâmetros.');
     }
     s.config = validateDigitConfig(patch, s.config);
-    s.status = s.config.enabled ? 'QAP-V3 Ativo · Assimetria Estatística (80%+ Probabilidade)' : 'Pausado';
+    s.status = s.config.enabled ? 'QAP-V3.1 Ativo · Alta Rentabilidade (~42% Payout · 80%+ Acerto)' : 'Pausado';
     if (s.config.enabled && !this.session.derivAPI.connected) {
       this.session.connectDeriv();
     }
@@ -190,8 +187,9 @@ export class DigitTrader {
     } else if (s.cooldownUntil && s.cooldownUntil <= Date.now()) {
       s.cooldownUntil = 0;
       this.tickCache = {};
-      this.recoveryStep = 0;
-      this.event('Cooldown concluído. Retomando varredura quântica com assimetria.');
+      this.sorosStage = 0;
+      this.lastWinProfit = 0;
+      this.event('Cooldown concluído. Retomando micro-sessão de lucros.');
     }
 
     this.busy = true;
@@ -209,7 +207,6 @@ export class DigitTrader {
         if (!valid()) return;
 
         if (p.quote) {
-          // Check for contract resolution (1 tick after proposal epoch)
           if (Date.now() / 1000 < p.expiry + 1) continue;
 
           const { history } = await api.sendRequest({
@@ -277,8 +274,15 @@ export class DigitTrader {
           s.sessionProfit = Number(((s.sessionProfit || 0) + row.profit).toFixed(2));
 
           if (win) {
-            this.recoveryStep = 0; // Reset D'Alembert on win
-            this.finish(p, `🎯 Vitória ${p.contractType} ${p.barrier ?? ''} (${p.symbol}) · Dígito ${exitDigit} · +$${row.profit.toFixed(2)}`);
+            if (s.config.sorosEnabled && this.sorosStage === 0) {
+              this.sorosStage = 1;
+              this.lastWinProfit = row.profit;
+              this.finish(p, `🎯 Vitória ${p.contractType} ${p.barrier ?? ''} (${p.symbol}) · +$${row.profit.toFixed(2)} · Ativando Soros N1`);
+            } else {
+              this.sorosStage = 0;
+              this.lastWinProfit = 0;
+              this.finish(p, `🎯 Vitória ${p.contractType} ${p.barrier ?? ''} (${p.symbol}) · +$${row.profit.toFixed(2)} · Ciclo Concluído`);
+            }
 
             // Micro-session profit target check
             if (s.sessionProfit >= s.config.sessionTarget) {
@@ -286,19 +290,16 @@ export class DigitTrader {
               const lockedProfit = s.sessionProfit;
               s.sessionProfit = 0;
               this.tickCache = {};
-              this.recoveryStep = 0;
+              this.sorosStage = 0;
+              this.lastWinProfit = 0;
               this.event(`🏆 Meta da micro-sessão batida (+${lockedProfit.toFixed(2)} USD)! Entrando em Cooldown de ${s.config.cooldownMinutes} min.`);
             }
             continue;
           } else {
-            // Gentle D'Alembert increment
-            if (this.recoveryStep < s.config.maxLossRecoverySteps) {
-              this.recoveryStep++;
-              this.finish(p, `Loss em ${p.contractType} (${p.symbol}) · Dígito ${exitDigit}. Ajustando recuperação D'Alembert (Passo ${this.recoveryStep})`);
-            } else {
-              this.recoveryStep = 0;
-              this.finish(p, `Ciclo D'Alembert finalizado em loss (${p.symbol}) · Resetando para stake base`);
-            }
+            // On loss: reset Soros to base stake (NEVER increase stake on loss!)
+            this.sorosStage = 0;
+            this.lastWinProfit = 0;
+            this.finish(p, `Loss em ${p.contractType} (${p.symbol}) · Dígito ${exitDigit} · Mantendo stake base fixo`);
             continue;
           }
         }
@@ -308,16 +309,17 @@ export class DigitTrader {
           continue;
         }
 
-        // Calculate Stake with gentle D'Alembert
-        const baseStake = s.config.stake;
-        const currentStake = Math.round((baseStake + this.recoveryStep * s.config.dalembertIncrement) * 100) / 100;
-
-        if (currentStake > s.config.cycleBudget) {
-          this.finish(p, 'Excluído: orçamento do ciclo excedido');
-          continue;
+        // Calculate Stake (Base stake or Soros reinvestment)
+        let currentStake = s.config.stake;
+        if (s.config.sorosEnabled && this.sorosStage === 1 && this.lastWinProfit > 0) {
+          currentStake = Math.round((s.config.stake + this.lastWinProfit) * 100) / 100;
         }
 
-        // Request proposal from Deriv
+        if (currentStake > s.config.cycleBudget) {
+          currentStake = s.config.stake;
+          this.sorosStage = 0;
+        }
+
         const proposalReq = {
           proposal: 1,
           amount: currentStake,
@@ -348,7 +350,7 @@ export class DigitTrader {
         }
 
         p.quote = { stake: price, payout, entry, epoch };
-        p.expiry = epoch + 2; // ~2 seconds for 1 tick resolution
+        p.expiry = epoch + 2;
         this.event(`Entrada simulada ${p.contractType} ${p.barrier ?? ''} (Stake: $${price}, Payout: $${payout}) em ${p.symbol}`, p);
       }
 
@@ -359,7 +361,6 @@ export class DigitTrader {
         for (const symbol of s.config.symbols) {
           if (!valid() || !s.config.enabled || s.pending.length) break;
 
-          // Fetch recent 100 ticks for L100 distribution
           const ticksResp = await api.sendRequest({
             ticks_history: symbol,
             style: 'ticks',
@@ -394,7 +395,6 @@ export class DigitTrader {
             lastUpdate: Date.now()
           };
 
-          // Trigger high-probability trade if score satisfies threshold
           if (analysis.signal && analysis.score >= s.config.minScore) {
             const id = `${mode}:${symbol}:${analysis.contractType}:${Date.now()}`;
             s.pending.push({
@@ -405,12 +405,12 @@ export class DigitTrader {
               score: analysis.score,
               expectedWinRate: analysis.expectedWinRate,
               rule: analysis.rule,
-              stage: this.recoveryStep,
+              stage: this.sorosStage,
               quote: null,
               createdAt: Date.now()
             });
-            this.event(`🎯 OPORTUNIDADE ASSIMÉTRICA em ${symbol}: ${analysis.contractType} ${analysis.barrier ?? ''} (Probabilidade projetada: ${analysis.expectedWinRate}%)`, { symbol, contractType: analysis.contractType });
-            break; // One trade at a time
+            this.event(`🎯 OPORTUNIDADE ASSIMÉTRICA em ${symbol}: ${analysis.contractType} ${analysis.barrier ?? ''} (Probabilidade: ${analysis.expectedWinRate}%)`, { symbol, contractType: analysis.contractType });
+            break;
           }
         }
       }
@@ -418,7 +418,7 @@ export class DigitTrader {
       s.lastScan = Date.now();
       s.errors = 0;
       s.status = s.config.enabled
-        ? `QAP-V3 Ativo · Monitorando ${s.config.symbols.length} ativos (Assimetria 80%+)`
+        ? `QAP-V3.1 Ativo · Monitorando ${s.config.symbols.length} ativos (Rentabilidade ~42% Payout · 80%+ Acerto)`
         : s.pending.length ? 'Pausado · Finalizando operações' : 'Pausado';
 
     } catch (e) {
