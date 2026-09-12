@@ -4,6 +4,8 @@ import {
   calculateEMA,
   calculateATR,
   calculateRSI,
+  extractLastDigit,
+  analyzeQuantumAsymmetricDigits,
   analyzeQuantumTrend,
   QUANTUM_ASSETS
 } from '../vps-backend/automation/digitAnomaly.js';
@@ -49,168 +51,147 @@ test('calculateRSI identifies overbought, oversold and neutral momentum', () => 
   assert.ok(lowRsi <= 35);
 });
 
-test('analyzeQuantumTrend detects 5-tick momentum sniper pulse', () => {
-  const candles = [];
-  for (let i = 0; i < 40; i++) {
-    const base = 1000 + i * 4;
-    candles.push({
-      open: base,
-      high: base + 5,
-      low: base - 2,
-      close: base + 3.5,
-      epoch: 1000 + i * 60
-    });
-  }
-
-  const analysis = analyzeQuantumTrend(candles, 'R_100', { minCandles: 30 });
-  assert.equal(analysis.trend, 'BULLISH');
-  assert.equal(analysis.direction, 'CALL');
-  assert.equal(analysis.durationTicks, 5);
-  assert.ok(analysis.score >= 75);
-  assert.ok(analysis.signal);
+test('extractLastDigit extracts correct decimal digit based on asset precision', () => {
+  assert.equal(extractLastDigit(50123.45, 'R_100'), 5);
+  assert.equal(extractLastDigit(1234.567, 'R_10'), 7);
+  assert.equal(extractLastDigit(9876.01, '1HZ100V'), 1);
 });
 
-test('validateDigitConfig enforces QT-Sniper bounds and rejects invalid inputs', () => {
+test('analyzeQuantumAsymmetricDigits triggers DIGITUNDER 8 on low digit dominance', () => {
+  const ticks = [];
+  // 90 low digits (0-4), 10 middle digits (5-7), 0 extreme high digits (8,9), last digit = 2
+  for (let i = 0; i < 99; i++) {
+    const digit = (i % 4); // 0, 1, 2, 3
+    ticks.push({ price: 1000 + digit * 0.01, epoch: 1000 + i });
+  }
+  ticks.push({ price: 1000.02, epoch: 1099 }); // last digit = 2 (<= 6)
+
+  const analysis = analyzeQuantumAsymmetricDigits(ticks, 'R_100');
+  assert.equal(analysis.signal, true);
+  assert.equal(analysis.contractType, 'DIGITUNDER');
+  assert.equal(analysis.barrier, 8);
+  assert.ok(analysis.expectedWinRate >= 80);
+  assert.ok(analysis.score >= 85);
+});
+
+test('analyzeQuantumAsymmetricDigits triggers DIGITOVER 1 on high digit dominance', () => {
+  const ticks = [];
+  // 90 high digits (5-9), 0 extreme low digits (0,1), last digit = 7
+  for (let i = 0; i < 99; i++) {
+    const digit = 5 + (i % 4); // 5, 6, 7, 8
+    ticks.push({ price: 1000 + digit * 0.01, epoch: 1000 + i });
+  }
+  ticks.push({ price: 1000.07, epoch: 1099 }); // last digit = 7 (>= 3)
+
+  const analysis = analyzeQuantumAsymmetricDigits(ticks, 'R_100');
+  assert.equal(analysis.signal, true);
+  assert.equal(analysis.contractType, 'DIGITOVER');
+  assert.equal(analysis.barrier, 1);
+  assert.ok(analysis.expectedWinRate >= 80);
+  assert.ok(analysis.score >= 85);
+});
+
+test('validateDigitConfig enforces QAP-V3 bounds and rejects invalid inputs', () => {
   assert.throws(() => validateDigitConfig(null), /inválida/);
   assert.throws(() => validateDigitConfig({ stake: 0.1 }), /stake/);
-  assert.throws(() => validateDigitConfig({ multiplier: 10 }), /multiplier/);
+  assert.throws(() => validateDigitConfig({ dalembertIncrement: 20 }), /dalembertIncrement/);
   assert.throws(() => validateDigitConfig({ minScore: 40 }), /minScore/);
 
   const valid = validateDigitConfig({
     enabled: true,
-    stake: 1.5,
-    multiplier: 2.1,
-    maxGale: 1,
-    cycleBudget: 30.0,
-    minScore: 75,
-    durationTicks: 5,
-    virtualLossesRequired: 2,
+    stake: 1.0,
+    dalembertIncrement: 0.50,
+    maxLossRecoverySteps: 2,
+    cycleBudget: 20.0,
+    minScore: 85,
     sessionTarget: 5.0,
     cooldownMinutes: 30,
     symbols: ['R_100', '1HZ100V']
   });
 
   assert.equal(valid.enabled, true);
-  assert.equal(valid.stake, 1.5);
-  assert.equal(valid.multiplier, 2.1);
-  assert.equal(valid.virtualLossesRequired, 2);
-  assert.equal(valid.durationTicks, 5);
+  assert.equal(valid.stake, 1.0);
+  assert.equal(valid.dalembertIncrement, 0.50);
+  assert.equal(valid.maxLossRecoverySteps, 2);
 });
 
-test('DigitTrader simulates Deep Fakegale 2L Pipeline and 5-Tick Sniper execution', async () => {
-  const session = {
+test('DigitTrader simulates QAP-V3 Asymmetric Execution and D\'Alembert gentle recovery', async () => {
+  const mockSession = {
     activeMode: 'demo',
-    modeStates: { demo: {}, real: {} },
     accountCurrency: 'USD',
-    balance: 100.0,
-    saveToFile: () => {},
-    syncToClients: () => {},
-    connectDeriv: () => {},
+    loadedFromFile: false,
+    modeStates: {
+      demo: {}
+    },
+    saveToFile() {},
+    syncToClients() {},
+    connectDeriv() {},
     derivAPI: {
       connected: true,
       authorized: true,
       sendRequest: async (req) => {
-        if (req.proposal) {
+        if (req.ticks_history) {
+          const nowSec = Math.floor(Date.now() / 1000);
           return {
-            proposal: {
-              id: 'prop-sniper-5t',
-              ask_price: req.amount,
-              payout: req.amount * 1.95,
-              spot: 1050.00,
-              spot_time: Math.floor(Date.now() / 1000)
+            history: {
+              prices: Array.from({ length: 100 }, (_, i) => 1000 + (i % 4) * 0.01),
+              times: Array.from({ length: 100 }, (_, i) => nowSec - 100 + i)
             }
           };
         }
-        if (req.ticks_history && req.style === 'candles') {
-          const candles = [];
-          for (let i = 0; i < 40; i++) {
-            const base = 1000 + i * 4;
-            candles.push({
-              epoch: 1000 + i * 60,
-              open: base,
-              high: base + 5,
-              low: base - 2,
-              close: base + 3.5
-            });
-          }
-          return { candles };
-        }
-        if (req.ticks_history && req.style === 'ticks') {
-          // Return tick that produces a virtual loss for CALL (lower price)
-          return { history: { prices: [1000.00], times: [1000] } };
+        if (req.proposal) {
+          return {
+            proposal: {
+              id: 'prop-123',
+              ask_price: req.amount,
+              payout: req.amount * 1.25,
+              spot: 1000.02,
+              spot_time: Math.floor(Date.now() / 1000)
+            }
+          };
         }
         return {};
       }
     }
   };
 
-  const trader = new DigitTrader(session);
+  const trader = new DigitTrader(mockSession);
   trader.configure({
     enabled: true,
     stake: 1.0,
-    multiplier: 2.1,
-    maxGale: 1,
-    minScore: 75,
-    virtualLossesRequired: 2,
-    durationTicks: 5,
-    sessionTarget: 0.50,
-    cooldownMinutes: 30,
-    symbols: ['R_100']
+    dalembertIncrement: 0.50,
+    maxLossRecoverySteps: 2,
+    symbols: ['R_100'],
+    sessionTarget: 5.0,
+    cooldownMinutes: 30
   });
 
-  // Cycle 1: Open Virtual Order 1
-  trader.lastPoll = 0;
-  await trader.tick();
-  assert.equal(trader.state.pending.length, 0);
-  assert.ok(trader.virtualPipeline['R_100'].pending);
+  assert.equal(trader.state.config.enabled, true);
 
-  // Expire Virtual Order 1 -> Virtual Loss 1 (0 -> 1)
-  trader.virtualPipeline['R_100'].pending.expiryEpoch = Math.floor(Date.now() / 1000) - 2;
-  trader.lastPoll = 0;
-  await trader.tick();
-  assert.equal(trader.virtualPipeline['R_100'].losses, 1);
-
-  // Cycle 2: Open Virtual Order 2
-  trader.lastPoll = 0;
-  await trader.tick();
-  assert.ok(trader.virtualPipeline['R_100'].pending);
-
-  // Expire Virtual Order 2 -> Virtual Loss 2 (1 -> 2)
-  trader.virtualPipeline['R_100'].pending.expiryEpoch = Math.floor(Date.now() / 1000) - 2;
-  trader.lastPoll = 0;
-  await trader.tick();
-  assert.equal(trader.virtualPipeline['R_100'].losses, 2);
-
-  // Cycle 3: 2 Virtual Losses satisfied! -> Real Sniper Trade Triggered!
+  // Run tick to trigger scan and asymmetric entry
   trader.lastPoll = 0;
   await trader.tick();
   assert.equal(trader.state.pending.length, 1);
-  assert.equal(trader.state.pending[0].direction, 'CALL');
-  assert.equal(trader.state.pending[0].durationTicks, 5);
+  assert.equal(trader.state.pending[0].contractType, 'DIGITUNDER');
+  assert.equal(trader.state.pending[0].barrier, 8);
 
   // Quote proposal
   trader.lastPoll = 0;
   await trader.tick();
-  assert.ok(trader.state.pending[0].quote);
+  assert.ok(trader.state.pending[0].quote != null);
+  assert.equal(trader.state.pending[0].quote.stake, 1.0);
 
-  // Settle Sniper 5T trade (Exit Price 1055.00 > Entry 1050.00 -> WIN on CALL)
+  // Advance time and settle win
   trader.state.pending[0].expiry = Math.floor(Date.now() / 1000) - 2;
   trader.lastPoll = 0;
-  session.derivAPI.sendRequest = async (req) => {
-    if (req.ticks_history && req.style !== 'candles') {
-      return { history: { times: [trader.state.pending[0].expiry], prices: [1055.00] } };
-    }
-    return {};
-  };
-
   await trader.tick();
+
   assert.equal(trader.state.trades.length, 1);
   assert.ok(trader.state.trades[0].profit > 0);
-  assert.equal(trader.state.trades[0].profit, 0.95);
-  assert.ok(trader.state.cooldownUntil > Date.now());
+  assert.equal(trader.recoveryStep, 0);
 
   // Test reset
-  trader.configure({ reset: true });
+  trader.reset();
   assert.equal(trader.state.trades.length, 0);
   assert.equal(trader.state.sessionProfit, 0);
 });

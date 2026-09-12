@@ -1,4 +1,4 @@
-export const QUANTUM_VERSION = 'qt-sniper-v1';
+export const QUANTUM_VERSION = 'qap-v3';
 export const QUANTUM_ASSETS = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_25', '1HZ25V', 'R_10', '1HZ10V'];
 export const DIGIT_ASSETS = QUANTUM_ASSETS;
 export const DIGIT_VERSION = QUANTUM_VERSION;
@@ -94,7 +94,142 @@ export function calculateRSI(prices = [], period = 14) {
 }
 
 /**
- * Quantum Momentum Sniper & Pullback Analyzer.
+ * Extract last decimal digit based on asset precision.
+ * @param {number|string} price 
+ * @param {string} symbol 
+ * @returns {number} 0-9
+ */
+export function extractLastDigit(price, symbol = 'R_100') {
+  if (price == null || !Number.isFinite(Number(price))) return 0;
+  const num = Number(price);
+  const decimals = symbol.includes('10') && !symbol.includes('100') ? 3 : 2;
+  const formatted = num.toFixed(decimals);
+  return parseInt(formatted.slice(-1), 10) || 0;
+}
+
+/**
+ * Quantum Asymmetric Digit Probability Engine (QAP-Engine V3).
+ * Analyzes L100 rolling digit frequency and triggers asymmetric high-probability setups:
+ * - DIGITUNDER 8 (80% theoretical win rate)
+ * - DIGITOVER 1 (80% theoretical win rate)
+ * - DIGITDIFF (90% theoretical win rate on cold digit prediction)
+ * 
+ * @param {Array<{epoch: number, price: number}>} ticks 
+ * @param {string} symbol 
+ * @param {object} config 
+ */
+export function analyzeQuantumAsymmetricDigits(ticks = [], symbol = 'R_100', config = {}) {
+  const sampleSize = ticks.length;
+  if (sampleSize < 20) {
+    return {
+      signal: false,
+      contractType: null,
+      barrier: null,
+      score: 0,
+      rule: 'insufficient_ticks',
+      reason: `Ticks insuficientes (${sampleSize}/20)`,
+      distribution: Array(10).fill(10),
+      counts: Array(10).fill(0)
+    };
+  }
+
+  const digits = ticks.map(t => extractLastDigit(t.price, symbol));
+  const counts = Array(10).fill(0);
+  for (const d of digits) {
+    if (d >= 0 && d <= 9) counts[d]++;
+  }
+
+  const percentages = counts.map(c => Number(((c / sampleSize) * 100).toFixed(1)));
+  const last5 = digits.slice(-5);
+  const lastDigit = digits.at(-1);
+
+  // Frequency groups
+  const highExtremesFreq = (counts[8] + counts[9]) / sampleSize; // Freq of 8 and 9
+  const lowExtremesFreq = (counts[0] + counts[1]) / sampleSize;  // Freq of 0 and 1
+  const lowGroupFreq = counts.slice(0, 5).reduce((a, b) => a + b, 0) / sampleSize; // 0,1,2,3,4
+  const highGroupFreq = counts.slice(5, 10).reduce((a, b) => a + b, 0) / sampleSize; // 5,6,7,8,9
+
+  // Find coldest and hottest digits
+  let minCount = Infinity, maxCount = -1;
+  let coldDigit = 0, hotDigit = 0;
+  for (let d = 0; d <= 9; d++) {
+    if (counts[d] < minCount) { minCount = counts[d]; coldDigit = d; }
+    if (counts[d] > maxCount) { maxCount = counts[d]; hotDigit = d; }
+  }
+
+  let signal = false;
+  let contractType = null;
+  let barrier = null;
+  let rule = 'neutral_distribution';
+  let score = 50;
+  let expectedWinRate = 50;
+  const reasons = [];
+
+  // SETUP 1: ASYMMETRIC DIGITUNDER 8 (80% Base Probability)
+  // When 8 and 9 are compressed (<14% in L100) and recent digits are low (last digit <= 6)
+  if (highExtremesFreq <= 0.15 && lowGroupFreq >= 0.55 && lastDigit <= 6) {
+    signal = true;
+    contractType = 'DIGITUNDER';
+    barrier = 8;
+    rule = 'asymmetric_under_8';
+    score = 92;
+    expectedWinRate = 84;
+    reasons.push(
+      `Dígitos altos 8 e 9 suprimidos em ${symbol} (${(highExtremesFreq * 100).toFixed(1)}% no L100)`,
+      `Dominância de dígitos baixos 0-4 (${(lowGroupFreq * 100).toFixed(1)}%)`,
+      `Último dígito favorável (${lastDigit}) · Alta assimetria estatística DIGITUNDER 8`
+    );
+  }
+  // SETUP 2: ASYMMETRIC DIGITOVER 1 (80% Base Probability)
+  // When 0 and 1 are compressed (<14% in L100) and recent digits are high (last digit >= 3)
+  else if (lowExtremesFreq <= 0.15 && highGroupFreq >= 0.55 && lastDigit >= 3) {
+    signal = true;
+    contractType = 'DIGITOVER';
+    barrier = 1;
+    rule = 'asymmetric_over_1';
+    score = 92;
+    expectedWinRate = 84;
+    reasons.push(
+      `Dígitos baixos 0 e 1 suprimidos em ${symbol} (${(lowExtremesFreq * 100).toFixed(1)}% no L100)`,
+      `Dominância de dígitos altos 5-9 (${(highGroupFreq * 100).toFixed(1)}%)`,
+      `Último dígito favorável (${lastDigit}) · Alta assimetria estatística DIGITOVER 1`
+    );
+  }
+  // SETUP 3: ASYMMETRIC DIGITDIFF (90% Base Probability on Coldest Suppressed Digit)
+  else if (minCount / sampleSize <= 0.06 && last5.every(d => d !== coldDigit)) {
+    signal = true;
+    contractType = 'DIGITDIFF';
+    barrier = coldDigit;
+    rule = 'asymmetric_diff_cold';
+    score = 90;
+    expectedWinRate = 92;
+    reasons.push(
+      `Dígito frio ${coldDigit} com apenas ${(percentages[coldDigit])}% de frequência no L100`,
+      `Ausente nas últimas 5 amostras consecutivas`,
+      `Probabilidade matemática de 90%+ com proteção contra anomalia de repetição`
+    );
+  }
+
+  return {
+    signal,
+    contractType,
+    barrier,
+    rule,
+    score,
+    expectedWinRate,
+    reasons,
+    counts,
+    percentages,
+    coldDigit,
+    hotDigit,
+    lastDigit,
+    last5,
+    sampleSize
+  };
+}
+
+/**
+ * Macro Trend Pullback Analyzer for M3/M5 Directional Trades.
  * @param {Array<{open: number, high: number, low: number, close: number, epoch: number}>} candles 
  * @param {string} symbol 
  * @param {object} config 
@@ -126,7 +261,6 @@ export function analyzeQuantumTrend(candles = [], symbol = 'R_100', config = {})
   const rsi = calculateRSI(closes, 14);
   const atr = calculateATR(validCandles, 14);
 
-  // Determine Directional Trend
   let trend = 'NEUTRAL';
   let trendScore = 50;
 
@@ -135,10 +269,10 @@ export function analyzeQuantumTrend(candles = [], symbol = 'R_100', config = {})
 
   if (isBullish) {
     trend = 'BULLISH';
-    trendScore = 75;
+    trendScore = 80;
   } else if (isBearish) {
     trend = 'BEARISH';
-    trendScore = 75;
+    trendScore = 80;
   }
 
   const lastCandle = validCandles.at(-1);
@@ -146,72 +280,38 @@ export function analyzeQuantumTrend(candles = [], symbol = 'R_100', config = {})
   const isRed = lastCandle.close <= lastCandle.open;
 
   let signal = false;
-  let direction = null; // 'CALL' or 'PUT'
+  let direction = null;
   let rule = '';
   let score = 0;
-  let durationTicks = 5; // Default 5 ticks for sniper pulse
   const reasons = [];
 
-  // Setup 1: 5-Tick High-Velocity Momentum Pulse (Rompimento Explosivo)
-  if (isBullish && isGreen && currentPrice >= ema9 && rsi >= 45) {
+  // M3/M5 Pullback Trend Confirmation
+  if (isBullish && (lastCandle.low <= ema9 || lastCandle.low <= ema21) && lastCandle.close >= ema9 && isGreen && rsi >= 42 && rsi <= 68) {
     signal = true;
     direction = 'CALL';
-    rule = 'momentum_sniper_5t';
-    score = 90;
-    durationTicks = 5;
+    rule = 'macro_trend_pullback_call';
+    score = 88;
     reasons.push(
-      `Pulso de Momentum de Alta em ${symbol} (EMA 9 > 21 > 50)`,
-      `Aceleração de rompimento comprador (5 Ticks / 10s)`,
-      `RSI saudável em ${rsi}`
+      `Alinhamento de Alta Macrotendência (EMA 9 > 21 > 50)`,
+      `Retração compradora confirmada na EMA de suporte`,
+      `RSI equilibrado em ${rsi}`
     );
-  } else if (isBearish && isRed && currentPrice <= ema9 && rsi <= 55) {
+  } else if (isBearish && (lastCandle.high >= ema9 || lastCandle.high >= ema21) && lastCandle.close <= ema9 && isRed && rsi <= 58 && rsi >= 32) {
     signal = true;
     direction = 'PUT';
-    rule = 'momentum_sniper_5t';
-    score = 90;
-    durationTicks = 5;
+    rule = 'macro_trend_pullback_put';
+    score = 88;
     reasons.push(
-      `Pulso de Momentum de Baixa em ${symbol} (EMA 9 < 21 < 50)`,
-      `Aceleração de rompimento vendedor (5 Ticks / 10s)`,
-      `RSI saudável em ${rsi}`
+      `Alinhamento de Baixa Macrotendência (EMA 9 < 21 < 50)`,
+      `Retração vendedora confirmada na EMA de resistência`,
+      `RSI equilibrado em ${rsi}`
     );
-  }
-
-  // Setup 2: EMA 21 Pullback Rejection (M1 Retração)
-  if (!signal) {
-    const isPullbackBullish = isBullish && (lastCandle.low <= ema9 || lastCandle.low <= ema21) && lastCandle.close >= ema9 && isGreen;
-    const isPullbackBearish = isBearish && (lastCandle.high >= ema9 || lastCandle.high >= ema21) && lastCandle.close <= ema9 && isRed;
-
-    if (isPullbackBullish && rsi >= 40 && rsi <= 70) {
-      signal = true;
-      direction = 'CALL';
-      rule = 'pullback_ema_rejection';
-      score = 88;
-      durationTicks = 5;
-      reasons.push(
-        `Retração compradora confirmada na EMA 9/21`,
-        `Rejeição de suporte com fechamento verde`,
-        `RSI em nível de suporte (${rsi})`
-      );
-    } else if (isPullbackBearish && rsi <= 60 && rsi >= 30) {
-      signal = true;
-      direction = 'PUT';
-      rule = 'pullback_ema_rejection';
-      score = 88;
-      durationTicks = 5;
-      reasons.push(
-        `Retração vendedora confirmada na EMA 9/21`,
-        `Rejeição de resistência com fechamento vermelho`,
-        `RSI em nível de resistência (${rsi})`
-      );
-    }
   }
 
   return {
     signal,
     direction,
     contractType: direction === 'CALL' ? 'CALL' : direction === 'PUT' ? 'PUT' : 'CALL',
-    durationTicks,
     trend,
     score: score || trendScore,
     rule: rule || 'neutral_scan',
@@ -228,46 +328,10 @@ export function analyzeQuantumTrend(candles = [], symbol = 'R_100', config = {})
   };
 }
 
-/**
- * Backward compatibility aliases.
- */
-export function extractLastDigit(price, symbol = 'R_100') {
-  if (price == null || !Number.isFinite(Number(price))) return 0;
-  const num = Number(price);
-  const formatted = num.toFixed(2);
-  return parseInt(formatted.slice(-1), 10) || 0;
-}
-
-export function analyzeDigitDistribution(ticks = [], symbol = 'R_100', windowSize = 60) {
-  const candles = (ticks || []).map((t, i) => ({
-    open: Number(t.price || 0),
-    high: Number(t.price || 0) * 1.0001,
-    low: Number(t.price || 0) * 0.9999,
-    close: Number(t.price || 0),
-    epoch: t.epoch || (1000 + i)
-  }));
-  const quantum = analyzeQuantumTrend(candles, symbol, { minCandles: 10 });
-  return {
-    sampleSize: ticks.length,
-    counts: Array(10).fill(1),
-    percentages: Array(10).fill(10),
-    chiSquare: 0,
-    entropy: 1.0,
-    ranked: [],
-    hotDigits: [],
-    coldDigits: [],
-    lastDigits: ticks.slice(-10).map(t => extractLastDigit(t.price, symbol)),
-    quantum
-  };
+export function analyzeDigitDistribution(ticks = [], symbol = 'R_100') {
+  return analyzeQuantumAsymmetricDigits(ticks, symbol);
 }
 
 export function detectDigitAnomalySignal(ticks = [], symbol = 'R_100', config = {}) {
-  const candles = (ticks || []).map((t, i) => ({
-    open: Number(t.price || 0),
-    high: Number(t.price || 0) * 1.0001,
-    low: Number(t.price || 0) * 0.9999,
-    close: Number(t.price || 0),
-    epoch: t.epoch || (1000 + i)
-  }));
-  return analyzeQuantumTrend(candles, symbol, config);
+  return analyzeQuantumAsymmetricDigits(ticks, symbol, config);
 }

@@ -72,7 +72,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
 
   const exportData = () => {
     const dataBlob = new Blob([JSON.stringify({
-      version: state?.version || 'qt-sniper-v1',
+      version: state?.version || 'qap-v3',
       simulationOnly: true,
       config: state?.config,
       selectedAsset,
@@ -84,7 +84,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
     const url = URL.createObjectURL(dataBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `quantum-sniper-lab-${selectedAsset}.json`;
+    a.download = `quantum-asymmetric-lab-${selectedAsset}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -93,9 +93,9 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
     <section className="digit-lab-panel aut-workspace">
       <div className="workspace-heading">
         <div>
-          <span className="workspace-eyebrow">QUANTUM SNIPER · FAKEGALE 2L & 5-TICKS / 100% SIMULADO</span>
-          <h1>Laboratório Quântico QT-Sniper<span>.</span></h1>
-          <p>Disparos cirúrgicos de 5 ticks em rompimentos e retrações EMA. Exige <b>2 perdas virtuais consecutivas</b> antes de abrir a operação simulada.</p>
+          <span className="workspace-eyebrow">QUANTUM ASYMMETRIC ENGINE (QAP-V3) · ASSIMETRIA 80%+ / 100% SIMULADO</span>
+          <h1>Laboratório Quântico Asimétrico<span>.</span></h1>
+          <p>Exploração estatística de alta probabilidade base (<b>DIGITUNDER 8</b> e <b>DIGITOVER 1</b> com 80%+ de acerto) e recuperação suave D'Alembert.</p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
           <span className={`workspace-status ${state?.config?.enabled ? 'is-online' : ''}`}>
@@ -114,66 +114,90 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
         </div>
       </div>
 
-      {/* MULTI-ASSET SCANNER MATRIX & VIRTUAL PIPELINE */}
+      {/* MULTI-ASSET SCANNER MATRIX & DIGIT DISTRIBUTION */}
       <section className="aut-card" style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
-          <h2><Crosshair size={18} /> Scanner Sniper & Pipeline de Perdas Virtuais (Fakegale 2L)</h2>
-          <span style={{ fontSize: '12px', color: '#94a3b8' }}>Operação simulada só é armada quando o ativo atinge 2 perdas virtuais consecutivas</span>
+          <h2><Crosshair size={18} /> Scanner de Distribuição L100 & Assimetria Estatística (80%+)</h2>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+            Varredura em tempo real dos 100 últimos dígitos por ativo
+          </span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
-          {(draft.symbols || QUANTUM_ASSETS.slice(0, 6)).map((sym) => {
-            const data = matrix[sym] || {};
-            const isBull = data.trend === 'BULLISH';
-            const isBear = data.trend === 'BEARISH';
-            const vLosses = data.virtualLosses || 0;
-            const reqLosses = data.virtualRequired || 2;
-            const isReady = vLosses >= reqLosses;
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+          {(state?.config?.symbols || QUANTUM_ASSETS.slice(0, 6)).map((sym) => {
+            const m = matrix[sym];
+            const hasSignal = m?.contractType != null;
+            const percentages = m?.percentages || Array(10).fill(10);
+            const coldDigit = m?.coldDigit ?? 0;
+            const hotDigit = m?.hotDigit ?? 0;
 
             return (
               <div
                 key={sym}
                 style={{
-                  background: isReady
-                    ? 'rgba(56, 189, 248, 0.12)'
-                    : 'rgba(255, 255, 255, 0.03)',
-                  border: isReady
-                    ? '1px solid #38bdf8'
-                    : '1px solid rgba(255, 255, 255, 0.08)',
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: hasSignal ? '1px solid #38bdf8' : '1px solid rgba(51, 65, 85, 0.5)',
                   borderRadius: '8px',
                   padding: '12px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '6px'
+                  gap: '8px',
+                  boxShadow: hasSignal ? '0 0 15px rgba(56, 189, 248, 0.15)' : 'none'
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <b style={{ fontSize: '14px', color: '#f8fafc' }}>{sym}</b>
-                  <span
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 'bold',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      background: isBull ? 'rgba(16, 185, 129, 0.2)' : isBear ? 'rgba(244, 63, 94, 0.2)' : 'rgba(255,255,255,0.08)',
-                      color: isBull ? '#34d399' : isBear ? '#fb7185' : '#94a3b8'
-                    }}
-                  >
-                    {isBull ? '🐂 ALTA' : isBear ? '🐻 BAIXA' : '⚖ NEUTRO'}
-                  </span>
+                  {hasSignal ? (
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        background: 'rgba(56, 189, 248, 0.2)',
+                        color: '#38bdf8',
+                        fontWeight: 'bold',
+                        border: '1px solid rgba(56, 189, 248, 0.4)'
+                      }}
+                    >
+                      🎯 {m.contractType} {m.barrier ?? ''} ({m.expectedWinRate || 80}%)
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>⚖ Frequência Equilibrada</span>
+                  )}
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
-                  <span>Confluência: <b style={{ color: (data.score || 0) >= 75 ? '#34d399' : '#f8fafc' }}>{data.score || 50}%</b></span>
-                  <span>RSI: <b>{data.rsi ? Number(data.rsi).toFixed(0) : '—'}</b></span>
+                {/* Mini Digit Frequency Bar chart (0-9) */}
+                <div style={{ display: 'flex', gap: '2px', alignItems: 'flex-end', height: '36px', background: 'rgba(0,0,0,0.2)', padding: '2px', borderRadius: '4px' }}>
+                  {percentages.map((pct, digit) => {
+                    const isCold = digit === coldDigit;
+                    const isHot = digit === hotDigit;
+                    const height = Math.max(4, Math.min(32, Math.round((pct / 25) * 32)));
+                    const bg = isCold ? '#38bdf8' : isHot ? '#f43f5e' : 'rgba(148, 163, 184, 0.4)';
+
+                    return (
+                      <div
+                        key={digit}
+                        title={`Dígito ${digit}: ${pct}% (L100)`}
+                        style={{
+                          flex: 1,
+                          height: `${height}px`,
+                          background: bg,
+                          borderRadius: '2px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '8px',
+                          color: '#fff'
+                        }}
+                      />
+                    );
+                  })}
                 </div>
 
-                {/* Virtual Pipeline Indicator */}
-                <div style={{ marginTop: '4px', fontSize: '11px', padding: '4px 6px', borderRadius: '4px', background: 'rgba(0,0,0,0.25)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Filtro Fakegale:</span>
-                  <b style={{ color: isReady ? '#38bdf8' : vLosses > 0 ? '#facc15' : '#94a3b8' }}>
-                    {isReady ? '🎯 PRONTO P/ DISPARO' : vLosses === 1 ? '1/2 Perda Virtual' : 'Aguardando Perda'}
-                  </b>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8' }}>
+                  <span>Dígito Frio: <b style={{ color: '#38bdf8' }}>{coldDigit}</b> ({percentages[coldDigit]}%)</span>
+                  <span>Último: <b style={{ color: '#f8fafc' }}>{m?.lastDigit ?? '—'}</b></span>
+                  <span>Dígito Quente: <b style={{ color: '#f43f5e' }}>{hotDigit}</b> ({percentages[hotDigit]}%)</span>
                 </div>
               </div>
             );
@@ -181,12 +205,13 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
         </div>
       </section>
 
-      <div className="aut-columns">
-        {/* CONFIGURATION CARD */}
+      {/* PARAMETERS AND STATS */}
+      <div className="aut-grid">
+        {/* CONTROLS */}
         <section className="aut-card">
-          <h2><Cpu size={18} /> Parâmetros QT-Sniper</h2>
-          <p>
-            O robô opera pulsos de <b>5 Ticks (~10 segundos)</b> com <b>~95% de payout líquido</b>. O filtro Fakegale elimina sequências negativas ao exigir que o ativo perca virtualmente antes da entrada real.
+          <h2><Cpu size={18} /> Parâmetros QAP-V3 (Assimetria & D'Alembert)</h2>
+          <p style={{ fontSize: '12px', color: '#94a3b8', margin: '8px 0 16px' }}>
+            Operações em contratos de alta probabilidade natural (UNDER 8 / OVER 1 com 80%+). O D'Alembert suave substitui o Martingale destrutivo.
           </p>
 
           <div className="aut-form">
@@ -203,49 +228,27 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </label>
 
             <label>
-              Multiplicador de Gale (Payout 95%)
+              Incremento D'Alembert após Loss (USD)
               <input
                 type="number"
-                min="1"
+                min="0.1"
                 max="5"
                 step="0.1"
-                value={draft.multiplier || 2.1}
-                onChange={(e) => update('multiplier', Number(e.target.value))}
+                value={draft.dalembertIncrement || 0.50}
+                onChange={(e) => update('dalembertIncrement', Number(e.target.value))}
               />
             </label>
 
             <label>
-              Níveis máximos de Gale
+              Passos Máximos de Recuperação D'Alembert
               <select
-                value={draft.maxGale}
-                onChange={(e) => update('maxGale', Number(e.target.value))}
+                value={draft.maxLossRecoverySteps ?? 2}
+                onChange={(e) => update('maxLossRecoverySteps', Number(e.target.value))}
               >
-                <option value="0">Sem Gale (Mão Fixa)</option>
-                <option value="1">1 Nível de Gale (Recomendado · 2.1x)</option>
-                <option value="2">2 Níveis de Gale</option>
-              </select>
-            </label>
-
-            <label>
-              Perdas Virtuais Obrigatórias (Fakegale)
-              <select
-                value={draft.virtualLossesRequired ?? 2}
-                onChange={(e) => update('virtualLossesRequired', Number(e.target.value))}
-              >
-                <option value="1">1 Perda Virtual</option>
-                <option value="2">2 Perdas Virtuais (Recomendado · 88%+ Acerto)</option>
-                <option value="3">3 Perdas Virtuais (Ultra Conservador)</option>
-              </select>
-            </label>
-
-            <label>
-              Duração da Operação (Ticks)
-              <select
-                value={draft.durationTicks || 5}
-                onChange={(e) => update('durationTicks', Number(e.target.value))}
-              >
-                <option value="5">5 Ticks (~10 segundos · Sniper Rápido)</option>
-                <option value="10">10 Ticks (~20 segundos)</option>
+                <option value="0">Sem Progressão (Mão Fixa)</option>
+                <option value="1">1 Passo (+0.50 USD)</option>
+                <option value="2">2 Passos (+1.00 USD Máx · Recomendado)</option>
+                <option value="3">3 Passos Conservadores</option>
               </select>
             </label>
 
@@ -279,7 +282,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
                 type="number"
                 min="1"
                 max="500"
-                value={draft.cycleBudget}
+                value={draft.cycleBudget || 15.0}
                 onChange={(e) => update('cycleBudget', Number(e.target.value))}
               />
             </label>
@@ -289,18 +292,17 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             <legend>Ativos Monitorados em Paralelo</legend>
             <div className="aut-checks">
               {QUANTUM_ASSETS.map((sym) => (
-                <label key={sym}>
+                <label key={sym} className="aut-checkbox">
                   <input
                     type="checkbox"
-                    checked={draft.symbols.includes(sym)}
-                    onChange={(e) =>
-                      update(
-                        'symbols',
-                        e.target.checked
-                          ? [...draft.symbols, sym]
-                          : draft.symbols.filter((x) => x !== sym)
-                      )
-                    }
+                    checked={(draft.symbols || []).includes(sym)}
+                    onChange={(e) => {
+                      const current = draft.symbols || [];
+                      const next = e.target.checked
+                        ? [...current, sym]
+                        : current.filter((s) => s !== sym);
+                      update('symbols', next);
+                    }}
                   />
                   {sym}
                 </label>
@@ -329,7 +331,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
               }
             >
               {state?.config?.enabled ? <Pause size={15} /> : <Play size={15} />}
-              {state?.config?.enabled ? 'Pausar Laboratório Sniper' : 'Iniciar Laboratório Sniper'}
+              {state?.config?.enabled ? 'Pausar Laboratório QAP' : 'Iniciar Laboratório QAP'}
             </button>
           </div>
 
@@ -338,7 +340,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
 
         {/* METRICS & OVERVIEW */}
         <section className="aut-card">
-          <h2><TrendingUp size={18} /> Desempenho Global da Simulação Sniper</h2>
+          <h2><TrendingUp size={18} /> Desempenho Global da Simulação QAP-V3</h2>
           <div className="aut-form" style={{ marginBottom: '16px' }}>
             <label>
               Filtrar Ativo nas Métricas
@@ -355,55 +357,65 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
           </div>
 
           <div className="aut-metrics">
-            <article>
-              <span>Resultado Simulado Total</span>
-              <strong style={{ color: net >= 0 ? '#34d399' : '#f87171' }}>{usd(net)}</strong>
-              <small>{totalOps} entradas sniper simuladas</small>
-            </article>
+            <div className="aut-metric">
+              <span className="aut-metric-label">Resultado Simulado Total</span>
+              <span
+                className="aut-metric-value"
+                style={{ color: net >= 0 ? '#34d399' : '#fb7185' }}
+              >
+                {usd(net)}
+              </span>
+              <span className="aut-metric-sub">{totalOps} entradas simuladas</span>
+            </div>
 
-            <article>
-              <span>Taxa de Acerto Real</span>
-              <strong style={{ color: winRate >= 70 ? '#34d399' : '#fbbf24' }}>{percent(winRate)}</strong>
-              <small>{wins} vitórias · {losses} derrotas</small>
-            </article>
+            <div className="aut-metric">
+              <span className="aut-metric-label">Taxa de Acerto Real</span>
+              <span
+                className="aut-metric-value"
+                style={{ color: winRate >= 75 ? '#34d399' : winRate >= 60 ? '#facc15' : '#fb7185' }}
+              >
+                {percent(winRate)}
+              </span>
+              <span className="aut-metric-sub">{wins} vitórias · {losses} derrotas</span>
+            </div>
 
-            <article>
-              <span>Maior Sequência de Wins</span>
-              <strong style={{ color: '#38bdf8' }}>{maxWinStreak}</strong>
-              <small>Vitórias consecutivas</small>
-            </article>
+            <div className="aut-metric">
+              <span className="aut-metric-label">Maior Sequência de Wins</span>
+              <span className="aut-metric-value" style={{ color: '#38bdf8' }}>{maxWinStreak}</span>
+              <span className="aut-metric-sub">Vitórias consecutivas</span>
+            </div>
 
-            <article>
-              <span>Drawdown Máximo</span>
-              <strong style={{ color: '#fb7185' }}>{usd(drawdown)}</strong>
-              <small>{state?.pending?.length || 0} ordens em andamento</small>
-            </article>
+            <div className="aut-metric">
+              <span className="aut-metric-label">Drawdown Máximo</span>
+              <span className="aut-metric-value" style={{ color: drawdown > 10 ? '#fb7185' : '#94a3b8' }}>{usd(drawdown)}</span>
+              <span className="aut-metric-sub">{state?.pending?.length || 0} ordens em andamento</span>
+            </div>
           </div>
 
-          {/* Equity Curve */}
-          <div className="aut-equity" style={{ marginTop: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <b>Curva de Capital (Sniper 5 Ticks · Fakegale 2L)</b>
-              <span>{usd(low)} a {usd(high)}</span>
+          {/* EQUITY CURVE SVG */}
+          <div style={{ marginTop: '20px', background: 'rgba(15, 23, 42, 0.4)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px' }}>
+              <b>Curva de Capital (Assimetria QAP-V3)</b>
+              <span style={{ color: '#94a3b8' }}>{usd(low)} a {usd(high)}</span>
             </div>
-            {filteredTrades.length ? (
-              <svg viewBox="0 0 800 190" role="img" aria-label={`Curva Sniper: ${filteredTrades.length} entradas`}>
+            {equityPoints.length > 1 ? (
+              <svg width="100%" height="80" style={{ overflow: 'visible' }}>
                 <polyline
                   fill="none"
-                  stroke={net < 0 ? '#fb8b9e' : '#34d399'}
-                  strokeWidth="2.5"
+                  stroke={net >= 0 ? '#34d399' : '#fb7185'}
+                  strokeWidth="2"
                   points={equityPoints
                     .map(
-                      (v, i) =>
-                        `${20 + (i / (equityPoints.length - 1)) * 760},${
-                          160 - ((v - low) / span) * 135
+                      (p, idx) =>
+                        `${(idx / (equityPoints.length - 1)) * 300},${
+                          70 - ((p - low) / span) * 60
                         }`
                     )
                     .join(' ')}
                 />
               </svg>
             ) : (
-              <p>Aguardando o primeiro ativo completar 2 perdas virtuais para disparar a entrada simulada.</p>
+              <p>Aguardando a primeira oportunidade assimétrica para gerar o gráfico.</p>
             )}
           </div>
         </section>
@@ -412,13 +424,13 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
       {/* RECENT TRADES */}
       <section className="aut-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-          <h2>Últimas Entradas Sniper Simuladas</h2>
+          <h2>Últimas Entradas Assimétricas Simuladas</h2>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               className="workspace-button"
               disabled={!trades.length && !state?.pending?.length}
               onClick={() => {
-                if (window.confirm('Tem certeza que deseja resetar o histórico e zerar as métricas para reiniciar os testes no QT-Sniper?')) {
+                if (window.confirm('Tem certeza que deseja resetar o histórico e zerar as métricas para reiniciar os testes no QAP-V3?')) {
                   onConfigure({ reset: true });
                 }
               }}
@@ -438,10 +450,10 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
               <tr>
                 <th>Data/Hora</th>
                 <th>Ativo</th>
-                <th>Disparo</th>
-                <th>Estratégia</th>
-                <th>Confluência</th>
-                <th>Nível</th>
+                <th>Contrato</th>
+                <th>Barreira</th>
+                <th>Dígito de Saída</th>
+                <th>Probabilidade</th>
                 <th>Stake</th>
                 <th>Lucro Líquido</th>
               </tr>
@@ -455,17 +467,17 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
                     <span
                       className="badge-tag"
                       style={{
-                        background: t.direction === 'CALL' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(244, 63, 94, 0.2)',
-                        color: t.direction === 'CALL' ? '#34d399' : '#fb7185',
+                        background: t.profit > 0 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(244, 63, 94, 0.2)',
+                        color: t.profit > 0 ? '#34d399' : '#fb7185',
                         fontWeight: 'bold'
                       }}
                     >
-                      {t.direction === 'CALL' ? '🎯 5T CALL' : '🎯 5T PUT'}
+                      🎯 {t.contractType}
                     </span>
                   </td>
-                  <td><span style={{ fontSize: '12px', color: '#94a3b8' }}>{t.rule || 'Momentum Sniper'}</span></td>
-                  <td><b>{t.score ? `${t.score}%` : '90%'}</b></td>
-                  <td>G{t.stage}</td>
+                  <td><b>{t.barrier ?? '—'}</b></td>
+                  <td><b style={{ color: '#f8fafc' }}>{t.exitDigit ?? '—'}</b></td>
+                  <td><b>{t.expectedWinRate ? `${t.expectedWinRate}%` : '80%'}</b></td>
                   <td>{usd(t.stake)}</td>
                   <td style={{ color: t.profit > 0 ? '#34d399' : '#f87171', fontWeight: 'bold' }}>
                     {t.profit > 0 ? `+${usd(t.profit)}` : usd(t.profit)}
@@ -475,7 +487,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </tbody>
           </table>
         </div>
-        {!filteredTrades.length && <p>Nenhuma entrada sniper simulada ainda para este filtro.</p>}
+        {!filteredTrades.length && <p>Nenhuma entrada assimétrica simulada ainda para este filtro.</p>}
 
         {/* Live event logs */}
         <div style={{ marginTop: '16px' }}>
