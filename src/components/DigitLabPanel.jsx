@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, Save, Download, Cpu, Activity, Zap, AlertCircle, Shield, TrendingUp, BarChart2 } from 'lucide-react';
+import { Play, Pause, Save, Download, Cpu, Activity, Zap, AlertCircle, Shield, TrendingUp, BarChart2, Clock, CheckCircle2, RotateCw } from 'lucide-react';
 import { DIGIT_DEFAULTS, validateDigitConfig } from '../../vps-backend/automation/DigitTrader.js';
 import { DIGIT_ASSETS } from '../../vps-backend/automation/digitAnomaly.js';
 
@@ -67,15 +67,23 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
     percentages: Array(10).fill(0),
     sampleSize: 0,
     chiSquare: 0,
+    entropy: 1.0,
     ranked: [],
     hotDigits: [],
     coldDigits: [],
     lastDigits: []
   };
 
+  const cooldownSec = state?.cooldownRemainingSec || 0;
+  const isCooldown = cooldownSec > 0;
+  const cooldownMin = Math.floor(cooldownSec / 60);
+  const cooldownSecRemainder = cooldownSec % 60;
+  const sessionTarget = state?.config?.sessionTarget || 2.50;
+  const sessionProfit = state?.sessionProfit || 0;
+
   const exportData = () => {
     const dataBlob = new Blob([JSON.stringify({
-      version: state?.version || 'digit-v1',
+      version: state?.version || 'digit-v2',
       simulationOnly: true,
       config: state?.config,
       selectedAsset,
@@ -87,30 +95,59 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
     const url = URL.createObjectURL(dataBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `quantum-digit-lab-${selectedAsset}.json`;
+    a.download = `quantum-digit-matrix-${selectedAsset}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const getContractBadge = (contractType, targetDigit, barrier) => {
+    switch (contractType) {
+      case 'DIGITDIFF':
+        return <span className="badge-tag" style={{ background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8' }}>≠ DIFF {targetDigit}</span>;
+      case 'DIGITUNDER':
+        return <span className="badge-tag" style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc' }}>▼ UNDER {barrier}</span>;
+      case 'DIGITOVER':
+        return <span className="badge-tag" style={{ background: 'rgba(234, 179, 8, 0.2)', color: '#facc15' }}>▲ OVER {barrier}</span>;
+      case 'DIGITEVEN':
+        return <span className="badge-tag" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>⚖ PAR</span>;
+      case 'DIGITODD':
+        return <span className="badge-tag" style={{ background: 'rgba(249, 115, 22, 0.2)', color: '#fb923c' }}>⚖ ÍMPAR</span>;
+      default:
+        return <span className="badge-tag">DÍGITO</span>;
+    }
   };
 
   return (
     <section className="digit-lab-panel aut-workspace">
       <div className="workspace-heading">
         <div>
-          <span className="workspace-eyebrow">PESQUISA CONTÍNUA / 100% SIMULADO</span>
-          <h1>Laboratório de Dígitos Quantum<span>.</span></h1>
-          <p>Estratégia QD-Differ (Dígito Diferente) com detecção de anomalias estatísticas de repetição e clustering.</p>
+          <span className="workspace-eyebrow">PESQUISA & ANÁLISE QUANTITATIVA / 100% SIMULADO</span>
+          <h1>QD-Matrix V2 · Laboratório Quântico de Dígitos<span>.</span></h1>
+          <p>Micro-sessões com travamento de lucro, pausa de descanso (cooldown), aquecimento limpo de 30 ticks e rotação dinâmica de modalidades.</p>
         </div>
-        <span className={`workspace-status ${state?.config?.enabled ? 'is-online' : ''}`}>
-          <i />{state?.status || 'Aguardando VPS'}
-        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+          <span className={`workspace-status ${state?.config?.enabled ? 'is-online' : ''}`}>
+            <i />{state?.status || 'Aguardando VPS'}
+          </span>
+          {isCooldown && (
+            <span style={{ fontSize: '11px', background: 'rgba(234, 179, 8, 0.15)', color: '#facc15', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
+              ⏳ Cooldown Ativo: <b>{cooldownMin}m {cooldownSecRemainder}s</b> restantes
+            </span>
+          )}
+          {state?.config?.enabled && !isCooldown && (
+            <span style={{ fontSize: '11px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+              🎯 Sessão Atual: <b>{usd(sessionProfit)}</b> / {usd(sessionTarget)}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="aut-columns">
         {/* CONFIGURATION CARD */}
         <section className="aut-card">
-          <h2><Cpu size={18} /> Parâmetros do Algoritmo QD-Differ</h2>
+          <h2><Cpu size={18} /> Parâmetros QD-Matrix V2</h2>
           <p>
-            Opera no modo <b>DIGITDIFF</b> com 90% de probabilidade matemática base por tick. O filtro aguarda anomalias de repetição dupla ou exaustão de dígitos superaquecidos antes de simular a entrada. Nenhuma ordem real é enviada à corretora.
+            Execução contínua em micro-sessões de alta disciplina. Ao atingir a meta parcial estipulada, o motor pausa automaticamente no período de <i>cooldown</i>, garantindo que sequências de reversão ou clusters anômalos não corroam o lucro acumulado.
           </p>
 
           <div className="aut-form">
@@ -123,6 +160,30 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
                 step="0.1"
                 value={draft.stake}
                 onChange={(e) => update('stake', Number(e.target.value))}
+              />
+            </label>
+
+            <label>
+              Meta da Micro-Sessão (USD)
+              <input
+                type="number"
+                min="0.5"
+                max="50"
+                step="0.5"
+                value={draft.sessionTarget || 2.50}
+                onChange={(e) => update('sessionTarget', Number(e.target.value))}
+              />
+            </label>
+
+            <label>
+              Tempo de Cooldown (minutos)
+              <input
+                type="number"
+                min="1"
+                max="240"
+                step="5"
+                value={draft.cooldownMinutes || 45}
+                onChange={(e) => update('cooldownMinutes', Number(e.target.value))}
               />
             </label>
 
@@ -173,19 +234,39 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </label>
 
             <label>
-              Amostra mínima para disparo
+              Ticks de Aquecimento (Warm-up)
               <input
                 type="number"
                 min="10"
                 max="100"
-                value={draft.minSamples}
-                onChange={(e) => update('minSamples', Number(e.target.value))}
+                value={draft.warmupTicksRequired || 30}
+                onChange={(e) => update('warmupTicksRequired', Number(e.target.value))}
               />
             </label>
           </div>
 
-          <fieldset>
-            <legend>Ativos Monitorados</legend>
+          <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+              <input
+                type="checkbox"
+                checked={Boolean(draft.enableRotation)}
+                onChange={(e) => update('enableRotation', e.target.checked)}
+              />
+              <b>Rotação Multi-Estratégia:</b> Alternar entre DIFF, UNDER/OVER e PARIDADE.
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+              <input
+                type="checkbox"
+                checked={Boolean(draft.enableFakegaleLoss)}
+                onChange={(e) => update('enableFakegaleLoss', e.target.checked)}
+              />
+              <b>Filtro Fakegale Pós-Loss:</b> Aguardar dispersão do cluster antes do Gale 1.
+            </label>
+          </div>
+
+          <fieldset style={{ marginTop: '16px' }}>
+            <legend>Ativos Monitorados em Paralelo</legend>
             <div className="aut-checks">
               {DIGIT_ASSETS.map((sym) => (
                 <label key={sym}>
@@ -228,21 +309,16 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
               }
             >
               {state?.config?.enabled ? <Pause size={15} /> : <Play size={15} />}
-              {state?.config?.enabled ? 'Pausar Laboratório de Dígitos' : 'Iniciar Laboratório de Dígitos'}
+              {state?.config?.enabled ? 'Pausar QD-Matrix V2' : 'Iniciar QD-Matrix V2'}
             </button>
           </div>
 
           {error && <p role="alert" style={{ color: '#fb7185', marginTop: '8px' }}>{error}</p>}
-          {!state && (
-            <p style={{ fontSize: '12px', color: '#fbbf24', marginTop: '10px' }}>
-              💡 <b>Aviso:</b> Se a VPS estiver em execução no servidor remoto, execute <code>git pull</code> e reinicie o processo do Node (ex: <code>pm2 restart</code>) para que a VPS ative o motor de dígitos em tempo real.
-            </p>
-          )}
         </section>
 
         {/* HEATMAP & DIGIT DISTRIBUTION */}
         <section className="aut-card">
-          <h2><BarChart2 size={18} /> Distribuição & Anomalias em Tempo Real</h2>
+          <h2><BarChart2 size={18} /> Distribuição & Entropia Quântica</h2>
           <div className="aut-form" style={{ marginBottom: '16px' }}>
             <label>
               Ativo para Inspeção Visual
@@ -257,9 +333,11 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </label>
           </div>
 
-          <p>
-            Amostra atual: <b>{currentDistribution.sampleSize} ticks</b> · Teste Qui-Quadrado (&chi;&sup2;): <b>{currentDistribution.chiSquare}</b> (Normal: &lt; 16.9)
-          </p>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '13px', margin: '8px 0' }}>
+            <span>Amostra: <b>{currentDistribution.sampleSize} ticks</b></span>
+            <span>&chi;&sup2;: <b>{currentDistribution.chiSquare}</b></span>
+            <span>Entropia H: <b>{currentDistribution.entropy ?? 1.0}</b> ({currentDistribution.entropy >= 0.95 ? 'Alta Aleatoriedade' : 'Viés Estatístico'})</span>
+          </div>
 
           {/* Bar Chart Heatmap */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '6px', margin: '16px 0', alignItems: 'flex-end', height: '120px', background: 'rgba(0,0,0,0.2)', padding: '12px 8px 4px 8px', borderRadius: '8px' }}>
@@ -292,14 +370,14 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
           </div>
 
           <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#94a3b8', marginBottom: '16px' }}>
-            <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#f43f5e', borderRadius: '2px', marginRight: '4px' }} /> Dígito Quente (&ge; 18%)</span>
-            <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#38bdf8', borderRadius: '2px', marginRight: '4px' }} /> Dígito Frio (&le; 4%)</span>
+            <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#f43f5e', borderRadius: '2px', marginRight: '4px' }} /> Quente (&ge; 18%)</span>
+            <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#38bdf8', borderRadius: '2px', marginRight: '4px' }} /> Frio (&le; 4%)</span>
             <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#10b981', borderRadius: '2px', marginRight: '4px' }} /> Equilíbrio (~10%)</span>
           </div>
 
           {/* Last Digits Stream */}
           <div>
-            <span style={{ fontSize: '12px', color: '#94a3b8' }}>Últimos Ticks Capturados:</span>
+            <span style={{ fontSize: '12px', color: '#94a3b8' }}>Últimos Ticks Capturados ({currentDistribution.lastDigits.length}):</span>
             <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
               {currentDistribution.lastDigits.length ? (
                 currentDistribution.lastDigits.map((d, i) => (
@@ -328,7 +406,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
       {/* SIMULATION RESULTS & METRICS */}
       <section className="aut-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-          <h2><TrendingUp size={18} /> Resultados da Simulação QD-Differ</h2>
+          <h2><TrendingUp size={18} /> Desempenho Global da Simulação QD-Matrix V2</h2>
           <button className="workspace-button" disabled={!trades.length} onClick={exportData}>
             <Download size={15} /> Exportar Relatório de Dígitos JSON
           </button>
@@ -336,14 +414,14 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
 
         <div className="aut-metrics">
           <article>
-            <span>Resultado Simulado</span>
+            <span>Resultado Simulado Total</span>
             <strong style={{ color: net >= 0 ? '#34d399' : '#f87171' }}>{usd(net)}</strong>
             <small>{totalOps} entradas simuladas</small>
           </article>
 
           <article>
             <span>Taxa de Acerto</span>
-            <strong style={{ color: winRate >= 88 ? '#34d399' : '#fbbf24' }}>{percent(winRate)}</strong>
+            <strong style={{ color: winRate >= 85 ? '#34d399' : '#fbbf24' }}>{percent(winRate)}</strong>
             <small>{wins} vitórias · {losses} derrotas</small>
           </article>
 
@@ -397,9 +475,9 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
               <tr>
                 <th>Data/Hora</th>
                 <th>Ativo</th>
-                <th>Contrato</th>
-                <th>Alvo Anômalo</th>
-                <th>Dígito de Saída</th>
+                <th>Modalidade</th>
+                <th>Alvo / Regra</th>
+                <th>Dígito Saída</th>
                 <th>Nível</th>
                 <th>Stake</th>
                 <th>Lucro Líquido</th>
@@ -410,8 +488,8 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
                 <tr key={t.id}>
                   <td>{new Date(t.timestamp).toLocaleTimeString()}</td>
                   <td><b>{t.symbol}</b></td>
-                  <td><span className="badge-tag">≠ DIFF</span></td>
-                  <td><span style={{ color: '#f43f5e', fontWeight: 'bold' }}>≠ {t.targetDigit}</span></td>
+                  <td>{getContractBadge(t.contractType, t.targetDigit, t.barrier)}</td>
+                  <td><span style={{ fontSize: '12px', color: '#94a3b8' }}>{t.rule || 'anomaly'}</span></td>
                   <td><span style={{ color: t.profit > 0 ? '#34d399' : '#f43f5e', fontWeight: 'bold' }}>{t.exitDigit ?? '—'}</span></td>
                   <td>G{t.stage}</td>
                   <td>{usd(t.stake)}</td>
@@ -427,7 +505,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
 
         {/* Live event logs */}
         <div style={{ marginTop: '16px' }}>
-          {(state?.events || []).slice(-5).reverse().map((e, i) => (
+          {(state?.events || []).slice(-6).reverse().map((e, i) => (
             <p key={i} style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0' }}>
               <time>{new Date(e.time).toLocaleTimeString()}</time> · <b>{e.symbol || 'SISTEMA'}</b>: {e.message}
             </p>

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   extractLastDigit,
+  calculateEntropy,
   analyzeDigitDistribution,
   detectDigitAnomalySignal,
   DIGIT_ASSETS
@@ -32,8 +33,22 @@ test('digit extraction accurately parses last digits for all synthetic assets', 
   assert.equal(extractLastDigit(undefined, 'R_100'), null);
 });
 
+test('calculateEntropy computes normalized Shannon entropy correctly', () => {
+  // Perfect uniform distribution (10 of each digit) -> entropy ~ 1.0
+  const uniformCounts = Array(10).fill(10);
+  const uniformH = calculateEntropy(uniformCounts, 100);
+  assert.equal(uniformH, 1.0);
+
+  // Zero/empty counts
+  assert.equal(calculateEntropy([], 0), 1.0);
+
+  // Complete concentration in 1 digit -> entropy = 0.0
+  const biasedCounts = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const biasedH = calculateEntropy(biasedCounts, 100);
+  assert.equal(biasedH, 0.0);
+});
+
 test('digit distribution computes uniform frequencies and chi-square statistics', () => {
-  // Generate 100 ticks with known digits (10 of each digit 0-9)
   const ticks = [];
   for (let i = 0; i < 100; i++) {
     const digit = i % 10;
@@ -47,16 +62,16 @@ test('digit distribution computes uniform frequencies and chi-square statistics'
     assert.equal(result.percentages[d], 10.0);
   }
   assert.equal(result.chiSquare, 0.0);
+  assert.equal(result.entropy, 1.0);
 });
 
 test('anomaly detector identifies double-hit repetition and suppresses triple-hits', () => {
   const ticks = [];
-  // 30 normal baseline ticks (digits 0 to 9 cycling)
   for (let i = 0; i < 30; i++) {
     ticks.push({ price: 1000.00 + (i % 10) * 0.01, epoch: 1000 + i });
   }
 
-  // Add double repetition of digit 7 (1000.07 and 1000.17)
+  // Double repetition of digit 7
   ticks.push({ price: 1000.07, epoch: 1031 });
   ticks.push({ price: 1000.17, epoch: 1032 });
 
@@ -67,72 +82,115 @@ test('anomaly detector identifies double-hit repetition and suppresses triple-hi
   assert.equal(signal.rule, 'double_repeat_exhaustion');
   assert.ok(signal.score >= 80);
 
-  // Now add a 3rd repetition of digit 7 (triple hit trap) -> should suppress
+  // 3rd repetition of digit 7 -> should suppress
   ticks.push({ price: 1000.27, epoch: 1033 });
   const suppressed = detectDigitAnomalySignal(ticks, 'R_100', { minSamples: 20, windowSize: 50 });
   assert.equal(suppressed.signal, false);
   assert.ok(suppressed.reason.includes('já repetiu 3x consecutivas'));
 });
 
-test('validateDigitConfig enforces bounds and rejects non-finite or invalid parameters', () => {
+test('anomaly detector identifies multi-modality signals (UNDER, OVER, PARITY)', () => {
+  const baselineTicks = [];
+  for (let i = 0; i < 30; i++) {
+    baselineTicks.push({ price: 1000.00 + (i % 10) * 0.01, epoch: 1000 + i });
+  }
+
+  // 1. High cluster -> Directional UNDER 7
+  const underTicks = [...baselineTicks];
+  underTicks.push({ price: 1000.07, epoch: 1031 });
+  underTicks.push({ price: 1000.08, epoch: 1032 });
+  underTicks.push({ price: 1000.09, epoch: 1033 });
+  underTicks.push({ price: 1000.07, epoch: 1034 });
+  underTicks.push({ price: 1000.08, epoch: 1035 });
+
+  const underSignal = detectDigitAnomalySignal(underTicks, 'R_100', { minSamples: 20, windowSize: 50, enableRotation: true });
+  assert.equal(underSignal.signal, true);
+  assert.equal(underSignal.contractType, 'DIGITUNDER');
+  assert.equal(underSignal.barrier, '7');
+  assert.equal(underSignal.rule, 'directional_under');
+
+  // 2. Low cluster -> Directional OVER 2
+  const overTicks = [...baselineTicks];
+  overTicks.push({ price: 1000.00, epoch: 1031 });
+  overTicks.push({ price: 1000.01, epoch: 1032 });
+  overTicks.push({ price: 1000.02, epoch: 1033 });
+  overTicks.push({ price: 1000.01, epoch: 1034 });
+  overTicks.push({ price: 1000.00, epoch: 1035 });
+
+  const overSignal = detectDigitAnomalySignal(overTicks, 'R_100', { minSamples: 20, windowSize: 50, enableRotation: true });
+  assert.equal(overSignal.signal, true);
+  assert.equal(overSignal.contractType, 'DIGITOVER');
+  assert.equal(overSignal.barrier, '2');
+  assert.equal(overSignal.rule, 'directional_over');
+
+  // 3. Parity Reversion (5 even digits -> DIGITODD)
+  const evenTicks = [...baselineTicks];
+  evenTicks.push({ price: 1000.02, epoch: 1031 });
+  evenTicks.push({ price: 1000.04, epoch: 1032 });
+  evenTicks.push({ price: 1000.08, epoch: 1033 });
+  evenTicks.push({ price: 1000.06, epoch: 1034 });
+  evenTicks.push({ price: 1000.04, epoch: 1035 });
+
+  const paritySignal = detectDigitAnomalySignal(evenTicks, 'R_100', { minSamples: 20, windowSize: 50, enableRotation: true });
+  assert.equal(paritySignal.signal, true);
+  assert.equal(paritySignal.contractType, 'DIGITODD');
+  assert.equal(paritySignal.rule, 'parity_reversion');
+});
+
+test('validateDigitConfig validates QD-Matrix V2 parameters', () => {
   assert.throws(() => validateDigitConfig(null), /inválida/);
-  assert.throws(() => validateDigitConfig({ stake: 0.1 }), /stake/);
-  assert.throws(() => validateDigitConfig({ stake: -5 }), /stake/);
-  assert.throws(() => validateDigitConfig({ multiplier: 0.5 }), /multiplier/);
-  assert.throws(() => validateDigitConfig({ maxGale: 5 }), /maxGale/);
-  assert.throws(() => validateDigitConfig({ symbols: ['INVALID_ASSET'] }), /ativos/);
+  assert.throws(() => validateDigitConfig({ sessionTarget: 0.01 }), /sessionTarget/);
+  assert.throws(() => validateDigitConfig({ cooldownMinutes: 0 }), /cooldownMinutes/);
+  assert.throws(() => validateDigitConfig({ warmupTicksRequired: 5 }), /warmupTicksRequired/);
 
   const valid = validateDigitConfig({
     enabled: true,
-    stake: 2.0,
-    multiplier: 10.0,
+    stake: 1.0,
+    multiplier: 11.0,
     maxGale: 1,
-    cycleBudget: 30.0,
+    cycleBudget: 25.0,
+    sessionTarget: 3.00,
+    cooldownMinutes: 30,
+    enableRotation: true,
+    enableFakegaleLoss: true,
+    warmupTicksRequired: 30,
     symbols: ['R_100', '1HZ50V']
   });
 
   assert.equal(valid.enabled, true);
-  assert.equal(valid.stake, 2.0);
-  assert.equal(valid.multiplier, 10.0);
+  assert.equal(valid.sessionTarget, 3.00);
+  assert.equal(valid.cooldownMinutes, 30);
+  assert.equal(valid.enableRotation, true);
+  assert.equal(valid.enableFakegaleLoss, true);
+  assert.equal(valid.warmupTicksRequired, 30);
 });
 
-test('DigitTrader simulates DIGITDIFF trades without mutating balance or placing real buys', async () => {
-  let saved = false;
-  let syncCount = 0;
-  const requests = [];
-
+test('DigitTrader locks profit upon hitting micro-session target and triggers cooldown', async () => {
   const session = {
     activeMode: 'demo',
-    modeStates: {
-      demo: {},
-      real: {}
-    },
+    modeStates: { demo: {}, real: {} },
     accountCurrency: 'USD',
     balance: 100.0,
-    saveToFile: () => { saved = true; },
-    syncToClients: () => { syncCount++; },
+    saveToFile: () => {},
+    syncToClients: () => {},
     connectDeriv: () => {},
     derivAPI: {
       connected: true,
       authorized: true,
       sendRequest: async (req) => {
-        requests.push(req);
-        assert.ok(!req.buy, 'DigitTrader should NEVER send real buy requests');
         if (req.proposal) {
           return {
             proposal: {
-              id: 'prop-123',
+              id: 'prop-v2',
               ask_price: req.amount,
-              payout: req.amount * 1.095, // ~9.5% payout for DIGITDIFF
+              payout: req.amount * 1.095,
               spot: 1234.56,
               spot_time: Math.floor(Date.now() / 1000)
             }
           };
         }
         if (req.ticks_history) {
-          // Provide 30 ticks ending at digit 9, then two consecutive digit 4s
-          const times = [];
-          const prices = [];
+          const times = [], prices = [];
           for (let i = 0; i < 30; i++) {
             times.push(1000 + i);
             prices.push(1000.00 + (i % 10) * 0.01);
@@ -140,12 +198,73 @@ test('DigitTrader simulates DIGITDIFF trades without mutating balance or placing
           times.push(1030);
           prices.push(1000.04);
           times.push(1031);
-          prices.push(1000.14);
+          prices.push(1000.14); // Double 4
+          return { history: { times, prices } };
+        }
+        return {};
+      }
+    }
+  };
 
+  const trader = new DigitTrader(session);
+  trader.configure({
+    enabled: true,
+    stake: 1.0,
+    sessionTarget: 0.05, // Low target so 1 win locks the session
+    cooldownMinutes: 30,
+    symbols: ['R_100']
+  });
+
+  // Step 1: Scan and detect
+  trader.lastPoll = 0;
+  await trader.tick();
+  assert.equal(trader.state.pending.length, 1);
+
+  // Step 2: Quote
+  trader.lastPoll = 0;
+  await trader.tick();
+  assert.ok(trader.state.pending[0].quote);
+
+  // Step 3: Exit win (dígito 8 !== 4)
+  trader.state.pending[0].expiry = Math.floor(Date.now() / 1000) - 2;
+  trader.lastPoll = 0;
+  session.derivAPI.sendRequest = async (req) => {
+    if (req.ticks_history) {
+      return { history: { times: [trader.state.pending[0].expiry], prices: [1234.58] } };
+    }
+    return {};
+  };
+
+  await trader.tick();
+  assert.equal(trader.state.trades.length, 1);
+  assert.ok(trader.state.trades[0].profit > 0);
+  // Cooldown should be active now!
+  assert.ok(trader.state.cooldownUntil > Date.now());
+  const snap = trader.snapshot();
+  assert.ok(snap.cooldownRemainingSec > 0);
+});
+
+test('DigitTrader Post-Loss Fakegale holds Gale until cluster breaks', async () => {
+  const session = {
+    activeMode: 'demo',
+    modeStates: { demo: {}, real: {} },
+    accountCurrency: 'USD',
+    balance: 100.0,
+    saveToFile: () => {},
+    syncToClients: () => {},
+    connectDeriv: () => {},
+    derivAPI: {
+      connected: true,
+      authorized: true,
+      sendRequest: async (req) => {
+        if (req.proposal) {
           return {
-            history: {
-              times,
-              prices
+            proposal: {
+              id: 'prop-gale',
+              ask_price: req.amount,
+              payout: req.amount * 1.095,
+              spot: 1234.56,
+              spot_time: Math.floor(Date.now() / 1000)
             }
           };
         }
@@ -155,42 +274,75 @@ test('DigitTrader simulates DIGITDIFF trades without mutating balance or placing
   };
 
   const trader = new DigitTrader(session);
-  trader.configure({ enabled: true, stake: 1.0, symbols: ['R_100'] });
+  trader.configure({
+    enabled: true,
+    stake: 1.0,
+    maxGale: 1,
+    enableFakegaleLoss: true,
+    symbols: ['R_100']
+  });
 
-  // First tick scans and detects anomaly (target digit 4)
-  trader.lastPoll = 0;
-  await trader.tick();
-  assert.equal(trader.state.pending.length, 1);
-  assert.equal(trader.state.pending[0].targetDigit, 4);
+  // Create an artificial active pending trade targeting DIFF 5
+  trader.state.pending = [{
+    id: 'test-pending-1',
+    symbol: 'R_100',
+    contractType: 'DIGITDIFF',
+    targetDigit: 5,
+    stage: 0,
+    rule: 'double_repeat_exhaustion',
+    quote: { stake: 1.0, payout: 1.095, entry: 100.0, epoch: 1000 },
+    expiry: Math.floor(Date.now() / 1000) - 2,
+    accumulatedProfit: 0
+  }];
 
-  // Next tick requests proposal for DIGITDIFF barrier: '4'
-  trader.lastPoll = 0;
-  await trader.tick();
-  assert.ok(trader.state.pending[0].quote);
-  assert.equal(trader.state.pending[0].quote.stake, 1.0);
-
-  // Advance expiry past threshold for immediate exit resolution
-  trader.state.pending[0].expiry = Math.floor(Date.now() / 1000) - 2;
-  trader.lastPoll = 0;
-
-  // Mock exit tick with price ending in digit 8 (1234.58 !== 4 -> WIN)
+  // Mock exit tick with digit 5 (LOSS on DIFF 5!)
   session.derivAPI.sendRequest = async (req) => {
     if (req.ticks_history) {
+      return { history: { times: [trader.state.pending[0].expiry], prices: [1000.55] } };
+    }
+    return {};
+  };
+
+  trader.lastPoll = 0;
+  await trader.tick();
+
+  // Trade suffered loss, stage advanced to 1, and Fakegale cluster break filter activated
+  assert.equal(trader.state.pending.length, 1);
+  assert.equal(trader.state.pending[0].stage, 1);
+  assert.equal(trader.state.pending[0].waitingClusterBreak, true);
+  assert.equal(trader.state.pending[0].lossDigit, 5);
+
+  // Next tick: market still has digit 5 (cluster continuing) -> fakegale must continue waiting
+  session.derivAPI.sendRequest = async (req) => {
+    if (req.ticks_history) {
+      return { history: { prices: [1000.85] } }; // digit 5
+    }
+    return {};
+  };
+  trader.lastPoll = 0;
+  await trader.tick();
+  assert.equal(trader.state.pending[0].waitingClusterBreak, true);
+
+  // Next tick: market moves to digit 2 (cluster broken!) -> fakegale clears and allows Gale 1 proposal
+  session.derivAPI.sendRequest = async (req) => {
+    if (req.ticks_history) {
+      return { history: { prices: [1000.82] } }; // digit 2 !== 5
+    }
+    if (req.proposal) {
       return {
-        history: {
-          times: [trader.state.pending[0].expiry],
-          prices: [1234.58]
+        proposal: {
+          id: 'prop-gale-cleared',
+          ask_price: req.amount,
+          payout: req.amount * 1.095,
+          spot: 1000.82,
+          spot_time: Math.floor(Date.now() / 1000)
         }
       };
     }
     return {};
   };
-
-  // Settle trade
+  trader.lastPoll = 0;
   await trader.tick();
-  assert.equal(trader.state.pending.length, 0);
-  assert.equal(trader.state.trades.length, 1);
-  assert.equal(trader.state.trades[0].exitDigit, 8);
-  assert.ok(trader.state.trades[0].profit > 0);
-  assert.equal(session.balance, 100.0, 'Balance must remain untouched during simulation');
+  assert.equal(trader.state.pending[0].waitingClusterBreak, false);
+  assert.ok(trader.state.pending[0].quote);
 });

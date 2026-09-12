@@ -1,4 +1,10 @@
-import { DIGIT_ASSETS, DIGIT_VERSION, extractLastDigit, analyzeDigitDistribution, detectDigitAnomalySignal } from './digitAnomaly.js';
+import {
+  DIGIT_ASSETS,
+  DIGIT_VERSION,
+  extractLastDigit,
+  analyzeDigitDistribution,
+  detectDigitAnomalySignal
+} from './digitAnomaly.js';
 
 export const DIGIT_DEFAULTS = Object.freeze({
   enabled: false,
@@ -9,7 +15,12 @@ export const DIGIT_DEFAULTS = Object.freeze({
   cycleBudget: 25.0,
   minPayout: 0.08,
   windowSize: 60,
-  minSamples: 30
+  minSamples: 30,
+  sessionTarget: 2.50, // Profit target per micro-session in USD
+  cooldownMinutes: 45, // Cooldown in minutes after hitting sessionTarget
+  enableRotation: true, // Multi-modality rotation (DIFF, UNDER, OVER, EVEN, ODD)
+  enableFakegaleLoss: true, // Post-loss cluster break filter (fakegale virtual tick)
+  warmupTicksRequired: 30 // Fresh ticks required before opening trades after warmup/cooldown
 });
 
 export function validateDigitConfig(patch, previous = DIGIT_DEFAULTS) {
@@ -17,10 +28,17 @@ export function validateDigitConfig(patch, previous = DIGIT_DEFAULTS) {
     throw Error('Configuração do laboratório de dígitos inválida.');
   }
   const c = { ...previous, ...patch };
-  if (typeof c.enabled !== 'boolean' || !Array.isArray(c.symbols) || !c.symbols.length || c.symbols.length > 5 || c.symbols.some(s => !DIGIT_ASSETS.includes(s))) {
+  if (
+    typeof c.enabled !== 'boolean' ||
+    !Array.isArray(c.symbols) ||
+    !c.symbols.length ||
+    c.symbols.length > 5 ||
+    c.symbols.some(s => !DIGIT_ASSETS.includes(s))
+  ) {
     throw Error('Seleção de ativos inválida para o laboratório de dígitos.');
   }
   c.symbols = [...new Set(c.symbols)];
+
   for (const [k, min, max] of [
     ['stake', 0.35, 100],
     ['multiplier', 1, 20],
@@ -28,13 +46,24 @@ export function validateDigitConfig(patch, previous = DIGIT_DEFAULTS) {
     ['cycleBudget', 0.35, 500],
     ['minPayout', 0.05, 0.5],
     ['windowSize', 20, 200],
-    ['minSamples', 10, 100]
+    ['minSamples', 10, 100],
+    ['sessionTarget', 0.05, 100],
+    ['cooldownMinutes', 1, 360],
+    ['warmupTicksRequired', 10, 100]
   ]) {
     c[k] = Number(c[k]);
     if (!Number.isFinite(c[k]) || c[k] < min || c[k] > max) {
       throw Error(`Valor inválido para o parâmetro: ${k}`);
     }
   }
+
+  if (typeof c.enableRotation !== 'boolean') {
+    c.enableRotation = Boolean(c.enableRotation);
+  }
+  if (typeof c.enableFakegaleLoss !== 'boolean') {
+    c.enableFakegaleLoss = Boolean(c.enableFakegaleLoss);
+  }
+
   return c;
 }
 
@@ -52,6 +81,8 @@ export class DigitTrader {
       config: { ...DIGIT_DEFAULTS },
       version: DIGIT_VERSION,
       status: 'Desligado',
+      sessionProfit: 0,
+      cooldownUntil: 0,
       pending: [],
       trades: [],
       distribution: {},
@@ -63,19 +94,32 @@ export class DigitTrader {
 
   snapshot() {
     const s = this.state;
+    const cooldownRemainingSec = s.cooldownUntil && s.cooldownUntil > Date.now()
+      ? Math.ceil((s.cooldownUntil - Date.now()) / 1000)
+      : 0;
+
     return {
       config: s.config,
       version: s.version,
       status: s.status,
+      sessionProfit: s.sessionProfit || 0,
+      cooldownUntil: s.cooldownUntil || 0,
+      cooldownRemainingSec,
       pending: (s.pending || []).map(p => ({
         id: p.id,
         symbol: p.symbol,
         contractType: p.contractType,
         targetDigit: p.targetDigit,
+        barrier: p.barrier,
         stage: p.stage,
         rule: p.rule,
         score: p.score,
-        phase: p.quote ? 'Aguardando tick de saída' : 'Cotando proposta'
+        waitingClusterBreak: Boolean(p.waitingClusterBreak),
+        phase: p.waitingClusterBreak
+          ? 'Filtro Fakegale: aguardando dispersão'
+          : p.quote
+          ? 'Aguardando tick de saída'
+          : 'Cotando proposta'
       })),
       distribution: Object.fromEntries(
         (s.config.symbols || []).map(sym => [
@@ -127,12 +171,44 @@ export class DigitTrader {
     this.event(reason, p);
   }
 
+  evaluateWin(contractType, targetDigit, barrier, exitDigit) {
+    if (exitDigit === null) return false;
+    switch (contractType) {
+      case 'DIGITDIFF':
+        return exitDigit !== targetDigit;
+      case 'DIGITUNDER':
+        return exitDigit < Number(barrier);
+      case 'DIGITOVER':
+        return exitDigit > Number(barrier);
+      case 'DIGITEVEN':
+        return exitDigit % 2 === 0;
+      case 'DIGITODD':
+        return exitDigit % 2 !== 0;
+      default:
+        return exitDigit !== targetDigit;
+    }
+  }
+
   async tick() {
     const s = this.state, api = this.session.derivAPI;
     if (this.busy || this.destroyed || (!s.config.enabled && !s.pending.length) || Date.now() - this.lastPoll < 3000) return;
     if (!api.connected || !api.authorized) {
       s.status = 'Aguardando conexão Deriv';
       return;
+    }
+
+    // Cooldown check for micro-sessions
+    if (s.cooldownUntil && s.cooldownUntil > Date.now()) {
+      const remSec = Math.ceil((s.cooldownUntil - Date.now()) / 1000);
+      const min = Math.floor(remSec / 60);
+      const sec = remSec % 60;
+      s.status = `Cooldown ativo (${min}m ${sec}s restantes) · Meta de sessão protegida`;
+      return;
+    } else if (s.cooldownUntil && s.cooldownUntil <= Date.now()) {
+      // Cooldown just finished
+      s.cooldownUntil = 0;
+      this.tickCache = {};
+      this.event(`Cooldown concluído. Iniciando aquecimento limpo (${s.config.warmupTicksRequired} ticks).`);
     }
 
     this.busy = true;
@@ -148,6 +224,29 @@ export class DigitTrader {
       // Step 1: Process pending operations
       for (const p of [...s.pending]) {
         if (!valid()) return;
+
+        // Check Fakegale cluster break filter
+        if (p.waitingClusterBreak) {
+          const { history } = await api.sendRequest({
+            ticks_history: p.symbol,
+            style: 'ticks',
+            end: 'latest',
+            count: 5
+          });
+          if (!valid()) return;
+
+          const recentPrices = history?.prices || [];
+          const lastPrice = recentPrices.at(-1);
+          const currentDigit = extractLastDigit(lastPrice, p.symbol);
+
+          if (currentDigit !== null && currentDigit !== p.lossDigit) {
+            p.waitingClusterBreak = false;
+            this.event(`Filtro Fakegale: cluster no dígito ${p.lossDigit} dispersado (tick atual: ${currentDigit}). Prosseguindo com Gale ${p.stage}.`, p);
+          } else {
+            // Still in cluster or awaiting tick
+            continue;
+          }
+        }
 
         if (p.quote) {
           // Check for exit tick
@@ -177,7 +276,7 @@ export class DigitTrader {
 
           const exit = points[0];
           const exitDigit = extractLastDigit(exit.price, p.symbol);
-          const win = exitDigit !== null && exitDigit !== p.targetDigit; // DIGITDIFF: WIN if exit digit != target
+          const win = this.evaluateWin(p.contractType, p.targetDigit, p.barrier, exitDigit);
 
           const profit = win ? (p.quote.payout - p.quote.stake) : -p.quote.stake;
           const row = {
@@ -186,6 +285,7 @@ export class DigitTrader {
             symbol: p.symbol,
             contractType: p.contractType,
             targetDigit: p.targetDigit,
+            barrier: p.barrier,
             exitDigit,
             stage: p.stage,
             rule: p.rule,
@@ -202,9 +302,19 @@ export class DigitTrader {
           s.trades.push(row);
           s.trades = s.trades.slice(-2000);
           p.accumulatedProfit = (p.accumulatedProfit || 0) + row.profit;
+          s.sessionProfit = Number(((s.sessionProfit || 0) + row.profit).toFixed(2));
 
           if (win) {
-            this.finish(p, `Vitória no Dígito Dif (alvo: ${p.targetDigit} × saída: ${exitDigit}) · +$${row.profit.toFixed(2)}`);
+            this.finish(p, `Vitória em ${p.contractType} (${p.rule}) (saída: ${exitDigit}) · +$${row.profit.toFixed(2)}`);
+
+            // Micro-session profit target check
+            if (s.sessionProfit >= s.config.sessionTarget) {
+              s.cooldownUntil = Date.now() + s.config.cooldownMinutes * 60 * 1000;
+              const lockedProfit = s.sessionProfit;
+              s.sessionProfit = 0;
+              this.tickCache = {};
+              this.event(`🎯 Meta da micro-sessão batida (+${lockedProfit.toFixed(2)} USD)! Cooldown de ${s.config.cooldownMinutes} min ativado.`);
+            }
             continue;
           } else {
             // Loss occurred
@@ -212,9 +322,17 @@ export class DigitTrader {
               p.stage++;
               p.quote = null;
               p.scheduled = Date.now() / 1000 + 1;
-              this.event(`Loss no dígito ${p.targetDigit}. Preparando Gale ${p.stage}`, p);
+              p.lossDigit = exitDigit;
+
+              if (s.config.enableFakegaleLoss) {
+                p.waitingClusterBreak = true;
+                this.event(`Loss no ${p.contractType} (${exitDigit}). Filtro Fakegale ativado: aguardando dispersão do cluster antes do Gale ${p.stage}.`, p);
+              } else {
+                this.event(`Loss no ${p.contractType} (${exitDigit}). Preparando Gale ${p.stage}.`, p);
+              }
+              continue;
             } else {
-              this.finish(p, `Ciclo encerrado em loss no Gale ${p.stage} (dígito repetido: ${exitDigit})`);
+              this.finish(p, `Ciclo encerrado em loss no Gale ${p.stage} (${p.contractType} · saída: ${exitDigit})`);
               continue;
             }
           }
@@ -226,23 +344,31 @@ export class DigitTrader {
         }
 
         // Request proposal for next stage
-        const stake = Math.round(s.config.stake * (s.config.multiplier ** p.stage) * 100) / 100;
+        const galeMultiplier = p.contractType === 'DIGITDIFF' ? s.config.multiplier : 2.1;
+        const stake = Math.round(s.config.stake * (galeMultiplier ** p.stage) * 100) / 100;
         if ((p.spent || 0) + stake > s.config.cycleBudget + 1e-9) {
           this.finish(p, 'Excluído: orçamento do ciclo de dígitos excedido');
           continue;
         }
 
-        const response = await api.sendRequest({
+        const proposalReq = {
           proposal: 1,
           amount: stake,
           basis: 'stake',
-          contract_type: 'DIGITDIFF',
-          barrier: String(p.targetDigit),
+          contract_type: p.contractType,
           currency: 'USD',
           underlying_symbol: p.symbol,
           duration: 1,
           duration_unit: 't'
-        });
+        };
+
+        if (p.contractType === 'DIGITDIFF') {
+          proposalReq.barrier = String(p.targetDigit);
+        } else if (p.contractType === 'DIGITUNDER' || p.contractType === 'DIGITOVER') {
+          proposalReq.barrier = String(p.barrier);
+        }
+
+        const response = await api.sendRequest(proposalReq);
         if (!valid()) return;
 
         const q = response.proposal;
@@ -259,11 +385,11 @@ export class DigitTrader {
         p.spent = (p.spent || 0) + price;
         p.quote = { stake: price, payout, entry, epoch };
         p.expiry = epoch + 1; // 1 tick
-        this.event(`Entrada simulada DIGITDIFF (Alvo: ≠${p.targetDigit}, Stake: $${price})`, p);
+        this.event(`Entrada simulada ${p.contractType} (Alvo: ${p.barrier ?? p.targetDigit ?? 'Paridade'}, Stake: $${price})`, p);
       }
 
-      // Step 2: Scan active symbols for new tick anomalies
-      if (s.config.enabled && !s.pending.length) {
+      // Step 2: Scan active symbols for new tick anomalies (only if not in cooldown)
+      if (s.config.enabled && !s.pending.length && (!s.cooldownUntil || s.cooldownUntil <= Date.now())) {
         for (const symbol of s.config.symbols) {
           if (!valid() || !s.config.enabled || s.pending.length) break;
 
@@ -271,7 +397,7 @@ export class DigitTrader {
             ticks_history: symbol,
             style: 'ticks',
             end: 'latest',
-            count: 60
+            count: s.config.windowSize || 60
           });
           if (!valid() || !s.config.enabled) break;
 
@@ -282,26 +408,34 @@ export class DigitTrader {
 
           this.tickCache[symbol] = ticks;
 
+          // Warmup check: require at least warmupTicksRequired clean ticks
+          if (ticks.length < (s.config.warmupTicksRequired || 30)) {
+            continue;
+          }
+
           const anomaly = detectDigitAnomalySignal(ticks, symbol, {
             windowSize: s.config.windowSize,
-            minSamples: s.config.minSamples
+            minSamples: s.config.minSamples,
+            enableRotation: s.config.enableRotation
           });
 
           if (anomaly.signal) {
-            const id = `${mode}:${symbol}:${anomaly.targetDigit}:${Date.now()}`;
+            const id = `${mode}:${symbol}:${anomaly.contractType}:${Date.now()}`;
             s.pending.push({
               id,
               symbol,
-              contractType: 'DIGITDIFF',
+              contractType: anomaly.contractType,
               targetDigit: anomaly.targetDigit,
+              barrier: anomaly.barrier,
               stage: 0,
               rule: anomaly.rule,
               score: anomaly.score,
               scheduled: Date.now() / 1000,
               accumulatedProfit: 0,
-              quote: null
+              quote: null,
+              waitingClusterBreak: false
             });
-            this.event(`Anomalia detectada em ${symbol}: Alvo ≠${anomaly.targetDigit} (${anomaly.rule})`, {
+            this.event(`Anomalia detectada em ${symbol}: ${anomaly.contractType} (${anomaly.rule})`, {
               symbol,
               targetDigit: anomaly.targetDigit
             });
@@ -311,9 +445,14 @@ export class DigitTrader {
 
       s.lastScan = Date.now();
       s.errors = 0;
-      s.status = s.config.enabled
-        ? `Monitorando dígitos em ${s.config.symbols.join(', ')} · 100% simulado`
-        : s.pending.length ? 'Pausado · liquidando simulações pendentes' : 'Pausado';
+      if (s.cooldownUntil && s.cooldownUntil > Date.now()) {
+        const remSec = Math.ceil((s.cooldownUntil - Date.now()) / 1000);
+        s.status = `Cooldown ativo (${Math.floor(remSec / 60)}m restantes) · Lucro da sessão protegido`;
+      } else {
+        s.status = s.config.enabled
+          ? `Monitorando dígitos em ${s.config.symbols.join(', ')} · QD-Matrix V2`
+          : s.pending.length ? 'Pausado · liquidando simulações pendentes' : 'Pausado';
+      }
 
     } catch (err) {
       s.errors++;
