@@ -113,7 +113,12 @@ export class DigitTrader {
         stage: p.stage,
         rule: p.rule,
         score: p.score,
-        phase: p.quote ? 'Aguardando fechamento da vela M1' : 'Cotando proposta'
+        waitingFreshTrigger: Boolean(p.waitingFreshTrigger),
+        phase: p.waitingFreshTrigger
+          ? 'Gale Inteligente: aguardando novo gatilho'
+          : p.quote
+          ? 'Aguardando fechamento da vela M1'
+          : 'Cotando proposta'
       })),
       distribution: Object.fromEntries(
         (s.config.symbols || []).map(sym => [
@@ -228,6 +233,11 @@ export class DigitTrader {
       for (const p of [...s.pending]) {
         if (!valid()) return;
 
+        // If waiting for fresh trigger on Gale 1, don't execute quote yet
+        if (p.waitingFreshTrigger) {
+          continue;
+        }
+
         if (p.quote) {
           // Check for contract expiry (M1 candle completion)
           if (Date.now() / 1000 < p.expiry + 1) continue;
@@ -297,12 +307,13 @@ export class DigitTrader {
             }
             continue;
           } else {
-            // Loss occurred -> apply gentle Gale 1 (multiplier 2.1x)
+            // Loss occurred -> apply Intelligent Gale 1
             if (p.stage < s.config.maxGale) {
               p.stage++;
               p.quote = null;
+              p.waitingFreshTrigger = true;
               p.scheduled = Date.now() / 1000 + 1;
-              this.event(`Loss no ${p.direction} (${p.symbol}). Preparando Gale ${p.stage} (recuperação 2.1x).`, p);
+              this.event(`Loss no ${p.direction} (${p.symbol}). Gale Inteligente ativado: aguardando nova retração/gatilho antes do Gale ${p.stage}.`, p);
               continue;
             } else {
               this.finish(p, `Ciclo encerrado em loss no Gale ${p.stage} (${p.symbol})`);
@@ -355,11 +366,11 @@ export class DigitTrader {
       }
 
       // Step 2: Scan active symbols for Quantum Trend Signals on M1 candles
-      if (s.config.enabled && !s.pending.length && (!s.cooldownUntil || s.cooldownUntil <= Date.now())) {
+      if (s.config.enabled && (!s.cooldownUntil || s.cooldownUntil <= Date.now())) {
         s.matrix ||= {};
 
         for (const symbol of s.config.symbols) {
-          if (!valid() || !s.config.enabled || s.pending.length) break;
+          if (!valid() || !s.config.enabled) break;
 
           const candlesResp = await api.sendRequest({
             ticks_history: symbol,
@@ -398,6 +409,19 @@ export class DigitTrader {
           };
 
           if (analysis.signal && analysis.score >= s.config.minScore) {
+            // Check if there is an existing pending trade waiting for fresh trigger on this symbol
+            const pendingGale = s.pending.find(p => p.symbol === symbol && p.waitingFreshTrigger);
+            if (pendingGale) {
+              pendingGale.waitingFreshTrigger = false;
+              pendingGale.direction = analysis.direction;
+              pendingGale.rule = analysis.rule;
+              pendingGale.score = analysis.score;
+              this.event(`Gale Inteligente acionado em ${symbol}: novo gatilho ${analysis.direction} (${analysis.rule} · Score ${analysis.score}%). Executando Gale ${pendingGale.stage}.`, pendingGale);
+              break;
+            }
+
+            if (s.pending.length) continue;
+
             // Fakegale Virtual Loss Filter (if enabled)
             if (s.config.enableFakegaleLoss) {
               const currentVCount = this.virtualTriggers[symbol] || 0;
@@ -423,11 +447,13 @@ export class DigitTrader {
               score: analysis.score,
               scheduled: Date.now() / 1000,
               accumulatedProfit: 0,
-              quote: null
+              quote: null,
+              waitingFreshTrigger: false
             });
             this.event(`Gatilho Quântico M1 em ${symbol}: ${analysis.direction} (${analysis.rule} · Score: ${analysis.score}%)`, {
               symbol
             });
+            break;
           }
         }
       }
@@ -439,7 +465,7 @@ export class DigitTrader {
         s.status = `Cooldown ativo (${Math.floor(remSec / 60)}m restantes) · Lucro protegido`;
       } else {
         s.status = s.config.enabled
-          ? `Monitorando ${s.config.symbols.length} ativos em M1 · QT-Matrix V1`
+          ? `Monitorando ${s.config.symbols.length} ativos em M1 · QT-Matrix V2`
           : s.pending.length ? 'Pausado · liquidando simulações pendentes' : 'Pausado';
       }
 

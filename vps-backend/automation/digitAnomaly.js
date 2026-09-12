@@ -1,6 +1,6 @@
-export const QUANTUM_VERSION = 'qt-matrix-v1';
-export const QUANTUM_ASSETS = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_50', '1HZ50V', 'R_25', '1HZ25V', 'R_10', '1HZ10V'];
-export const DIGIT_ASSETS = QUANTUM_ASSETS; // Backward compatibility
+export const QUANTUM_VERSION = 'qt-matrix-v2';
+export const QUANTUM_ASSETS = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_25', '1HZ25V', 'R_10', '1HZ10V', 'R_50', '1HZ50V'];
+export const DIGIT_ASSETS = QUANTUM_ASSETS;
 export const DIGIT_VERSION = QUANTUM_VERSION;
 
 /**
@@ -94,7 +94,8 @@ export function calculateRSI(prices = [], period = 14) {
 }
 
 /**
- * Multi-Factor Quantitative Trend & Volatility Analyzer for M1 Candles.
+ * Multi-Factor Precision Trend & Pullback Analyzer for M1 Candles.
+ * Incorporates Anti-Exhaustion RSI filters, EMA Ribbon (9/21/50), and Wick Rejection.
  * @param {Array<{open: number, high: number, low: number, close: number, epoch: number}>} candles 
  * @param {string} symbol 
  * @param {object} config 
@@ -141,67 +142,75 @@ export function analyzeQuantumTrend(candles = [], symbol = 'R_100', config = {})
     trendScore = 75;
   }
 
-  // Check Price Action Candle Structure
+  // Price Action & Candle Geometry
   const lastCandle = validCandles.at(-1);
+  const prevCandle = validCandles.at(-2);
+  const range = (lastCandle.high - lastCandle.low) || 1e-5;
   const isGreen = lastCandle.close >= lastCandle.open;
   const isRed = lastCandle.close <= lastCandle.open;
 
-  // Signal Candidates
+  const lowerWick = Math.min(lastCandle.open, lastCandle.close) - lastCandle.low;
+  const upperWick = lastCandle.high - Math.max(lastCandle.open, lastCandle.close);
+  const lowerWickRatio = lowerWick / range;
+  const upperWickRatio = upperWick / range;
+
   let signal = false;
   let direction = null; // 'CALL' or 'PUT'
   let rule = '';
   let score = 0;
   const reasons = [];
 
-  // Strategy 1: EMA Ribbon Breakout Expansion (Tendência Forte + Expansão ATR)
-  if (isBullishAlignment && isGreen && currentPrice >= ema9 && rsi >= 45) {
+  // Strategy 1: Pullback & Wick Rejection on EMA Support/Resistance (HIGH ACCURACY SETUP)
+  const isPullbackBullish = isBullishAlignment && (lastCandle.low <= ema9 || lastCandle.low <= ema21) && lastCandle.close >= ema9 && isGreen;
+  const isPullbackBearish = isBearishAlignment && (lastCandle.high >= ema9 || lastCandle.high >= ema21) && lastCandle.close <= ema9 && isRed;
+
+  if (isPullbackBullish && rsi >= 40 && rsi <= 80) {
+    // Healthy pullback in uptrend without extreme exhaustion
     signal = true;
     direction = 'CALL';
-    rule = 'ema_ribbon_breakout';
-    score = 88;
+    rule = 'pullback_ema_rejection';
+    score = 92;
     reasons.push(
-      `Alinhamento de Alta EMA Ribbon (EMA9 > EMA21 > EMA50)`,
-      `Preço rompendo acima da EMA9 com força compradora`,
-      `RSI saudável em ${rsi} (zona de expansão direcional)`,
+      `Retração (Pullback) compradora confirmada na EMA 9/21`,
+      `Rejeição de pavio inferior (${(lowerWickRatio * 100).toFixed(0)}%) com fechamento verde`,
+      `RSI saudável em ${rsi} (zona perfeita sem sobrecompra)`,
       `Volatilidade ATR: ${atr}`
     );
-  } else if (isBearishAlignment && isRed && currentPrice <= ema9 && rsi <= 55) {
+  } else if (isPullbackBearish && rsi <= 60 && rsi >= 20) {
+    // Healthy pullback in downtrend without extreme exhaustion
     signal = true;
     direction = 'PUT';
-    rule = 'ema_ribbon_breakout';
-    score = 88;
+    rule = 'pullback_ema_rejection';
+    score = 92;
     reasons.push(
-      `Alinhamento de Baixa EMA Ribbon (EMA9 < EMA21 < EMA50)`,
-      `Preço rompendo abaixo da EMA9 com força vendedora`,
-      `RSI saudável em ${rsi} (zona de expansão vendedora)`,
+      `Retração (Pullback) vendedora confirmada na EMA 9/21`,
+      `Rejeição de pavio superior (${(upperWickRatio * 100).toFixed(0)}%) com fechamento vermelho`,
+      `RSI saudável em ${rsi} (zona perfeita sem sobrevenda)`,
       `Volatilidade ATR: ${atr}`
     );
   }
 
-  // Strategy 2: Pullback & Wick Rejection on EMA 21 Support/Resistance
+  // Strategy 2: Controlled Breakout Expansion
   if (!signal) {
-    const touchedEma21Bullish = lastCandle.low <= ema21 && lastCandle.close >= ema21 && isGreen;
-    const touchedEma21Bearish = lastCandle.high >= ema21 && lastCandle.close <= ema21 && isRed;
-
-    if (ema21 > ema50 && touchedEma21Bullish && rsi >= 45 && rsi <= 68) {
+    if (isBullishAlignment && isGreen && currentPrice >= ema9 && rsi >= 45) {
       signal = true;
       direction = 'CALL';
-      rule = 'rsi_pullback_reversion';
-      score = 82;
+      rule = 'ema_ribbon_breakout';
+      score = 85;
       reasons.push(
-        `Retração (Pullback) compradora confirmada na EMA21`,
-        `Rejeição de pavio inferior com fechamento positivo`,
-        `RSI em nível de suporte (${rsi})`
+        `Alinhamento de Alta EMA Ribbon (EMA9 > EMA21 > EMA50)`,
+        `Preço em aceleração acima da EMA9`,
+        `RSI em aceleração controlada (${rsi})`
       );
-    } else if (ema21 < ema50 && touchedEma21Bearish && rsi <= 55 && rsi >= 32) {
+    } else if (isBearishAlignment && isRed && currentPrice <= ema9 && rsi <= 55) {
       signal = true;
       direction = 'PUT';
-      rule = 'rsi_pullback_reversion';
-      score = 82;
+      rule = 'ema_ribbon_breakout';
+      score = 85;
       reasons.push(
-        `Retração (Pullback) vendedora confirmada na EMA21`,
-        `Rejeição de pavio superior com fechamento negativo`,
-        `RSI em nível de resistência (${rsi})`
+        `Alinhamento de Baixa EMA Ribbon (EMA9 < EMA21 < EMA50)`,
+        `Preço em aceleração abaixo da EMA9`,
+        `RSI em aceleração controlada (${rsi})`
       );
     }
   }
