@@ -345,4 +345,11 @@ test('DigitTrader Post-Loss Fakegale holds Gale until cluster breaks', async () 
   await trader.tick();
   assert.equal(trader.state.pending[0].waitingClusterBreak, false);
   assert.ok(trader.state.pending[0].quote);
+
+  // Test reset method
+  trader.state.trades = [{ id: 'trade-1', profit: 5.0 }];
+  trader.state.sessionProfit = 5.0;
+  trader.configure({ reset: true });
+  assert.equal(trader.state.trades.length, 0);
+  assert.equal(trader.state.sessionProfit, 0);
 });

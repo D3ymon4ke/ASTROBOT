@@ -152,8 +152,24 @@ export class DigitTrader {
     s.events = s.events.slice(-100);
   }
 
+  reset() {
+    const s = this.state;
+    s.trades = [];
+    s.events = [];
+    s.pending = [];
+    s.sessionProfit = 0;
+    s.cooldownUntil = 0;
+    this.tickCache = {};
+    this.event('Histórico e métricas do laboratório de dígitos resetados.');
+    this.save();
+  }
+
   configure(patch) {
     const s = this.state;
+    if (patch?.reset) {
+      this.reset();
+      return;
+    }
     if ((s.pending.length || this.busy) && Object.keys(patch).some(k => k !== 'enabled')) {
       throw Error('Aguarde as simulações pendentes antes de alterar parâmetros.');
     }

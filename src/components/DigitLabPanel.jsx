@@ -407,9 +407,23 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
       <section className="aut-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
           <h2><TrendingUp size={18} /> Desempenho Global da Simulação QD-Matrix V2</h2>
-          <button className="workspace-button" disabled={!trades.length} onClick={exportData}>
-            <Download size={15} /> Exportar Relatório de Dígitos JSON
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className="workspace-button"
+              disabled={!trades.length && !state?.pending?.length}
+              onClick={() => {
+                if (window.confirm('Tem certeza que deseja resetar o histórico e zerar as métricas para reiniciar os testes com o QD-Matrix V2?')) {
+                  onConfigure({ reset: true });
+                }
+              }}
+              style={{ borderColor: 'rgba(244, 63, 94, 0.4)', color: '#fb7185' }}
+            >
+              <RotateCw size={15} /> Resetar Histórico
+            </button>
+            <button className="workspace-button" disabled={!trades.length} onClick={exportData}>
+              <Download size={15} /> Exportar Relatório JSON
+            </button>
+          </div>
         </div>
 
         <div className="aut-metrics">
