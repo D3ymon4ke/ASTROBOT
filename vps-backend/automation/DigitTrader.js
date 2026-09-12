@@ -9,7 +9,7 @@ import {
 
 export const QUANTUM_DEFAULTS = Object.freeze({
   enabled: false,
-  symbols: ['R_100', '1HZ100V', 'R_75', '1HZ50V'],
+  symbols: ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_25', '1HZ25V'],
   stake: 1.0,
   multiplier: 2.1, // Recovery multiplier for ~95% payout CALL/PUT contracts
   maxGale: 1,
