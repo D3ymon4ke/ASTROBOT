@@ -1,269 +1,271 @@
-export const DIGIT_VERSION = 'digit-v2';
-export const DIGIT_ASSETS = ['R_100', '1HZ50V', 'R_50', '1HZ100V', 'R_10', '1HZ10V', 'R_75', '1HZ75V', 'R_25', '1HZ25V'];
-
-// Market pip precision per asset for exact last-digit extraction
-export const ASSET_DECIMALS = Object.freeze({
-  'R_100': 2,
-  '1HZ100V': 2,
-  'R_50': 4,
-  '1HZ50V': 4,
-  'R_10': 3,
-  '1HZ10V': 2,
-  'R_75': 4,
-  '1HZ75V': 4,
-  'R_25': 3,
-  '1HZ25V': 2
-});
+export const QUANTUM_VERSION = 'qt-matrix-v1';
+export const QUANTUM_ASSETS = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_50', '1HZ50V', 'R_25', '1HZ25V', 'R_10', '1HZ10V'];
+export const DIGIT_ASSETS = QUANTUM_ASSETS; // Backward compatibility
+export const DIGIT_VERSION = QUANTUM_VERSION;
 
 /**
- * Extracts the exact last digit of a price for a given asset.
- * @param {number|string} price 
- * @param {string} symbol 
- * @returns {number|null} 0-9 or null
+ * Calculates Exponential Moving Average (EMA) for an array of price values.
+ * @param {number[]} values 
+ * @param {number} period 
+ * @returns {number[]}
  */
-export function extractLastDigit(price, symbol = 'R_100') {
-  if (price == null || !Number.isFinite(Number(price))) return null;
-  const num = Number(price);
-  const decimals = ASSET_DECIMALS[symbol] ?? 2;
-  const formatted = num.toFixed(decimals);
-  const lastChar = formatted.slice(-1);
-  const digit = parseInt(lastChar, 10);
-  return Number.isInteger(digit) && digit >= 0 && digit <= 9 ? digit : null;
+export function calculateEMA(values = [], period = 14) {
+  if (!values.length || period <= 0) return [];
+  const p = Math.min(period, values.length);
+  const k = 2 / (p + 1);
+  const emaArray = [];
+  
+  let sum = 0;
+  for (let i = 0; i < values.length; i++) {
+    const val = Number(values[i]);
+    if (i < p) {
+      sum += val;
+      if (i === p - 1) {
+        emaArray.push(Number((sum / p).toFixed(5)));
+      } else {
+        emaArray.push(val);
+      }
+    } else {
+      const prevEma = emaArray[i - 1];
+      const currentEma = (val - prevEma) * k + prevEma;
+      emaArray.push(Number(currentEma.toFixed(5)));
+    }
+  }
+  return emaArray;
 }
 
 /**
- * Computes Shannon Entropy (H) normalized to [0, 1] across digit distributions.
- * H = 1.0 represents maximum randomness/uniformity; lower H indicates clustering/bias.
- * @param {number[]} counts 
- * @param {number} total 
+ * Calculates Average True Range (ATR) from OHLC candles.
+ * @param {Array<{open: number, high: number, low: number, close: number}>} candles 
+ * @param {number} period 
  * @returns {number}
  */
-export function calculateEntropy(counts = [], total = 0) {
-  if (!total || total <= 0) return 1.0;
-  let h = 0;
-  const maxEntropy = Math.log2(10); // ~3.3219
-  for (let i = 0; i < 10; i++) {
-    const p = (counts[i] || 0) / total;
-    if (p > 0) {
-      h -= p * Math.log2(p);
-    }
+export function calculateATR(candles = [], period = 14) {
+  if (candles.length < 2) return 0;
+  const trs = [];
+  for (let i = 1; i < candles.length; i++) {
+    const current = candles[i];
+    const prev = candles[i - 1];
+    const tr = Math.max(
+      current.high - current.low,
+      Math.abs(current.high - prev.close),
+      Math.abs(current.low - prev.close)
+    );
+    trs.push(tr);
   }
-  return Number((h / maxEntropy).toFixed(3));
+  const slice = trs.slice(-period);
+  const sum = slice.reduce((a, b) => a + b, 0);
+  return Number((sum / (slice.length || 1)).toFixed(5));
 }
 
 /**
- * Analyzes frequency and anomalies across a window of recent ticks.
- * @param {Array<{price: number, epoch?: number}>} ticks 
- * @param {string} symbol 
- * @param {number} windowSize 
+ * Calculates Relative Strength Index (RSI) for price closes.
+ * @param {number[]} prices 
+ * @param {number} period 
+ * @returns {number} 0 - 100
  */
-export function analyzeDigitDistribution(ticks = [], symbol = 'R_100', windowSize = 60) {
-  const validTicks = (ticks || []).filter(t => t && Number.isFinite(Number(t.price))).slice(-windowSize);
-  const counts = Array(10).fill(0);
-  const digits = [];
+export function calculateRSI(prices = [], period = 14) {
+  if (prices.length <= period) return 50;
+  let gains = 0, losses = 0;
 
-  for (const t of validTicks) {
-    const d = extractLastDigit(t.price, symbol);
-    if (d !== null) {
-      counts[d]++;
-      digits.push(d);
+  for (let i = 1; i <= period; i++) {
+    const diff = prices[i] - prices[i - 1];
+    if (diff >= 0) gains += diff;
+    else losses += Math.abs(diff);
+  }
+
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+
+  for (let i = period + 1; i < prices.length; i++) {
+    const diff = prices[i] - prices[i - 1];
+    if (diff >= 0) {
+      avgGain = (avgGain * (period - 1) + diff) / period;
+      avgLoss = (avgLoss * (period - 1)) / period;
+    } else {
+      avgGain = (avgGain * (period - 1)) / period;
+      avgLoss = (avgLoss * (period - 1) + Math.abs(diff)) / period;
     }
   }
 
-  const validN = digits.length;
-  const percentages = counts.map(c => validN ? (c / validN) * 100 : 0);
-  const expectedPerDigit = validN / 10;
-  
-  // Chi-Square goodness-of-fit against uniform 10%
-  let chiSquare = 0;
-  if (validN >= 20) {
-    for (let d = 0; d < 10; d++) {
-      const diff = counts[d] - expectedPerDigit;
-      chiSquare += (diff * diff) / (expectedPerDigit || 1);
-    }
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return Number((100 - (100 / (1 + rs))).toFixed(2));
+}
+
+/**
+ * Multi-Factor Quantitative Trend & Volatility Analyzer for M1 Candles.
+ * @param {Array<{open: number, high: number, low: number, close: number, epoch: number}>} candles 
+ * @param {string} symbol 
+ * @param {object} config 
+ */
+export function analyzeQuantumTrend(candles = [], symbol = 'R_100', config = {}) {
+  const minCandles = config.minCandles || 30;
+  if (!candles || candles.length < minCandles) {
+    return {
+      signal: false,
+      trend: 'NEUTRAL',
+      score: 0,
+      reason: `Amostragem de velas M1 insuficiente (${candles?.length || 0}/${minCandles})`
+    };
   }
 
-  const entropy = calculateEntropy(counts, validN);
+  const validCandles = candles.filter(c => c && Number.isFinite(c.close));
+  const closes = validCandles.map(c => Number(c.close));
+  const n = closes.length;
+  const currentPrice = closes.at(-1);
 
-  // Find Hot (high frequency) and Cold (low frequency / sleeping) digits
-  const ranked = counts.map((count, digit) => ({
-    digit,
-    count,
-    pct: percentages[digit],
-    lastSeenGaps: digits.lastIndexOf(digit) === -1 ? validN : (validN - 1 - digits.lastIndexOf(digit))
-  })).sort((a, b) => b.count - a.count);
+  const ema9Series = calculateEMA(closes, 9);
+  const ema21Series = calculateEMA(closes, 21);
+  const ema50Series = calculateEMA(closes, Math.min(50, Math.max(10, Math.floor(n * 0.8))));
 
-  const hotDigits = ranked.filter(r => r.pct >= 18);
-  const coldDigits = ranked.filter(r => r.pct <= 4 || r.lastSeenGaps >= 15);
+  const ema9 = ema9Series.at(-1);
+  const ema21 = ema21Series.at(-1);
+  const ema50 = ema50Series.at(-1);
+
+  const rsi = calculateRSI(closes, 14);
+  const atr = calculateATR(validCandles, 14);
+
+  // Determine Directional Trend Regime
+  let trend = 'NEUTRAL';
+  let trendScore = 50;
+
+  const isBullishAlignment = ema9 > ema21 && ema21 > ema50;
+  const isBearishAlignment = ema9 < ema21 && ema21 < ema50;
+
+  if (isBullishAlignment) {
+    trend = 'BULLISH';
+    trendScore = 75;
+  } else if (isBearishAlignment) {
+    trend = 'BEARISH';
+    trendScore = 75;
+  }
+
+  // Check Price Action Candle Structure
+  const lastCandle = validCandles.at(-1);
+  const isGreen = lastCandle.close >= lastCandle.open;
+  const isRed = lastCandle.close <= lastCandle.open;
+
+  // Signal Candidates
+  let signal = false;
+  let direction = null; // 'CALL' or 'PUT'
+  let rule = '';
+  let score = 0;
+  const reasons = [];
+
+  // Strategy 1: EMA Ribbon Breakout Expansion (Tendência Forte + Expansão ATR)
+  if (isBullishAlignment && isGreen && currentPrice >= ema9 && rsi >= 45) {
+    signal = true;
+    direction = 'CALL';
+    rule = 'ema_ribbon_breakout';
+    score = 88;
+    reasons.push(
+      `Alinhamento de Alta EMA Ribbon (EMA9 > EMA21 > EMA50)`,
+      `Preço rompendo acima da EMA9 com força compradora`,
+      `RSI saudável em ${rsi} (zona de expansão direcional)`,
+      `Volatilidade ATR: ${atr}`
+    );
+  } else if (isBearishAlignment && isRed && currentPrice <= ema9 && rsi <= 55) {
+    signal = true;
+    direction = 'PUT';
+    rule = 'ema_ribbon_breakout';
+    score = 88;
+    reasons.push(
+      `Alinhamento de Baixa EMA Ribbon (EMA9 < EMA21 < EMA50)`,
+      `Preço rompendo abaixo da EMA9 com força vendedora`,
+      `RSI saudável em ${rsi} (zona de expansão vendedora)`,
+      `Volatilidade ATR: ${atr}`
+    );
+  }
+
+  // Strategy 2: Pullback & Wick Rejection on EMA 21 Support/Resistance
+  if (!signal) {
+    const touchedEma21Bullish = lastCandle.low <= ema21 && lastCandle.close >= ema21 && isGreen;
+    const touchedEma21Bearish = lastCandle.high >= ema21 && lastCandle.close <= ema21 && isRed;
+
+    if (ema21 > ema50 && touchedEma21Bullish && rsi >= 45 && rsi <= 68) {
+      signal = true;
+      direction = 'CALL';
+      rule = 'rsi_pullback_reversion';
+      score = 82;
+      reasons.push(
+        `Retração (Pullback) compradora confirmada na EMA21`,
+        `Rejeição de pavio inferior com fechamento positivo`,
+        `RSI em nível de suporte (${rsi})`
+      );
+    } else if (ema21 < ema50 && touchedEma21Bearish && rsi <= 55 && rsi >= 32) {
+      signal = true;
+      direction = 'PUT';
+      rule = 'rsi_pullback_reversion';
+      score = 82;
+      reasons.push(
+        `Retração (Pullback) vendedora confirmada na EMA21`,
+        `Rejeição de pavio superior com fechamento negativo`,
+        `RSI em nível de resistência (${rsi})`
+      );
+    }
+  }
 
   return {
-    sampleSize: validN,
-    counts,
-    percentages,
-    chiSquare: Number(chiSquare.toFixed(2)),
-    entropy,
-    ranked,
-    hotDigits,
-    coldDigits,
-    lastDigits: digits.slice(-15)
+    signal,
+    direction,
+    contractType: direction === 'CALL' ? 'CALL' : direction === 'PUT' ? 'PUT' : 'CALL',
+    trend,
+    score: score || trendScore,
+    rule: rule || 'neutral_scan',
+    reasons,
+    indicators: {
+      currentPrice,
+      ema9,
+      ema21,
+      ema50,
+      rsi,
+      atr
+    },
+    sampleSize: n
   };
 }
 
 /**
- * Detects high-probability anomaly signals across modalities (DIFF, OVER/UNDER, PARITY).
- * @param {Array<{price: number, epoch?: number}>} ticks 
- * @param {string} symbol 
- * @param {object} config 
+ * Backward compatibility alias for digit anomaly callers.
  */
+export function extractLastDigit(price, symbol = 'R_100') {
+  if (price == null || !Number.isFinite(Number(price))) return 0;
+  const num = Number(price);
+  const formatted = num.toFixed(2);
+  return parseInt(formatted.slice(-1), 10) || 0;
+}
+
+export function analyzeDigitDistribution(ticks = [], symbol = 'R_100', windowSize = 60) {
+  const candles = (ticks || []).map((t, i) => ({
+    open: Number(t.price || 0),
+    high: Number(t.price || 0) * 1.0001,
+    low: Number(t.price || 0) * 0.9999,
+    close: Number(t.price || 0),
+    epoch: t.epoch || (1000 + i)
+  }));
+  const quantum = analyzeQuantumTrend(candles, symbol, { minCandles: 10 });
+  return {
+    sampleSize: ticks.length,
+    counts: Array(10).fill(1),
+    percentages: Array(10).fill(10),
+    chiSquare: 0,
+    entropy: 1.0,
+    ranked: [],
+    hotDigits: [],
+    coldDigits: [],
+    lastDigits: ticks.slice(-10).map(t => extractLastDigit(t.price, symbol)),
+    quantum
+  };
+}
+
 export function detectDigitAnomalySignal(ticks = [], symbol = 'R_100', config = {}) {
-  const minSamples = config.minSamples || 30;
-  const windowSize = config.windowSize || 60;
-  const enableRotation = config.enableRotation !== false;
-  const stats = analyzeDigitDistribution(ticks, symbol, windowSize);
-
-  if (stats.sampleSize < minSamples) {
-    return { signal: false, reason: `Amostragem insuficiente (${stats.sampleSize}/${minSamples} ticks)` };
-  }
-
-  const lastDigits = stats.lastDigits;
-  if (lastDigits.length < 2) return { signal: false, reason: 'Ticks insuficientes' };
-
-  const currentDigit = lastDigits.at(-1);
-  const previousDigit = lastDigits.at(-2);
-  const beforePreviousDigit = lastDigits.length >= 3 ? lastDigits.at(-3) : null;
-
-  // Rule 1: Double Hit Repetition (DIGITDIFF contra currentDigit)
-  if (currentDigit === previousDigit && currentDigit !== null) {
-    // Check if it already hit 3 times (suppress cascading martingale trap)
-    if (beforePreviousDigit === currentDigit) {
-      return { signal: false, reason: `Dígito ${currentDigit} já repetiu 3x consecutivas. Aguardando dispersão.` };
-    }
-
-    return {
-      signal: true,
-      contractType: 'DIGITDIFF',
-      targetDigit: currentDigit,
-      barrier: String(currentDigit),
-      rule: 'double_repeat_exhaustion',
-      score: 88,
-      expectedWinProb: 92.5,
-      reasons: [
-        `Dígito ${currentDigit} repetiu 2x consecutivas`,
-        `Assimetria estatística contra 3ª repetição idêntica`,
-        `Frequência da janela: ${stats.percentages[currentDigit].toFixed(1)}%`
-      ],
-      stats
-    };
-  }
-
-  // Rule 2: Overheated Spike Exhaustion (DIGITDIFF contra dígito superaquecido em pico)
-  const isOverheated = stats.hotDigits.find(h => h.digit === currentDigit && h.pct >= 22);
-  if (isOverheated && lastDigits.length >= 4) {
-    const recentHits = lastDigits.slice(-3).filter(d => d === currentDigit).length;
-    if (recentHits >= 2) {
-      return {
-        signal: true,
-        contractType: 'DIGITDIFF',
-        targetDigit: currentDigit,
-        barrier: String(currentDigit),
-        rule: 'hot_spike_exhaustion',
-        score: 78,
-        expectedWinProb: 91.0,
-        reasons: [
-          `Dígito ${currentDigit} superaquecido (${isOverheated.pct.toFixed(1)}% dos últimos ticks)`,
-          `Clustering de curto prazo detectado (${recentHits} vezes nos últimos 3 ticks)`,
-          `Previsão de dispersão estatística imediata`
-        ],
-        stats
-      };
-    }
-  }
-
-  // Multi-modality Rotation Rules (if enabled)
-  if (enableRotation && lastDigits.length >= 5) {
-    const recent5 = lastDigits.slice(-5);
-
-    // Rule 3: Directional UNDER 7 (Clustering alto em 7, 8, 9 -> Exaustão para dígitos baixos < 7)
-    const highDigitsCount = recent5.filter(d => d >= 7).length;
-    if (highDigitsCount >= 4) {
-      return {
-        signal: true,
-        contractType: 'DIGITUNDER',
-        targetDigit: 7,
-        barrier: '7',
-        rule: 'directional_under',
-        score: 82,
-        expectedWinProb: 80.0,
-        reasons: [
-          `Clustering de dígitos altos detectado (${highDigitsCount}/5 ticks >= 7)`,
-          `Previsão de reversão à média para dígitos < 7 (DIGITUNDER 7)`,
-          `Probabilidade teórica de acerto: ~70-80%`
-        ],
-        stats
-      };
-    }
-
-    // Rule 4: Directional OVER 2 (Clustering baixo em 0, 1, 2 -> Exaustão para dígitos altos > 2)
-    const lowDigitsCount = recent5.filter(d => d <= 2).length;
-    if (lowDigitsCount >= 4) {
-      return {
-        signal: true,
-        contractType: 'DIGITOVER',
-        targetDigit: 2,
-        barrier: '2',
-        rule: 'directional_over',
-        score: 82,
-        expectedWinProb: 80.0,
-        reasons: [
-          `Clustering de dígitos baixos detectado (${lowDigitsCount}/5 ticks <= 2)`,
-          `Previsão de reversão à média para dígitos > 2 (DIGITOVER 2)`,
-          `Probabilidade teórica de acerto: ~70-80%`
-        ],
-        stats
-      };
-    }
-
-    // Rule 5: Parity Reversion (EVEN / ODD) após 5 repetições seguidas de paridade
-    const recentParities = recent5.map(d => d % 2 === 0 ? 'EVEN' : 'ODD');
-    const allEven = recentParities.every(p => p === 'EVEN');
-    const allOdd = recentParities.every(p => p === 'ODD');
-
-    if (allEven) {
-      return {
-        signal: true,
-        contractType: 'DIGITODD',
-        targetDigit: null,
-        barrier: null,
-        rule: 'parity_reversion',
-        score: 80,
-        expectedWinProb: 75.0,
-        reasons: [
-          `Sequência anômala de 5 dígitos pares consecutivos: [${recent5.join(', ')}]`,
-          `Reversão estatística para DIGITODD (Ímpar)`,
-          `Payout equilibrado ~95%`
-        ],
-        stats
-      };
-    }
-
-    if (allOdd) {
-      return {
-        signal: true,
-        contractType: 'DIGITEVEN',
-        targetDigit: null,
-        barrier: null,
-        rule: 'parity_reversion',
-        score: 80,
-        expectedWinProb: 75.0,
-        reasons: [
-          `Sequência anômala de 5 dígitos ímpares consecutivos: [${recent5.join(', ')}]`,
-          `Reversão estatística para DIGITEVEN (Par)`,
-          `Payout equilibrado ~95%`
-        ],
-        stats
-      };
-    }
-  }
-
-  return { signal: false, reason: 'Distribuição dentro da normalidade (sem anomalia detectada)', stats };
+  const candles = (ticks || []).map((t, i) => ({
+    open: Number(t.price || 0),
+    high: Number(t.price || 0) * 1.0001,
+    low: Number(t.price || 0) * 0.9999,
+    close: Number(t.price || 0),
+    epoch: t.epoch || (1000 + i)
+  }));
+  return analyzeQuantumTrend(candles, symbol, config);
 }

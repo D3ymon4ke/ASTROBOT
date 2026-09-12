@@ -94,7 +94,7 @@ export default function AutomationWorkspace({ children, continuous, research, fa
   };
   return <div className="aut-workspace">
     <nav className="aut-tabs" aria-label="Áreas de automação">{[
-      ['timeline', Calendar, 'Linha do tempo'], ['continuous', Activity, 'Trader contínuo'], ['fakegale', FlaskConical, 'Contínuo Fakegale V2'], ['digitlab', Cpu, 'Laboratório de Dígitos'], ['lab', FlaskConical, 'Laboratório']
+      ['timeline', Calendar, 'Linha do tempo'], ['continuous', Activity, 'Trader contínuo'], ['fakegale', FlaskConical, 'Contínuo Fakegale V2'], ['digitlab', Cpu, 'Laboratório Quântico (M1)'], ['lab', FlaskConical, 'Laboratório']
     ].map(([id, Icon, label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}<span className="aut-account">{accountMode === 'demo' ? 'CONTA DEMO' : 'CONTA REAL'}</span></nav>
     {notice && <p className="aut-notice" role="status">{notice}</p>}
     {tab === 'timeline' && children}
