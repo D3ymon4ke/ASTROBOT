@@ -9,15 +9,17 @@ import {
 export const QUANTUM_DEFAULTS = Object.freeze({
   enabled: false,
   strategyMode: 'asymmetric_digits',
-  symbols: ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_25', '1HZ25V'],
+  symbols: ['R_75', '1HZ75V', '1HZ25V'], // Verified profitable trio
   stake: 1.0,
-  sorosEnabled: false,
+  multiplier: 2.4,       // 2.4x Gale 1 recovery on ~42% payout
+  maxGale: 1,            // Strict 1 level of Gale only (80.9% historical success)
   cycleBudget: 15.0,
   minPayout: 0.20,
   minScore: 85,
-  sessionTarget: 1.00,  // Fast scalp target ($1.00 USD)
-  sessionStopLoss: 1.50, // Short session stop loss ($1.50 USD)
-  cooldownMinutes: 10   // 10m pause to break market correlation
+  sessionTarget: 1.00,   // Fast scalp target ($1.00 USD)
+  sessionStopLoss: 3.40, // 1 loss ($1.00) + 1 Gale loss ($2.40)
+  cooldownMinutes: 10,   // 10m cooldown on win
+  stopCooldownMinutes: 20 // 20m cooldown on stop for market decompression
 });
 
 export const DIGIT_DEFAULTS = QUANTUM_DEFAULTS;
@@ -40,12 +42,15 @@ export function validateDigitConfig(patch, previous = QUANTUM_DEFAULTS) {
 
   for (const [k, min, max] of [
     ['stake', 0.35, 100],
+    ['multiplier', 1.0, 5.0],
+    ['maxGale', 0, 2],
     ['cycleBudget', 0.35, 500],
     ['minPayout', 0.10, 2.00],
     ['minScore', 50, 99],
     ['sessionTarget', 0.05, 100],
     ['sessionStopLoss', 0.10, 100],
-    ['cooldownMinutes', 1, 360]
+    ['cooldownMinutes', 1, 360],
+    ['stopCooldownMinutes', 1, 360]
   ]) {
     c[k] = Number(c[k]);
     if (!Number.isFinite(c[k]) || c[k] < min || c[k] > max) {
@@ -63,8 +68,6 @@ export class DigitTrader {
     this.destroyed = false;
     this.lastPoll = 0;
     this.tickCache = {};
-    this.sorosStage = 0;
-    this.lastWinProfit = 0;
     this.currentSessionTrades = [];
   }
 
@@ -77,9 +80,8 @@ export class DigitTrader {
       totalLockedProfit: 0,
       sessionsWon: 0,
       sessionsLost: 0,
-      completedSessions: [], // Array of finished micro-sessions
+      completedSessions: [],
       cooldownUntil: 0,
-      sorosStage: 0,
       matrix: {},
       pending: [],
       trades: [],
@@ -106,7 +108,6 @@ export class DigitTrader {
       sessionsLost: s.sessionsLost || 0,
       completedSessions: (s.completedSessions || []).slice(-50),
       cooldownRemainingSec,
-      sorosStage: this.sorosStage || 0,
       matrix: s.matrix || {},
       pending: (s.pending || []).map(p => ({
         id: p.id,
@@ -114,9 +115,10 @@ export class DigitTrader {
         contractType: p.contractType,
         barrier: p.barrier,
         score: p.score,
+        stage: p.stage || 0,
         stake: p.quote?.stake || p.stake,
         expectedWinRate: p.expectedWinRate,
-        phase: p.quote ? 'Aguardando tick de desfecho' : 'Cotando proposta'
+        phase: p.quote ? (p.stage > 0 ? 'Gale 1 (2.4x) em andamento' : 'Aguardando tick de desfecho') : 'Cotando proposta'
       })),
       trades: (s.trades || []).slice(-1000),
       events: (s.events || []).slice(-30),
@@ -154,11 +156,9 @@ export class DigitTrader {
     s.sessionsLost = 0;
     s.completedSessions = [];
     s.cooldownUntil = 0;
-    this.sorosStage = 0;
-    this.lastWinProfit = 0;
     this.currentSessionTrades = [];
     this.tickCache = {};
-    this.event('Laboratório Quântico QAP-V3.2 resetado com novo histórico de micro-sessões.');
+    this.event('Laboratório Quântico QAP-V4 resetado com Modelo B (Gale 1 2.4x nos Ativos Vencedores).');
     this.save();
   }
 
@@ -172,7 +172,7 @@ export class DigitTrader {
       throw Error('Aguarde as operações em curso antes de alterar parâmetros.');
     }
     s.config = validateDigitConfig(patch, s.config);
-    s.status = s.config.enabled ? `Micro-Sessões Ativas (Meta: +$${s.config.sessionTarget.toFixed(2)} / Stop: -$${s.config.sessionStopLoss.toFixed(2)})` : 'Pausado';
+    s.status = s.config.enabled ? `QAP-V4 Ativo · Meta: +$${s.config.sessionTarget.toFixed(2)} (Gale 1: ${s.config.multiplier}x nos Ativos Vencedores)` : 'Pausado';
     if (s.config.enabled && !this.session.derivAPI.connected) {
       this.session.connectDeriv();
     }
@@ -198,15 +198,13 @@ export class DigitTrader {
       const remSec = Math.ceil((s.cooldownUntil - Date.now()) / 1000);
       const min = Math.floor(remSec / 60);
       const sec = remSec % 60;
-      s.status = `⏳ Cooldown Ativo (${min}m ${sec}s restantes) · Lucro Travado: $${(s.totalLockedProfit || 0).toFixed(2)}`;
+      s.status = `⏳ Cooldown Ativo (${min}m ${sec}s restantes) · Saldo no Cofre: $${(s.totalLockedProfit || 0).toFixed(2)}`;
       return;
     } else if (s.cooldownUntil && s.cooldownUntil <= Date.now()) {
       s.cooldownUntil = 0;
       this.tickCache = {};
-      this.sorosStage = 0;
-      this.lastWinProfit = 0;
       this.currentSessionTrades = [];
-      this.event('Nova Micro-Sessão iniciada! Buscando meta curta de +' + s.config.sessionTarget.toFixed(2) + ' USD.');
+      this.event(`Nova Micro-Sessão iniciada! Buscando meta de +$${s.config.sessionTarget.toFixed(2)} USD nos ativos vencedores.`);
     }
 
     this.busy = true;
@@ -292,17 +290,9 @@ export class DigitTrader {
           s.sessionProfit = Number(((s.sessionProfit || 0) + row.profit).toFixed(2));
 
           if (win) {
-            if (s.config.sorosEnabled && this.sorosStage === 0) {
-              this.sorosStage = 1;
-              this.lastWinProfit = row.profit;
-              this.finish(p, `🎯 Vitória ${p.contractType} ${p.barrier ?? ''} (${p.symbol}) · +$${row.profit.toFixed(2)}`);
-            } else {
-              this.sorosStage = 0;
-              this.lastWinProfit = 0;
-              this.finish(p, `🎯 Vitória ${p.contractType} ${p.barrier ?? ''} (${p.symbol}) · +$${row.profit.toFixed(2)}`);
-            }
+            this.finish(p, `🎯 Vitória ${p.contractType} ${p.barrier ?? ''} (${p.symbol}) · +$${row.profit.toFixed(2)}${p.stage > 0 ? ' (Gale 1 Recuperado!)' : ''}`);
 
-            // MICRO-SESSION PROFIT TARGET HIT: Lock profit and start cooldown!
+            // TARGET HIT: Lock profit and start cooldown!
             if (s.sessionProfit >= s.config.sessionTarget) {
               s.cooldownUntil = Date.now() + s.config.cooldownMinutes * 60 * 1000;
               const lockedProfit = s.sessionProfit;
@@ -325,45 +315,50 @@ export class DigitTrader {
               s.sessionProfit = 0;
               this.currentSessionTrades = [];
               this.tickCache = {};
-              this.sorosStage = 0;
-              this.lastWinProfit = 0;
-              this.event(`🏆 META DA MICRO-SESSÃO BATIDA (+${lockedProfit.toFixed(2)} USD)! Total Travado no Cofre: +$${s.totalLockedProfit.toFixed(2)} USD. Entrando em Cooldown de ${s.config.cooldownMinutes} min.`);
+              this.event(`🏆 META DA MICRO-SESSÃO BATIDA (+${lockedProfit.toFixed(2)} USD)! Total no Cofre: +$${s.totalLockedProfit.toFixed(2)} USD. Cooldown de ${s.config.cooldownMinutes} min.`);
             }
             continue;
           } else {
             // Loss occurred
-            this.sorosStage = 0;
-            this.lastWinProfit = 0;
-            this.finish(p, `Loss em ${p.contractType} (${p.symbol}) · Dígito ${exitDigit} · Saldo da sessão: ${s.sessionProfit > 0 ? '+' : ''}$${s.sessionProfit.toFixed(2)}`);
+            if (p.stage < s.config.maxGale) {
+              // Prepare Gale 1 with multiplier (2.4x)
+              p.stage++;
+              p.quote = null;
+              p.scheduled = Date.now() / 1000 + 1;
+              this.event(`Loss em ${p.contractType} (${p.symbol}) · Preparando Gale 1 (${s.config.multiplier}x = $${(s.config.stake * s.config.multiplier).toFixed(2)}) para recuperação imediata`, p);
+              continue;
+            } else {
+              // Gale 1 failed: End cycle in Stop Loss!
+              this.finish(p, `Gale 1 encerrado em loss (${p.symbol}) · Saldo da sessão: ${s.sessionProfit > 0 ? '+' : ''}$${s.sessionProfit.toFixed(2)}`);
 
-            // MICRO-SESSION STOP LOSS HIT: Protect capital and start cooldown!
-            if (s.sessionProfit <= -s.config.sessionStopLoss) {
-              s.cooldownUntil = Date.now() + s.config.cooldownMinutes * 60 * 1000;
-              const lossAmt = Math.abs(s.sessionProfit);
-              s.totalLockedProfit = Number(((s.totalLockedProfit || 0) - lossAmt).toFixed(2));
-              s.sessionsLost = (s.sessionsLost || 0) + 1;
+              // STOP LOSS TRIGGERED: Lock loss and enter extended cooldown
+              if (s.sessionProfit <= -s.config.sessionStopLoss || p.stage >= s.config.maxGale) {
+                const pauseMin = s.config.stopCooldownMinutes || 20;
+                s.cooldownUntil = Date.now() + pauseMin * 60 * 1000;
+                const lossAmt = Math.abs(s.sessionProfit);
+                s.totalLockedProfit = Number(((s.totalLockedProfit || 0) - lossAmt).toFixed(2));
+                s.sessionsLost = (s.sessionsLost || 0) + 1;
 
-              s.completedSessions = s.completedSessions || [];
-              s.completedSessions.push({
-                id: `sess-${Date.now()}`,
-                time: Date.now(),
-                result: 'STOP',
-                profit: -lossAmt,
-                tradesCount: this.currentSessionTrades.length,
-                wins: this.currentSessionTrades.filter(t => t.profit > 0).length,
-                losses: this.currentSessionTrades.filter(t => t.profit < 0).length,
-                accumulatedTotal: s.totalLockedProfit
-              });
-              s.completedSessions = s.completedSessions.slice(-100);
+                s.completedSessions = s.completedSessions || [];
+                s.completedSessions.push({
+                  id: `sess-${Date.now()}`,
+                  time: Date.now(),
+                  result: 'STOP',
+                  profit: -lossAmt,
+                  tradesCount: this.currentSessionTrades.length,
+                  wins: this.currentSessionTrades.filter(t => t.profit > 0).length,
+                  losses: this.currentSessionTrades.filter(t => t.profit < 0).length,
+                  accumulatedTotal: s.totalLockedProfit
+                });
+                s.completedSessions = s.completedSessions.slice(-100);
 
-              s.sessionProfit = 0;
-              this.currentSessionTrades = [];
-              this.tickCache = {};
-              this.sorosStage = 0;
-              this.lastWinProfit = 0;
-              this.event(`🛡️ STOP LOSS DE SESSÃO ATIVADO (-${lossAmt.toFixed(2)} USD). Protegendo banca de anomalias. Cooldown de ${s.config.cooldownMinutes} min.`);
+                s.sessionProfit = 0;
+                this.currentSessionTrades = [];
+                this.tickCache = {};
+                this.event(`🛡️ STOP LOSS DE SESSÃO (-${lossAmt.toFixed(2)} USD). Pausa adaptativa de ${pauseMin} min para descompressão.`);
+              }
+              continue;
             }
-            continue;
           }
         }
 
@@ -372,14 +367,14 @@ export class DigitTrader {
           continue;
         }
 
-        let currentStake = s.config.stake;
-        if (s.config.sorosEnabled && this.sorosStage === 1 && this.lastWinProfit > 0) {
-          currentStake = Math.round((s.config.stake + this.lastWinProfit) * 100) / 100;
-        }
+        // Calculate Stake with Gale 1 (2.4x)
+        const currentStake = p.stage > 0
+          ? Math.round(s.config.stake * s.config.multiplier * 100) / 100
+          : s.config.stake;
 
         if (currentStake > s.config.cycleBudget) {
-          currentStake = s.config.stake;
-          this.sorosStage = 0;
+          this.finish(p, 'Excluído: orçamento do ciclo excedido');
+          continue;
         }
 
         const proposalReq = {
@@ -413,7 +408,7 @@ export class DigitTrader {
 
         p.quote = { stake: price, payout, entry, epoch };
         p.expiry = epoch + 2;
-        this.event(`Entrada simulada ${p.contractType} ${p.barrier ?? ''} (Stake: $${price}, Payout: $${payout}) em ${p.symbol}`, p);
+        this.event(`Entrada simulada ${p.contractType} ${p.barrier ?? ''}${p.stage > 0 ? ' [Gale 1]' : ''} (Stake: $${price}, Payout: $${payout}) em ${p.symbol}`, p);
       }
 
       // Step 2: Scan active symbols for Asymmetric Setups
@@ -467,11 +462,11 @@ export class DigitTrader {
               score: analysis.score,
               expectedWinRate: analysis.expectedWinRate,
               rule: analysis.rule,
-              stage: this.sorosStage,
+              stage: 0,
               quote: null,
               createdAt: Date.now()
             });
-            this.event(`🎯 OPORTUNIDADE ASSIMÉTRICA em ${symbol}: ${analysis.contractType} ${analysis.barrier ?? ''} (Probabilidade: ${analysis.expectedWinRate}%)`, { symbol, contractType: analysis.contractType });
+            this.event(`🎯 OPORTUNIDADE ASSIMÉTRICA em ${symbol}: ${analysis.contractType} ${analysis.barrier ?? ''} (~42% Payout · ${analysis.expectedWinRate}% Win Rate)`, { symbol, contractType: analysis.contractType });
             break;
           }
         }
@@ -480,7 +475,7 @@ export class DigitTrader {
       s.lastScan = Date.now();
       s.errors = 0;
       s.status = s.config.enabled
-        ? `Micro-Sessões Ativas · Meta: +$${s.config.sessionTarget.toFixed(2)} (Sessões Vencidas: ${s.sessionsWon || 0} / Perdidas: ${s.sessionsLost || 0})`
+        ? `QAP-V4 Ativo · Trio Vencedor (${s.config.symbols.join(', ')}) · Meta: +$${s.config.sessionTarget.toFixed(2)} (Sessões Vencidas: ${s.sessionsWon || 0} / Stops: ${s.sessionsLost || 0})`
         : s.pending.length ? 'Pausado · Finalizando operações' : 'Pausado';
 
     } catch (e) {

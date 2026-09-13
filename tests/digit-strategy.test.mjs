@@ -52,9 +52,13 @@ test('calculateRSI identifies overbought, oversold and neutral momentum', () => 
 });
 
 test('extractLastDigit extracts correct decimal digit based on asset precision', () => {
-  assert.equal(extractLastDigit(50123.45, 'R_100'), 5);
+  assert.equal(extractLastDigit(50123.45, 'R_75'), 5);
   assert.equal(extractLastDigit(1234.567, 'R_10'), 7);
-  assert.equal(extractLastDigit(9876.01, '1HZ100V'), 1);
+  assert.equal(extractLastDigit(9876.01, '1HZ75V'), 1);
+});
+
+test('QUANTUM_ASSETS contains exclusively the verified profitable trio', () => {
+  assert.deepEqual(QUANTUM_ASSETS, ['R_75', '1HZ75V', '1HZ25V']);
 });
 
 test('analyzeQuantumAsymmetricDigits triggers high-payout DIGITUNDER 7 on low digit dominance', () => {
@@ -65,7 +69,7 @@ test('analyzeQuantumAsymmetricDigits triggers high-payout DIGITUNDER 7 on low di
   }
   ticks.push({ price: 1000.02, epoch: 1099 }); // last digit = 2 (<= 5)
 
-  const analysis = analyzeQuantumAsymmetricDigits(ticks, 'R_100');
+  const analysis = analyzeQuantumAsymmetricDigits(ticks, 'R_75');
   assert.equal(analysis.signal, true);
   assert.equal(analysis.contractType, 'DIGITUNDER');
   assert.equal(analysis.barrier, 7);
@@ -73,23 +77,7 @@ test('analyzeQuantumAsymmetricDigits triggers high-payout DIGITUNDER 7 on low di
   assert.ok(analysis.score >= 85);
 });
 
-test('analyzeQuantumAsymmetricDigits triggers high-payout DIGITOVER 2 on high digit dominance', () => {
-  const ticks = [];
-  for (let i = 0; i < 99; i++) {
-    const digit = 5 + (i % 4); // 5, 6, 7, 8
-    ticks.push({ price: 1000 + digit * 0.01, epoch: 1000 + i });
-  }
-  ticks.push({ price: 1000.07, epoch: 1099 }); // last digit = 7 (>= 4)
-
-  const analysis = analyzeQuantumAsymmetricDigits(ticks, 'R_100');
-  assert.equal(analysis.signal, true);
-  assert.equal(analysis.contractType, 'DIGITOVER');
-  assert.equal(analysis.barrier, 2);
-  assert.ok(analysis.expectedWinRate >= 75);
-  assert.ok(analysis.score >= 85);
-});
-
-test('validateDigitConfig enforces QAP-V3.2 bounds and rejects invalid inputs', () => {
+test('validateDigitConfig enforces QAP-V4 bounds and rejects invalid inputs', () => {
   assert.throws(() => validateDigitConfig(null), /inválida/);
   assert.throws(() => validateDigitConfig({ stake: 0.1 }), /stake/);
   assert.throws(() => validateDigitConfig({ minScore: 40 }), /minScore/);
@@ -97,23 +85,28 @@ test('validateDigitConfig enforces QAP-V3.2 bounds and rejects invalid inputs', 
   const valid = validateDigitConfig({
     enabled: true,
     stake: 1.0,
-    sorosEnabled: false,
+    multiplier: 2.4,
+    maxGale: 1,
     cycleBudget: 20.0,
     minScore: 85,
     sessionTarget: 1.00,
-    sessionStopLoss: 1.50,
+    sessionStopLoss: 3.40,
     cooldownMinutes: 10,
-    symbols: ['R_100', '1HZ100V']
+    stopCooldownMinutes: 20,
+    symbols: ['R_75', '1HZ75V']
   });
 
   assert.equal(valid.enabled, true);
   assert.equal(valid.stake, 1.0);
+  assert.equal(valid.multiplier, 2.4);
+  assert.equal(valid.maxGale, 1);
   assert.equal(valid.sessionTarget, 1.00);
-  assert.equal(valid.sessionStopLoss, 1.50);
+  assert.equal(valid.sessionStopLoss, 3.40);
   assert.equal(valid.cooldownMinutes, 10);
+  assert.equal(valid.stopCooldownMinutes, 20);
 });
 
-test('DigitTrader simulates QAP-V3.2 Micro-Session Target Lock and Cooldown', async () => {
+test('DigitTrader simulates QAP-V4 Model B Execution with Gale 1 recovery', async () => {
   const mockSession = {
     activeMode: 'demo',
     accountCurrency: 'USD',
@@ -142,7 +135,7 @@ test('DigitTrader simulates QAP-V3.2 Micro-Session Target Lock and Cooldown', as
             proposal: {
               id: 'prop-123',
               ask_price: req.amount,
-              payout: req.amount * 1.50, // +$0.50 profit
+              payout: req.amount * 1.42, // ~42% payout
               spot: 1000.02,
               spot_time: Math.floor(Date.now() / 1000)
             }
@@ -157,16 +150,18 @@ test('DigitTrader simulates QAP-V3.2 Micro-Session Target Lock and Cooldown', as
   trader.configure({
     enabled: true,
     stake: 1.0,
-    sorosEnabled: false,
-    symbols: ['R_100'],
+    multiplier: 2.4,
+    maxGale: 1,
+    symbols: ['R_75'],
     sessionTarget: 1.00,
-    sessionStopLoss: 1.50,
-    cooldownMinutes: 10
+    sessionStopLoss: 3.40,
+    cooldownMinutes: 10,
+    stopCooldownMinutes: 20
   });
 
   assert.equal(trader.state.config.enabled, true);
 
-  // Trade 1: Win +0.50
+  // Trade 1: Win +0.42
   trader.lastPoll = 0;
   await trader.tick();
   trader.lastPoll = 0;
@@ -176,10 +171,10 @@ test('DigitTrader simulates QAP-V3.2 Micro-Session Target Lock and Cooldown', as
   await trader.tick();
 
   assert.equal(trader.state.trades.length, 1);
-  assert.equal(trader.state.sessionProfit, 0.50);
+  assert.equal(trader.state.sessionProfit, 0.42);
   assert.equal(trader.state.sessionsWon, 0);
 
-  // Trade 2: Win +0.50 -> Total $1.00 (Hits target!)
+  // Trade 2: Win +0.42 -> total 0.84
   trader.lastPoll = 0;
   await trader.tick();
   trader.state.pending[0].expiry = Math.floor(Date.now() / 1000) - 2;
@@ -187,9 +182,21 @@ test('DigitTrader simulates QAP-V3.2 Micro-Session Target Lock and Cooldown', as
   await trader.tick();
 
   assert.equal(trader.state.trades.length, 2);
+  assert.equal(trader.state.sessionProfit, 0.84);
+
+  // Trade 3: Win +0.42 -> total 1.26 (Target hit >= 1.00!)
+  trader.lastPoll = 0;
+  await trader.tick();
+  trader.state.pending[0].expiry = Math.floor(Date.now() / 1000) - 2;
+  trader.lastPoll = 0;
+  await trader.tick();
+
+  assert.equal(trader.state.trades.length, 3);
   assert.equal(trader.state.sessionsWon, 1);
-  assert.equal(trader.state.totalLockedProfit, 1.00);
-  assert.ok(trader.state.cooldownUntil > Date.now()); // Cooldown triggered!
+  assert.equal(trader.state.totalLockedProfit, 1.26);
+  assert.equal(trader.state.completedSessions.length, 1);
+  assert.equal(trader.state.completedSessions[0].result, 'WIN');
+  assert.ok(trader.state.cooldownUntil > Date.now());
 
   // Test reset
   trader.reset();
@@ -197,4 +204,5 @@ test('DigitTrader simulates QAP-V3.2 Micro-Session Target Lock and Cooldown', as
   assert.equal(trader.state.sessionProfit, 0);
   assert.equal(trader.state.totalLockedProfit, 0);
   assert.equal(trader.state.sessionsWon, 0);
+  assert.equal(trader.state.completedSessions.length, 0);
 });

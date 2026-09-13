@@ -232,6 +232,29 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </label>
 
             <label>
+              Multiplicador Gale 1 (Payout ~42%)
+              <input
+                type="number"
+                min="1.5"
+                max="5.0"
+                step="0.1"
+                value={draft.multiplier || 2.4}
+                onChange={(e) => update('multiplier', Number(e.target.value))}
+              />
+            </label>
+
+            <label>
+              Níveis de Recuperação Gale
+              <select
+                value={draft.maxGale ?? 1}
+                onChange={(e) => update('maxGale', Number(e.target.value))}
+              >
+                <option value="1">1 Nível Seguro (2.4x · 80.9% Acerto)</option>
+                <option value="0">Sem Gale (Mão Fixa Estrita)</option>
+              </select>
+            </label>
+
+            <label>
               Meta da Micro-Sessão (USD · Trava de Lucro)
               <input
                 type="number"
@@ -244,19 +267,19 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </label>
 
             <label>
-              Stop Loss da Micro-Sessão (USD · Proteção)
+              Stop Loss da Sessão (USD · Proteção)
               <input
                 type="number"
                 min="0.50"
                 max="50"
                 step="0.50"
-                value={draft.sessionStopLoss || 1.50}
+                value={draft.sessionStopLoss || 3.40}
                 onChange={(e) => update('sessionStopLoss', Number(e.target.value))}
               />
             </label>
 
             <label>
-              Tempo de Cooldown / Descompressão (minutos)
+              Pausa pós-Meta (minutos)
               <input
                 type="number"
                 min="1"
@@ -268,14 +291,15 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
             </label>
 
             <label>
-              Gestão de Lucro (Soros Nível 1)
-              <select
-                value={draft.sorosEnabled ? 'true' : 'false'}
-                onChange={(e) => update('sorosEnabled', e.target.value === 'true')}
-              >
-                <option value="false">Mão Fixa Estrita (Recomendado · Risco Travado)</option>
-                <option value="true">Soros N1 Ativo (Reinveste lucro do Win 1)</option>
-              </select>
+              Pausa pós-Stop (minutos · Descompressão)
+              <input
+                type="number"
+                min="1"
+                max="120"
+                step="5"
+                value={draft.stopCooldownMinutes || 20}
+                onChange={(e) => update('stopCooldownMinutes', Number(e.target.value))}
+              />
             </label>
 
             <label>

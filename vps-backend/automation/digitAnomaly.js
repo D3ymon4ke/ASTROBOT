@@ -1,5 +1,5 @@
-export const QUANTUM_VERSION = 'qap-v3.1';
-export const QUANTUM_ASSETS = ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_25', '1HZ25V', 'R_10', '1HZ10V'];
+export const QUANTUM_VERSION = 'qap-v4';
+export const QUANTUM_ASSETS = ['R_75', '1HZ75V', '1HZ25V'];
 export const DIGIT_ASSETS = QUANTUM_ASSETS;
 export const DIGIT_VERSION = QUANTUM_VERSION;
 
