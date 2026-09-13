@@ -11,7 +11,7 @@ export const QUANTUM_DEFAULTS = Object.freeze({
   strategyMode: 'asymmetric_digits',
   symbols: ['R_100', '1HZ100V', 'R_75', '1HZ75V', 'R_25', '1HZ25V'],
   stake: 1.0,
-  sorosEnabled: false, // Fixed stake by default for predictable scalping
+  sorosEnabled: false,
   cycleBudget: 15.0,
   minPayout: 0.20,
   minScore: 85,
@@ -65,6 +65,7 @@ export class DigitTrader {
     this.tickCache = {};
     this.sorosStage = 0;
     this.lastWinProfit = 0;
+    this.currentSessionTrades = [];
   }
 
   get state() {
@@ -72,10 +73,11 @@ export class DigitTrader {
       config: { ...QUANTUM_DEFAULTS },
       version: QUANTUM_VERSION,
       status: 'Desligado',
-      sessionProfit: 0, // Current active micro-session profit
-      totalLockedProfit: 0, // Cumulative profit locked from won micro-sessions
+      sessionProfit: 0,
+      totalLockedProfit: 0,
       sessionsWon: 0,
       sessionsLost: 0,
+      completedSessions: [], // Array of finished micro-sessions
       cooldownUntil: 0,
       sorosStage: 0,
       matrix: {},
@@ -102,6 +104,7 @@ export class DigitTrader {
       totalLockedProfit: s.totalLockedProfit || 0,
       sessionsWon: s.sessionsWon || 0,
       sessionsLost: s.sessionsLost || 0,
+      completedSessions: (s.completedSessions || []).slice(-50),
       cooldownRemainingSec,
       sorosStage: this.sorosStage || 0,
       matrix: s.matrix || {},
@@ -149,11 +152,13 @@ export class DigitTrader {
     s.totalLockedProfit = 0;
     s.sessionsWon = 0;
     s.sessionsLost = 0;
+    s.completedSessions = [];
     s.cooldownUntil = 0;
     this.sorosStage = 0;
     this.lastWinProfit = 0;
+    this.currentSessionTrades = [];
     this.tickCache = {};
-    this.event('Laboratório Quântico QAP-V3.2 resetado com novo sistema de Micro-Metas.');
+    this.event('Laboratório Quântico QAP-V3.2 resetado com novo histórico de micro-sessões.');
     this.save();
   }
 
@@ -200,6 +205,7 @@ export class DigitTrader {
       this.tickCache = {};
       this.sorosStage = 0;
       this.lastWinProfit = 0;
+      this.currentSessionTrades = [];
       this.event('Nova Micro-Sessão iniciada! Buscando meta curta de +' + s.config.sessionTarget.toFixed(2) + ' USD.');
     }
 
@@ -282,6 +288,7 @@ export class DigitTrader {
 
           s.trades.push(row);
           s.trades = s.trades.slice(-2000);
+          this.currentSessionTrades.push(row);
           s.sessionProfit = Number(((s.sessionProfit || 0) + row.profit).toFixed(2));
 
           if (win) {
@@ -301,11 +308,26 @@ export class DigitTrader {
               const lockedProfit = s.sessionProfit;
               s.totalLockedProfit = Number(((s.totalLockedProfit || 0) + lockedProfit).toFixed(2));
               s.sessionsWon = (s.sessionsWon || 0) + 1;
+
+              s.completedSessions = s.completedSessions || [];
+              s.completedSessions.push({
+                id: `sess-${Date.now()}`,
+                time: Date.now(),
+                result: 'WIN',
+                profit: lockedProfit,
+                tradesCount: this.currentSessionTrades.length,
+                wins: this.currentSessionTrades.filter(t => t.profit > 0).length,
+                losses: this.currentSessionTrades.filter(t => t.profit < 0).length,
+                accumulatedTotal: s.totalLockedProfit
+              });
+              s.completedSessions = s.completedSessions.slice(-100);
+
               s.sessionProfit = 0;
+              this.currentSessionTrades = [];
               this.tickCache = {};
               this.sorosStage = 0;
               this.lastWinProfit = 0;
-              this.event(`🏆 META DA MICRO-SESSÃO BATIDA (+${lockedProfit.toFixed(2)} USD)! Total Travado no Banco: +$${s.totalLockedProfit.toFixed(2)} USD. Entrando em Cooldown de ${s.config.cooldownMinutes} min.`);
+              this.event(`🏆 META DA MICRO-SESSÃO BATIDA (+${lockedProfit.toFixed(2)} USD)! Total Travado no Cofre: +$${s.totalLockedProfit.toFixed(2)} USD. Entrando em Cooldown de ${s.config.cooldownMinutes} min.`);
             }
             continue;
           } else {
@@ -320,7 +342,22 @@ export class DigitTrader {
               const lossAmt = Math.abs(s.sessionProfit);
               s.totalLockedProfit = Number(((s.totalLockedProfit || 0) - lossAmt).toFixed(2));
               s.sessionsLost = (s.sessionsLost || 0) + 1;
+
+              s.completedSessions = s.completedSessions || [];
+              s.completedSessions.push({
+                id: `sess-${Date.now()}`,
+                time: Date.now(),
+                result: 'STOP',
+                profit: -lossAmt,
+                tradesCount: this.currentSessionTrades.length,
+                wins: this.currentSessionTrades.filter(t => t.profit > 0).length,
+                losses: this.currentSessionTrades.filter(t => t.profit < 0).length,
+                accumulatedTotal: s.totalLockedProfit
+              });
+              s.completedSessions = s.completedSessions.slice(-100);
+
               s.sessionProfit = 0;
+              this.currentSessionTrades = [];
               this.tickCache = {};
               this.sorosStage = 0;
               this.lastWinProfit = 0;
@@ -335,7 +372,6 @@ export class DigitTrader {
           continue;
         }
 
-        // Calculate Stake
         let currentStake = s.config.stake;
         if (s.config.sorosEnabled && this.sorosStage === 1 && this.lastWinProfit > 0) {
           currentStake = Math.round((s.config.stake + this.lastWinProfit) * 100) / 100;

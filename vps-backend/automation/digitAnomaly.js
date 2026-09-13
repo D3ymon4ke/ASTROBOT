@@ -151,8 +151,8 @@ export function analyzeQuantumAsymmetricDigits(ticks = [], symbol = 'R_100', con
   const reasons = [];
 
   // SETUP 1: HIGH PAYOUT DIGITUNDER 7 (~42% Payout · 75-80% Win Rate)
-  // When digits 7, 8, 9 represent <= 22% of L100 and last digit is <= 5
-  if (top3Freq <= 0.22 && lowGroupFreq >= 0.55 && lastDigit <= 5) {
+  // When digits 7, 8, 9 represent <= 26% of L100 and last digit is <= 5
+  if (top3Freq <= 0.26 && lowGroupFreq >= 0.48 && lastDigit <= 5) {
     signal = true;
     contractType = 'DIGITUNDER';
     barrier = 7;
@@ -166,8 +166,8 @@ export function analyzeQuantumAsymmetricDigits(ticks = [], symbol = 'R_100', con
     );
   }
   // SETUP 2: HIGH PAYOUT DIGITOVER 2 (~42% Payout · 75-80% Win Rate)
-  // When digits 0, 1, 2 represent <= 22% of L100 and last digit is >= 4
-  else if (bot3Freq <= 0.22 && highGroupFreq >= 0.55 && lastDigit >= 4) {
+  // When digits 0, 1, 2 represent <= 26% of L100 and last digit is >= 4
+  else if (bot3Freq <= 0.26 && highGroupFreq >= 0.48 && lastDigit >= 4) {
     signal = true;
     contractType = 'DIGITOVER';
     barrier = 2;
@@ -181,7 +181,7 @@ export function analyzeQuantumAsymmetricDigits(ticks = [], symbol = 'R_100', con
     );
   }
   // SETUP 3: ASYMMETRIC DIGITUNDER 8 (80-88% Win Rate)
-  else if ((counts[8] + counts[9]) / sampleSize <= 0.15 && lowGroupFreq >= 0.52 && lastDigit <= 6) {
+  else if ((counts[8] + counts[9]) / sampleSize <= 0.16 && lowGroupFreq >= 0.50 && lastDigit <= 6) {
     signal = true;
     contractType = 'DIGITUNDER';
     barrier = 8;
@@ -191,19 +191,6 @@ export function analyzeQuantumAsymmetricDigits(ticks = [], symbol = 'R_100', con
     reasons.push(
       `Dígitos 8 e 9 comprimidos (${(((counts[8] + counts[9]) / sampleSize) * 100).toFixed(1)}%)`,
       `Alta assimetria de acerto no DIGITUNDER 8`
-    );
-  }
-  // SETUP 4: ASYMMETRIC DIGITDIFF (90%+ Win Rate on Cold Digit)
-  else if (minCount / sampleSize <= 0.05 && last5.every(d => d !== coldDigit)) {
-    signal = true;
-    contractType = 'DIGITDIFF';
-    barrier = coldDigit;
-    rule = 'asymmetric_diff_cold';
-    score = 88;
-    expectedWinRate = 92;
-    reasons.push(
-      `Dígito frio ${coldDigit} com apenas ${(percentages[coldDigit])}% no L100`,
-      `Ausente nas últimas 5 amostras consecutivas`
     );
   }
 

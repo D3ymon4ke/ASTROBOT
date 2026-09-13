@@ -500,6 +500,84 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
           ))}
         </div>
       </section>
+
+      {/* COMPLETED MICRO-SESSIONS & ACCUMULATED PROFIT VAULT */}
+      <section className="aut-card" style={{ marginTop: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div>
+            <h2><Lock size={18} /> Histórico de Micro-Sessões & Lucro Acumulado no Cofre</h2>
+            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0' }}>
+              Cada sessão busca +$1.00 USD. Ao atingir a meta, o lucro é congelado permanentemente no cofre.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '6px 14px', borderRadius: '8px', textAlign: 'right' }}>
+              <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>Saldo Total no Cofre</span>
+              <b style={{ fontSize: '16px', color: totalLockedProfit >= 0 ? '#34d399' : '#fb7185' }}>{usd(totalLockedProfit)}</b>
+            </div>
+          </div>
+        </div>
+
+        {state?.completedSessions && state.completedSessions.length > 0 ? (
+          <div className="aut-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sessão #</th>
+                  <th>Horário de Fechamento</th>
+                  <th>Desfecho</th>
+                  <th>Operações</th>
+                  <th>Lucro da Sessão</th>
+                  <th>Saldo Acumulado no Cofre</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.completedSessions.slice(-20).reverse().map((sess, idx) => {
+                  const sessNum = state.completedSessions.length - idx;
+                  const isWin = sess.result === 'WIN';
+
+                  return (
+                    <tr key={sess.id || idx}>
+                      <td><b>Sessão #{sessNum}</b></td>
+                      <td>{new Date(sess.time).toLocaleTimeString()}</td>
+                      <td>
+                        <span
+                          className="badge-tag"
+                          style={{
+                            background: isWin ? 'rgba(16, 185, 129, 0.2)' : 'rgba(244, 63, 94, 0.2)',
+                            color: isWin ? '#34d399' : '#fb7185',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          {isWin ? '🏆 Meta Batida (+Lucro Travado)' : '🛡️ Stop Loss Acionado'}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '12px', color: '#f8fafc' }}>
+                          <b style={{ color: '#34d399' }}>{sess.wins || 0}V</b> · <b style={{ color: '#fb7185' }}>{sess.losses || 0}D</b> ({sess.tradesCount || 0} ops)
+                        </span>
+                      </td>
+                      <td style={{ color: sess.profit >= 0 ? '#34d399' : '#fb7185', fontWeight: 'bold' }}>
+                        {sess.profit >= 0 ? `+${usd(sess.profit)}` : usd(sess.profit)}
+                      </td>
+                      <td>
+                        <b style={{ color: sess.accumulatedTotal >= 0 ? '#34d399' : '#fb7185', fontSize: '13px' }}>
+                          {usd(sess.accumulatedTotal)}
+                        </b>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p style={{ color: '#94a3b8', fontStyle: 'italic', padding: '12px 0' }}>
+            Aguardando a conclusão da primeira micro-sessão para registrar no histórico do cofre.
+          </p>
+        )}
+      </section>
     </section>
   );
 }
+
