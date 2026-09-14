@@ -15,11 +15,14 @@ export const QUANTUM_DEFAULTS = Object.freeze({
   maxGale: 1,            // Strict 1 level of Gale only (80.9% historical success)
   cycleBudget: 15.0,
   minPayout: 0.20,
-  minScore: 85,
+  minScore: 88,          // Elevado para 88 (maior seletividade contra ruídos)
   sessionTarget: 1.00,   // Fast scalp target ($1.00 USD)
   sessionStopLoss: 3.40, // 1 loss ($1.00) + 1 Gale loss ($2.40)
   cooldownMinutes: 10,   // 10m cooldown on win
-  stopCooldownMinutes: 20 // 20m cooldown on stop for market decompression
+  stopCooldownMinutes: 20, // 20m cooldown on stop for market decompression
+  vaultDailyTarget: 3.00,  // Meta diária consolidada do cofre ($3.00 USD)
+  maxDailyStops: 2,        // Disjuntor: máximo 2 stops diários antes de desligar
+  trailingProfitLock: 0.70 // Trava lucro se atingir >= 70% da meta e houver recuo
 });
 
 export const DIGIT_DEFAULTS = QUANTUM_DEFAULTS;
@@ -50,7 +53,10 @@ export function validateDigitConfig(patch, previous = QUANTUM_DEFAULTS) {
     ['sessionTarget', 0.05, 100],
     ['sessionStopLoss', 0.10, 100],
     ['cooldownMinutes', 1, 360],
-    ['stopCooldownMinutes', 1, 360]
+    ['stopCooldownMinutes', 1, 360],
+    ['vaultDailyTarget', 0.20, 500],
+    ['maxDailyStops', 1, 10],
+    ['trailingProfitLock', 0.10, 0.95]
   ]) {
     c[k] = Number(c[k]);
     if (!Number.isFinite(c[k]) || c[k] < min || c[k] > max) {
@@ -207,6 +213,27 @@ export class DigitTrader {
       this.event(`Nova Micro-Sessão iniciada! Buscando meta de +$${s.config.sessionTarget.toFixed(2)} USD nos ativos vencedores.`);
     }
 
+    // Macro Vault Circuit Breakers
+    if (s.config.vaultDailyTarget && s.totalLockedProfit >= s.config.vaultDailyTarget) {
+      s.status = `🏆 META DIÁRIA DO COFRE ATINGIDA (+$${s.totalLockedProfit.toFixed(2)} USD) · Robô Desarmado`;
+      if (s.config.enabled) {
+        s.config.enabled = false;
+        this.event(`🏆 META DIÁRIA DO COFRE ALCANÇADA: Saldo de +$${s.totalLockedProfit.toFixed(2)} USD atingiu a meta diária de $${s.config.vaultDailyTarget.toFixed(2)} USD. Lucros travados no cofre!`);
+        this.save();
+      }
+      return;
+    }
+
+    if (s.config.maxDailyStops && s.sessionsLost >= s.config.maxDailyStops) {
+      s.status = `🛑 DISJUNTOR ACIONADO: Limite de ${s.sessionsLost}/${s.config.maxDailyStops} Stops Atingido · Desarmado`;
+      if (s.config.enabled) {
+        s.config.enabled = false;
+        this.event(`🛑 DISJUNTOR DE CAPITAL ACIONADO: ${s.sessionsLost} stops de sessão atingidos hoje. Robô pausado preventivamente.`);
+        this.save();
+      }
+      return;
+    }
+
     this.busy = true;
     this.lastPoll = Date.now();
     const mode = this.session.activeMode;
@@ -320,6 +347,40 @@ export class DigitTrader {
             continue;
           } else {
             // Loss occurred
+            // Trailing Profit Lock Check:
+            // Se a sessão já construiu lucro expressivo (>= 70% da meta) e após a perda ainda estiver no verde (> 0),
+            // encerramos imediatamente com vitória protegida, evitando disparar Gale 1 e correr risco de stop!
+            const lockThreshold = (s.config.sessionTarget || 1.0) * (s.config.trailingProfitLock || 0.70);
+            const peakWinsProfit = this.currentSessionTrades.reduce((acc, t) => acc + (t.profit > 0 ? t.profit : 0), 0);
+
+            if (s.sessionProfit > 0 && peakWinsProfit >= lockThreshold) {
+              const lockedProfit = s.sessionProfit;
+              this.finish(p, `🛡️ Lucro Protegido (Trailing Lock): Sessão finalizada com +$${lockedProfit.toFixed(2)} USD para evitar Gale arriscado.`);
+              s.cooldownUntil = Date.now() + (s.config.cooldownMinutes || 10) * 60 * 1000;
+              s.totalLockedProfit = Number(((s.totalLockedProfit || 0) + lockedProfit).toFixed(2));
+              s.sessionsWon = (s.sessionsWon || 0) + 1;
+
+              s.completedSessions = s.completedSessions || [];
+              s.completedSessions.push({
+                id: `sess-${Date.now()}`,
+                time: Date.now(),
+                result: 'WIN_PROTECTED',
+                profit: lockedProfit,
+                tradesCount: this.currentSessionTrades.length,
+                wins: this.currentSessionTrades.filter(t => t.profit > 0).length,
+                losses: this.currentSessionTrades.filter(t => t.profit < 0).length,
+                accumulatedTotal: s.totalLockedProfit
+              });
+              s.completedSessions = s.completedSessions.slice(-100);
+
+              s.sessionProfit = 0;
+              this.currentSessionTrades = [];
+              this.tickCache = {};
+              this.event(`🏆 MICRO-SESSÃO PROTEGIDA (+${lockedProfit.toFixed(2)} USD)! Total no Cofre: $${s.totalLockedProfit.toFixed(2)} USD. Cooldown de ${s.config.cooldownMinutes} min.`);
+              this.save();
+              continue;
+            }
+
             if (p.stage < s.config.maxGale) {
               // Prepare Gale 1 with multiplier (2.4x)
               p.stage++;
@@ -333,7 +394,11 @@ export class DigitTrader {
 
               // STOP LOSS TRIGGERED: Lock loss and enter extended cooldown
               if (s.sessionProfit <= -s.config.sessionStopLoss || p.stage >= s.config.maxGale) {
-                const pauseMin = s.config.stopCooldownMinutes || 20;
+                const lastSession = s.completedSessions?.[s.completedSessions.length - 1];
+                const isConsecutiveStop = lastSession && (lastSession.result === 'STOP' || lastSession.profit < 0);
+                const basePause = s.config.stopCooldownMinutes || 20;
+                const pauseMin = isConsecutiveStop ? Math.min(Math.round(basePause * 2.25), 60) : basePause;
+
                 s.cooldownUntil = Date.now() + pauseMin * 60 * 1000;
                 const lossAmt = Math.abs(s.sessionProfit);
                 s.totalLockedProfit = Number(((s.totalLockedProfit || 0) - lossAmt).toFixed(2));
@@ -355,7 +420,7 @@ export class DigitTrader {
                 s.sessionProfit = 0;
                 this.currentSessionTrades = [];
                 this.tickCache = {};
-                this.event(`🛡️ STOP LOSS DE SESSÃO (-${lossAmt.toFixed(2)} USD). Pausa adaptativa de ${pauseMin} min para descompressão.`);
+                this.event(`🛡️ STOP LOSS DE SESSÃO (-${lossAmt.toFixed(2)} USD). Pausa adaptativa de ${pauseMin} min${isConsecutiveStop ? ' (Stops Consecutivos - Cooldown Prolongado)' : ''} para descompressão.`);
               }
               continue;
             }

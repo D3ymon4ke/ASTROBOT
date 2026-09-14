@@ -312,6 +312,42 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
                 onChange={(e) => update('cycleBudget', Number(e.target.value))}
               />
             </label>
+
+            <label>
+              Meta Diária do Cofre (USD · Trava Diária)
+              <input
+                type="number"
+                min="0.50"
+                max="500"
+                step="0.50"
+                value={draft.vaultDailyTarget ?? 3.00}
+                onChange={(e) => update('vaultDailyTarget', Number(e.target.value))}
+              />
+            </label>
+
+            <label>
+              Disjuntor de Stops Diários (Máx Stops)
+              <input
+                type="number"
+                min="1"
+                max="10"
+                step="1"
+                value={draft.maxDailyStops ?? 2}
+                onChange={(e) => update('maxDailyStops', Number(e.target.value))}
+              />
+            </label>
+
+            <label>
+              Trailing Profit Lock (% da Meta)
+              <input
+                type="number"
+                min="0.10"
+                max="0.95"
+                step="0.05"
+                value={draft.trailingProfitLock ?? 0.70}
+                onChange={(e) => update('trailingProfitLock', Number(e.target.value))}
+              />
+            </label>
           </div>
 
           <fieldset style={{ marginTop: '16px' }}>
@@ -558,7 +594,8 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
               <tbody>
                 {state.completedSessions.slice(-20).reverse().map((sess, idx) => {
                   const sessNum = state.completedSessions.length - idx;
-                  const isWin = sess.result === 'WIN';
+                  const isProtected = sess.result === 'WIN_PROTECTED';
+                  const isWin = sess.result === 'WIN' || isProtected;
 
                   return (
                     <tr key={sess.id || idx}>
@@ -568,12 +605,20 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
                         <span
                           className="badge-tag"
                           style={{
-                            background: isWin ? 'rgba(16, 185, 129, 0.2)' : 'rgba(244, 63, 94, 0.2)',
-                            color: isWin ? '#34d399' : '#fb7185',
+                            background: isProtected
+                              ? 'rgba(6, 182, 212, 0.2)'
+                              : isWin
+                              ? 'rgba(16, 185, 129, 0.2)'
+                              : 'rgba(244, 63, 94, 0.2)',
+                            color: isProtected ? '#22d3ee' : isWin ? '#34d399' : '#fb7185',
                             fontWeight: 'bold'
                           }}
                         >
-                          {isWin ? '🏆 Meta Batida (+Lucro Travado)' : '🛡️ Stop Loss Acionado'}
+                          {isProtected
+                            ? '🛡️ Lucro Protegido (+Travado)'
+                            : isWin
+                            ? '🏆 Meta Batida (+Lucro Travado)'
+                            : '🛑 Stop Loss Acionado'}
                         </span>
                       </td>
                       <td>

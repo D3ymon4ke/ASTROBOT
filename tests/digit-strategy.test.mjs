@@ -206,3 +206,91 @@ test('DigitTrader simulates QAP-V4 Model B Execution with Gale 1 recovery', asyn
   assert.equal(trader.state.sessionsWon, 0);
   assert.equal(trader.state.completedSessions.length, 0);
 });
+
+test('DigitTrader Trailing Profit Lock and Vault Circuit Breaker protections work as expected', async () => {
+  const mockSession = {
+    activeMode: 'demo',
+    accountCurrency: 'USD',
+    loadedFromFile: false,
+    modeStates: { demo: {} },
+    saveToFile() {},
+    syncToClients() {},
+    connectDeriv() {},
+    derivAPI: {
+      connected: true,
+      authorized: true,
+      async sendRequest(req) {
+        if (req.proposal) {
+          return { proposal: { id: 'prop-lock-1', ask_price: 1.0, payout: 1.42 } };
+        }
+        if (req.ticks_history) {
+          // Exit digit = 8 -> Loss on DIGITUNDER 7
+          return {
+            history: {
+              times: [Math.floor(Date.now() / 1000)],
+              prices: [1234.08]
+            }
+          };
+        }
+        return {};
+      }
+    }
+  };
+
+  const trader = new DigitTrader(mockSession);
+  trader.configure({
+    enabled: true,
+    sessionTarget: 1.00,
+    trailingProfitLock: 0.70,
+    vaultDailyTarget: 2.00,
+    maxDailyStops: 2
+  });
+
+  // Simulate existing session with high profit (+0.84 USD)
+  trader.state.sessionProfit = 0.84;
+  trader.currentSessionTrades = [
+    { profit: 0.42 },
+    { profit: 0.42 }
+  ];
+
+  // Setup pending quote that will lose
+  trader.state.pending = [{
+    id: 'op-trailing',
+    symbol: 'R_75',
+    contractType: 'DIGITUNDER',
+    barrier: 7,
+    stage: 0,
+    expiry: Math.floor(Date.now() / 1000) - 2,
+    quote: { id: 'prop-1', stake: 0.35, payout: 0.49 }
+  }];
+
+  trader.lastPoll = 0;
+  await trader.tick();
+
+  // Loss happened (-0.35), but sessionProfit was > 0 (0.84 - 0.35 = 0.49 > 0)
+  // and peak profit was >= 0.70.
+  // Trailing Profit Lock should trigger WIN_PROTECTED, locking +0.49!
+  assert.equal(trader.state.sessionsWon, 1);
+  assert.equal(trader.state.totalLockedProfit, 0.49);
+  assert.equal(trader.state.completedSessions[0].result, 'WIN_PROTECTED');
+  assert.equal(trader.state.completedSessions[0].profit, 0.49);
+  assert.ok(trader.state.cooldownUntil > Date.now());
+
+  // Test Vault Daily Target Circuit Breaker
+  trader.state.totalLockedProfit = 2.50; // Above target of 2.00
+  trader.state.cooldownUntil = 0; // cooldown over
+  trader.lastPoll = 0;
+  await trader.tick();
+  assert.equal(trader.state.config.enabled, false);
+  assert.match(trader.state.status, /META DIÁRIA DO COFRE ATINGIDA/);
+
+  // Test Max Daily Stops Circuit Breaker
+  trader.state.config.enabled = true;
+  trader.state.totalLockedProfit = 0;
+  trader.state.sessionsLost = 2; // Hit max stops
+  trader.lastPoll = 0;
+  await trader.tick();
+  assert.equal(trader.state.config.enabled, false);
+  assert.match(trader.state.status, /DISJUNTOR ACIONADO/);
+});
+
