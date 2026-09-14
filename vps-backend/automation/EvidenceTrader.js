@@ -1,5 +1,5 @@
 import { cleanCandles } from './signals.js';
-import { EVIDENCE_VERSION, LAB_DEFAULTS, LAB_ARMS, validateLabConfig, candidate, validTicks, metrics, evidenceGate } from './evidenceStrategies.js';
+import { EVIDENCE_VERSION, LAB_DEFAULTS, LAB_ARMS, validateLabConfig, candidate, validTicks, metrics, evidenceGate, assetPrecision } from './evidenceStrategies.js';
 
 const round = n => Math.round(n * 100) / 100;
 export class EvidenceTrader {
@@ -85,7 +85,7 @@ export class EvidenceTrader {
         if (!Object.keys(this.metadata).length) {
           const r = await api.sendRequest({ active_symbols: 'brief' }); if (!valid()) return;
           for (const asset of r.active_symbols || []) {
-            const pip = Number(asset.pip), precision = Number.isInteger(asset.pip_size) ? asset.pip_size : pip > 0 ? Math.round(-Math.log10(pip)) : null;
+            const precision = assetPrecision(asset);
             if (Number.isInteger(precision) && precision >= 0 && precision <= 10) this.metadata[asset.symbol || asset.underlying_symbol] = precision;
           }
         }

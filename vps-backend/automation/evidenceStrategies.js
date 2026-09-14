@@ -25,6 +25,15 @@ export function lastDigit(price, precision) {
   if (!Number.isInteger(precision) || precision < 0 || precision > 10 || !Number.isFinite(Number(price))) return null;
   return Number(Number(price).toFixed(precision).slice(-1));
 }
+export function assetPrecision(asset) {
+  // Legacy API sends pip; PAT API sends the increment (e.g. 0.01) as pip_size.
+  const raw = Number(asset.pip ?? asset.pip_size);
+  if (!Number.isFinite(raw) || raw < 0) return null;
+  if (asset.pip == null && Number.isInteger(raw) && raw <= 10) return raw;
+  if (!(raw > 0)) return null;
+  const decimals = Math.round(-Math.log10(raw));
+  return decimals >= 0 && decimals <= 10 && Math.abs(raw - 10 ** -decimals) < 1e-12 ? decimals : null;
+}
 export function validTicks(history, precision) {
   const times = history?.times || [], prices = history?.prices || [];
   if (times.length !== prices.length) return [];

@@ -27,6 +27,8 @@ Carteiras reservam a exposição antes da entrada; limite padrão de US$ 3 de pe
 
 ## Interface, retenção e testes
 
+A compatibilidade de precisão foi verificada na API PAT em produção: `pip_size: 0.01` representa incremento de preço e é convertido em duas casas decimais. A API legada pode informar `pip`, e respostas com contagem inteira de casas também são aceitas. Incrementos não decimais e metadados ausentes não são usados para inventar um dígito.
+
 Curvas em eixo temporal comum, pesquisa separada de carteiras, saldo acumulado das carteiras, taxas de equilíbrio, amostra usada na decisão, histórico legado e exportação JSON. Backend retém 6.000 contratos de pesquisa, painel transmite 1.500; os gráficos são explicitamente da janela retida. Os saldos de carteira abrangem todo o experimento. Snapshots não substituem um arquivo histórico ilimitado.
 
 Testes cobrem tick-count, precisão, gaps, empate, pausas, orçamento, limite de drawdown, separação de contas/legado e rejeição de configuração real. Teste de navegador usa VPS simulada para botões, filtros, gráfico, exportação e layout móvel; não envia ordens ou Telegram reais.

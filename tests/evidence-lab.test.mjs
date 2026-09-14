@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EvidenceTrader } from '../vps-backend/automation/EvidenceTrader.js';
-import { LAB_DEFAULTS, validateLabConfig, lastDigit, validTicks, candidate, evidenceGate } from '../vps-backend/automation/evidenceStrategies.js';
+import { LAB_DEFAULTS, validateLabConfig, lastDigit, validTicks, candidate, evidenceGate, assetPrecision } from '../vps-backend/automation/evidenceStrategies.js';
 function fixture(request = async () => ({})) {
   const session = { activeMode: 'real', modeStates: { real: { digitLab: { trades: [{ profit: -5, stake: 1, timestamp: 1 }], config: { enabled: false } } }, demo: {} }, balance: 25, accountCurrency: 'USD', saveToFile() {}, syncToClients() {}, connectDeriv() {}, derivAPI: { connected: true, authorized: true, sendRequest: request, fetchCandleHistory: async () => [] } };
   return { session, engine: new EvidenceTrader(session) };
@@ -15,6 +15,13 @@ test('digit precision comes from explicit metadata and preserves trailing zeros'
   assert.equal(lastDigit(123.45, 3), 0); assert.equal(lastDigit(123.457, 3), 7);
   assert.equal(lastDigit(123.45, undefined), null);
   assert.deepEqual(validTicks({ times: [1, 1], prices: [1, 2] }, 2), []);
+});
+test('official PAT and legacy precision formats are both supported', () => {
+  assert.equal(assetPrecision({ underlying_symbol: 'R_100', pip_size: .01 }), 2);
+  assert.equal(assetPrecision({ symbol: 'R_100', pip: .001 }), 3);
+  assert.equal(assetPrecision({ pip_size: 3 }), 3);
+  assert.equal(assetPrecision({ pip_size: .25 }), null);
+  assert.equal(assetPrecision({}), null);
 });
 test('new state isolates legacy data and accounts without deleting old results', () => {
   const { session, engine } = fixture(); assert.equal(engine.snapshot().legacy.quantum.net, -5);
