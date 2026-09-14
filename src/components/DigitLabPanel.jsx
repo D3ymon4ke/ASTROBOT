@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Play, Pause, Download, FlaskConical } from 'lucide-react';
 import { EVIDENCE_VERSION, LAB_ARMS, LAB_DEFAULTS, metrics } from '../../vps-backend/automation/evidenceStrategies.js';
 import './EvidenceLab.css';
+import RangeResearchPanel from './RangeResearchPanel.jsx';
 const money = n => Number(n || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 const pct = n => n == null ? '—' : `${n.toFixed(1)}%`;
 const colors = ['#71d5c2', '#8896b2', '#baacff', '#ecbc76'];
@@ -24,11 +25,13 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
     const a = document.createElement('a'); a.href = url; a.download = 'astrobot-laboratorio-evidencia.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return <div className="evidence-lab">
-    <div className="workspace-heading"><div><span className="workspace-eyebrow">PESQUISA PROSPECTIVA · V1</span><h1>Laboratório de Evidência<span>.</span></h1><p>Quatro hipóteses. Aposta fixa. Resultados verificáveis.</p></div><div className="evidence-actions">
+    <div className="workspace-heading"><div><span className="workspace-eyebrow">PESQUISA PROSPECTIVA</span><h1>Laboratório de Evidência<span>.</span></h1><p>Novos testes Range Break e históricos comparáveis. Somente simulação.</p></div><div className="evidence-actions">
       <button className="workspace-button" disabled={!ready} onClick={download}><Download size={16}/>Exportar evidências</button>
       <button className="workspace-button primary" disabled={!ready || !available || pending} onClick={() => onConfigure({ enabled: !config.enabled })}>{config.enabled ? <Pause size={16}/> : <Play size={16}/>} {config.enabled ? 'Pausar pesquisa' : 'Iniciar pesquisa simulada'}</button>
     </div></div>
     <section className="aut-card evidence-status"><FlaskConical size={22}/><div><strong>{ready ? state.status : 'Aguardando atualização do laboratório na VPS'}</strong><p>Dados e cotações da Deriv · execução indicativa · nenhuma compra real</p></div><span>{state?.lastScan ? `Atualizado ${new Date(state.lastScan).toLocaleTimeString()}` : 'Sem coleta nesta versão'}</span></section>
+    <RangeResearchPanel state={state?.rangeResearch}/>
+    <h2>Experimentos anteriores · dígitos e Rise/Fall</h2>
     <div className="evidence-rules"><span>{money(config.initialBank)} por carteira</span><span>Entrada fixa: {money(config.stake)}</span><span>Perdas brutas/dia: {money(config.dailyLossLimit)}</span><span>Drawdown máximo: {money(config.maxDrawdown)}</span><span>Sem martingale</span></div>
     <section className="aut-card"><div className="evidence-filters"><label>Resultados<select aria-label="Resultados" value={view} onChange={e => setView(e.target.value)}><option value="research">Pesquisa · todos os sinais simulados</option><option value="portfolio">Carteiras · somente entradas aprovadas</option></select></label><label>Experimento<select aria-label="Experimento" value={arm} onChange={e => setArm(e.target.value)}><option value="all">Comparar os quatro</option>{LAB_ARMS.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label></div>
       <p className="evidence-note">A pesquisa continua quando uma carteira está bloqueada. Cada carteira exige 200 resultados novos por ativo, modalidade e estratégia, duas metades positivas e limite inferior de Wilson de 99% acima do equilíbrio do payout + 2 pontos. É um filtro experimental, sujeito a correlação e testes repetidos; não comprova rentabilidade.</p>

@@ -1,9 +1,10 @@
 import { cleanCandles } from './signals.js';
+import { RangeResearch } from './RangeResearch.js';
 import { EVIDENCE_VERSION, LAB_DEFAULTS, LAB_ARMS, validateLabConfig, candidate, validTicks, metrics, evidenceGate, assetPrecision } from './evidenceStrategies.js';
 
 const round = n => Math.round(n * 100) / 100;
 export class EvidenceTrader {
-  constructor(session) { this.session = session; this.busy = false; this.destroyed = false; this.lastPoll = 0; this.metadata = {}; }
+  constructor(session) { this.session = session; this.busy = false; this.destroyed = false; this.lastPoll = 0; this.metadata = {}; this.range = new RangeResearch(this); }
   get state() {
     return this.session.modeStates[this.session.activeMode].evidenceLab ||= {
       version: EVIDENCE_VERSION, config: { ...LAB_DEFAULTS, symbols: [...LAB_DEFAULTS.symbols] }, startedAt: Date.now(),
@@ -13,7 +14,7 @@ export class EvidenceTrader {
   snapshot() {
     const s = this.state, legacy = this.session.modeStates[this.session.activeMode];
     return { ...s, samples: undefined, seen: undefined, simulationOnly: true, trades: s.trades.slice(-1500),
-      arms: LAB_ARMS, legacy: { quantum: metrics(legacy.digitLab?.trades || []), fakegale: metrics(legacy.fakegale?.trades || []), retainedOnly: true },
+      arms: LAB_ARMS, rangeResearch: this.range.snapshot(), legacy: { quantum: metrics(legacy.digitLab?.trades || []), fakegale: metrics(legacy.fakegale?.trades || []), retainedOnly: true },
       pending: s.pending.map(p => ({ id: p.id, arm: p.arm, symbol: p.symbol, contractType: p.contractType, allocated: p.allocated, createdAt: p.createdAt })) };
   }
   save() { if (!this.destroyed) { this.session.loadedFromFile = true; this.session.saveToFile(); this.session.syncToClients(); } }
@@ -61,12 +62,14 @@ export class EvidenceTrader {
   }
   async tick() {
     const s = this.state, api = this.session.derivAPI;
-    if (this.busy || this.destroyed || (!s.config.enabled && !s.pending.length) || Date.now() - this.lastPoll < 5000) return;
+    if (this.busy || this.destroyed || (!s.config.enabled && !s.pending.length && !this.range.state.positions.length) || Date.now() - this.lastPoll < 5000) return;
     if (!api.connected || !api.authorized) { s.status = 'Aguardando conexão Deriv'; return; }
     this.busy = true; this.lastPoll = Date.now(); const mode = this.session.activeMode;
     const valid = () => !this.destroyed && this.session.activeMode === mode;
     try {
       if (this.session.accountCurrency && this.session.accountCurrency !== 'USD') throw Error('Propostas requerem USD.');
+      await this.range.tick(() => s.config.enabled, valid);
+      if (!valid()) return;
       // Settle before all risk gates, pauses and day boundaries.
       for (const p of [...s.pending]) {
         const now = Date.now() / 1000;
