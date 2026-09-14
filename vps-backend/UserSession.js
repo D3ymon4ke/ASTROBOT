@@ -1,5 +1,5 @@
 import { FakegaleTrader } from './automation/FakegaleTrader.js';
-import { DigitTrader } from './automation/DigitTrader.js';
+import { EvidenceTrader as DigitTrader } from './automation/EvidenceTrader.js';
 import { telegramPreference } from './utils/telegramTemplates.js';
 import fs from 'fs';
 import path from 'path';

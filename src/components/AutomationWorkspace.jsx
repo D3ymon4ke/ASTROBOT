@@ -94,7 +94,7 @@ export default function AutomationWorkspace({ children, continuous, research, fa
   };
   return <div className="aut-workspace">
     <nav className="aut-tabs" aria-label="Áreas de automação">{[
-      ['timeline', Calendar, 'Linha do tempo'], ['continuous', Activity, 'Trader contínuo'], ['fakegale', FlaskConical, 'Contínuo Fakegale V2'], ['digitlab', Cpu, 'Laboratório Quântico (M1)'], ['lab', FlaskConical, 'Laboratório']
+      ['timeline', Calendar, 'Linha do tempo'], ['continuous', Activity, 'Trader contínuo'], ['fakegale', FlaskConical, 'Fakegale V2 · histórico'], ['digitlab', Cpu, 'Laboratório de Evidência'], ['lab', FlaskConical, 'Pesquisa & Replay']
     ].map(([id, Icon, label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}<span className="aut-account">{accountMode === 'demo' ? 'CONTA DEMO' : 'CONTA REAL'}</span></nav>
     {notice && <p className="aut-notice" role="status">{notice}</p>}
     {tab === 'timeline' && children}
@@ -133,7 +133,7 @@ export default function AutomationWorkspace({ children, continuous, research, fa
     {tab === 'lab' && <>
       <div className="aut-columns">
         <section className="aut-card"><h2>Fakegale V2 · laboratório ao vivo</h2><p>{fakegale?.status || 'Aguardando VPS'} · modalidade MHI independente, somente simulada.</p><button className="workspace-button" onClick={() => setTab('fakegale')}>Abrir gráfico do Fakegale V2</button></section>
-        <section className="aut-card"><h2>Laboratório de Dígitos Quantum · QD-Differ</h2><p>{digitLab?.status || 'Aguardando VPS'} · 90% probabilidade matemática, detecção de anomalias.</p><button className="workspace-button" onClick={() => setTab('digitlab')}>Abrir Laboratório de Dígitos</button></section>
+        <section className="aut-card"><h2>Laboratório de Evidência</h2><p>{digitLab?.status || 'Aguardando VPS'} · quatro experimentos prospectivos, carteiras simuladas e controle de dígitos.</p><button className="workspace-button" onClick={() => setTab('digitlab')}>Comparar experimentos</button></section>
       </div>
 
       <div className="workspace-heading"><div><span className="workspace-eyebrow">PESQUISA / VALIDAÇÃO</span><h1>Laboratório de estratégias<span>.</span></h1><p>Separe evidência, simulação e execução antes de decidir.</p></div><button className="workspace-button" onClick={() => download('astrobot-laboratorio.json', { accountMode, source, rows, metrics: summarize(rows), stress, walkForward: labResult, events: continuous?.events || [] })}><Download size={15} />Exportar análise</button></div>
