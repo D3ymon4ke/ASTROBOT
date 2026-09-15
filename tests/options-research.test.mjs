@@ -89,9 +89,10 @@ test('forex uses Deriv Rise/Fall duration without a barrier and reports the cand
   const original=Date.now;Date.now=()=>now*1000;
   try{
     const {engine,calls,session}=fixture(async req=>({proposal:{id:'quote',spot:1.07,spot_time:now,ask_price:.5,payout:.94,date_expiry:now+900}}));
-    const {m15,m5}=bars();engine.metadata={frxEURUSD:5,frxGBPUSD:5};session.derivAPI.fetchCandleHistory=async(_,granularity)=>granularity===900?m15:m5;
+    const {m15,m5}=bars();engine.metadata={frxEURUSD:5,frxGBPUSD:5};engine.state.scans.forex='Indisponível: Invalid barrier.';session.derivAPI.fetchCandleHistory=async(_,granularity)=>granularity===900?m15:m5;
     await engine.scanForex(()=>true,()=>true);
     assert.equal(engine.state.positions.length,2);
+    assert.equal(engine.state.scans.forex,undefined);
     assert.ok(calls.every(req=>req.contract_type==='CALL'&&req.duration===15&&req.duration_unit==='m'&&!('barrier'in req)&&!('buy'in req)));
     assert.equal(forexEvaluation(m15.slice(40),m5,now).reason,'Histórico M15 insuficiente ou descontínuo (24 velas)');
   }finally{Date.now=original;}

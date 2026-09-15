@@ -9,7 +9,7 @@ export class OptionsResearch {
       version: OPTIONS_VERSION, startedAt: Date.now(), positions: [], trades: [], ledgers: {}, seen: {}, scans: {}, events: [], lastScan: 0
     };
     state.learning=ensureAdaptiveNetwork(state.learning);
-    if(state.version!==OPTIONS_VERSION){state.version=OPTIONS_VERSION;state.retiredAccumulatorAt ||= Date.now();state.scans.accu='Encerrado após resultado líquido negativo; histórico preservado';}
+    if(state.version!==OPTIONS_VERSION){state.version=OPTIONS_VERSION;state.retiredAccumulatorAt ||= Date.now();state.scans.accu='Encerrado após resultado líquido negativo; histórico preservado';delete state.scans.forex;}
     return state;
   }
   snapshot() { const state=this.state, quality=adaptiveQuality(state.learning); return { ...state, seen: undefined, learning:{...quality,lastPrediction:state.learning.lastPrediction,lastTrainedAt:state.learning.lastTrainedAt,version:state.learning.version}, simulationOnly: true, arms: OPTIONS_ARMS,
@@ -102,6 +102,7 @@ export class OptionsResearch {
   async scanForex(enabled, valid) {
     const s = this.state, api = this.owner.session.derivAPI, now = Date.now()/1000, slot = Math.floor(now/300);
     if (!forexWindow(now)) { s.scans.forex = 'Fora da janela de pesquisa: segunda a sexta, 07–17 UTC'; return; }
+    delete s.scans.forex;
     for (const symbol of ['frxEURUSD','frxGBPUSD']) {
       if (!valid() || !enabled()) return;
       if (s.seen[symbol] === slot || s.positions.some(p=>p.symbol===symbol)) continue;
