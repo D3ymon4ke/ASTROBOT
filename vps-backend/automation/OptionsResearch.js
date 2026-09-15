@@ -103,7 +103,8 @@ export class OptionsResearch {
     const s = this.state, api = this.owner.session.derivAPI, now = Date.now()/1000, slot = Math.floor(now/300);
     if (!forexWindow(now)) { s.scans.forex = 'Fora da janela de pesquisa: segunda a sexta, 07–17 UTC'; return; }
     delete s.scans.forex;
-    for (const symbol of ['frxEURUSD','frxGBPUSD']) {
+    const symbols=slot%2?['frxGBPUSD','frxEURUSD']:['frxEURUSD','frxGBPUSD'];
+    for (const symbol of symbols) {
       if (!valid() || !enabled()) return;
       if (s.seen[symbol] === slot || s.positions.some(p=>p.symbol===symbol)) continue;
       // Wait for closed candles, but don't retry expired signals within the same slot.
@@ -130,7 +131,8 @@ export class OptionsResearch {
   async scanReset(enabled,valid) {
     const s=this.state,api=this.owner.session.derivAPI,now=Date.now()/1000,slot=Math.floor(now/900);
     if(!resetWindow(now)){s.scans.reset='Pausa antes do reset diário UTC; evita vencimento atravessando a mudança de base';return;}
-    for(const symbol of ['RDBULL','RDBEAR']){
+    const symbols=slot%2?['RDBEAR','RDBULL']:['RDBULL','RDBEAR'];
+    for(const symbol of symbols){
       if(!valid()||!enabled())return;
       const key=`reset:${symbol}`;
       if(s.seen[key]===slot||s.positions.some(p=>p.family==='reset'&&p.symbol===symbol))continue;

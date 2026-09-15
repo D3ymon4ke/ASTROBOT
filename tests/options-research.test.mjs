@@ -112,6 +112,21 @@ test('Daily Reset quotes both directions with separate payouts and settles paire
   await engine.tick(()=>false,()=>true);
   assert.deepEqual(engine.state.trades.map(r=>r.profit),[.39,-.5]);assert.equal(engine.state.positions.length,0);
 });
+test('paired wallet allocation alternates Daily Reset symbol priority by scan slot',async()=>{
+  const original=Date.now;let firstSymbol;
+  try{
+    for(const epoch of [now,now+900]){
+      Date.now=()=>epoch*1000;
+      const {engine}=fixture(async req=>({proposal:{id:'q',spot:100,spot_time:epoch,ask_price:.5,payout:.9,date_expiry:epoch+900}}));
+      engine.metadata={RDBULL:2,RDBEAR:2};await engine.scanReset(()=>true,()=>true);
+      assert.equal(engine.state.positions.length,2);
+      assert.equal(engine.state.positions[0].legs.every(l=>l.allocated),true);
+      assert.equal(engine.state.positions[1].legs.every(l=>!l.allocated),true);
+      if(firstSymbol)assert.notEqual(engine.state.positions[0].symbol,firstSymbol);
+      else firstSymbol=engine.state.positions[0].symbol;
+    }
+  }finally{Date.now=original;}
+});
 test('retired Accumulator remains in the audit but cannot scan for new proposals',async()=>{
   const {engine,calls}=fixture();engine.metadata={RDBULL:2,RDBEAR:2};engine.scanForex=async()=>{};engine.scanReset=async()=>{};engine.scanAccumulator=async()=>{throw Error('retired scanner invoked');};
   engine.state.version='forex-accumulator-v1';engine.state.trades=[{arm:'accu_3',profit:-1}];await engine.tick(()=>true,()=>true);
