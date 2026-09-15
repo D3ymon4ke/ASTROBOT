@@ -1,20 +1,23 @@
 import { cleanCandles } from './signals.js';
 import { RangeResearch } from './RangeResearch.js';
+import { OptionsResearch } from './OptionsResearch.js';
 import { EVIDENCE_VERSION, LAB_DEFAULTS, LAB_ARMS, validateLabConfig, candidate, validTicks, metrics, evidenceGate, assetPrecision } from './evidenceStrategies.js';
 
 const round = n => Math.round(n * 100) / 100;
 export class EvidenceTrader {
-  constructor(session) { this.session = session; this.busy = false; this.destroyed = false; this.lastPoll = 0; this.metadata = {}; this.range = new RangeResearch(this); }
+  constructor(session) { this.session = session; this.busy = false; this.destroyed = false; this.lastPoll = 0; this.metadata = {}; this.range = new RangeResearch(this); this.options = new OptionsResearch(this); }
   get state() {
-    return this.session.modeStates[this.session.activeMode].evidenceLab ||= {
+    const state = this.session.modeStates[this.session.activeMode].evidenceLab ||= {
       version: EVIDENCE_VERSION, config: { ...LAB_DEFAULTS, symbols: [...LAB_DEFAULTS.symbols] }, startedAt: Date.now(),
-      pending: [], trades: [], ledgers: {}, samples: {}, seen: {}, matrix: {}, events: [], lastScan: 0, errors: 0, cursor: 0, status: 'Pronto para iniciar pesquisa prospectiva'
+      pending: [], trades: [], ledgers: {}, samples: {}, seen: {}, matrix: {}, events: [], lastScan: 0, errors: 0, cursor: 0, status: 'Experimentos anteriores encerrados', retiredAt: Date.now()
     };
+    state.retiredAt ||= Date.now();
+    return state;
   }
   snapshot() {
     const s = this.state, legacy = this.session.modeStates[this.session.activeMode];
     return { ...s, samples: undefined, seen: undefined, simulationOnly: true, trades: s.trades.slice(-1500),
-      arms: LAB_ARMS, rangeResearch: this.range.snapshot(), legacy: { quantum: metrics(legacy.digitLab?.trades || []), fakegale: metrics(legacy.fakegale?.trades || []), retainedOnly: true },
+      arms: LAB_ARMS, rangeResearch: this.range.snapshot(), optionsResearch: this.options.snapshot(), legacy: { quantum: metrics(legacy.digitLab?.trades || []), fakegale: metrics(legacy.fakegale?.trades || []), retainedOnly: true },
       pending: s.pending.map(p => ({ id: p.id, arm: p.arm, symbol: p.symbol, contractType: p.contractType, allocated: p.allocated, createdAt: p.createdAt })) };
   }
   save() { if (!this.destroyed) { this.session.loadedFromFile = true; this.session.saveToFile(); this.session.syncToClients(); } }
@@ -24,7 +27,7 @@ export class EvidenceTrader {
     if (Object.keys(patch || {}).some(k => k !== 'enabled') && (s.trades.length || s.pending.length || this.busy)) throw Error('Parâmetros congelados após o início para preservar a comparação.');
     s.config = validateLabConfig(patch, s.config);
     if (s.config.enabled && !this.session.derivAPI.connected) this.session.connectDeriv();
-    s.status = s.config.enabled ? 'Pesquisa ativa · somente simulação' : 'Pausado · pendências serão apuradas'; this.save();
+    s.status = s.config.enabled ? 'Nova fase ativa · Forex e Accumulator · somente simulação' : 'Pausado · pendências serão apuradas'; this.save();
   }
   ledger(arm) {
     const s = this.state;
@@ -62,13 +65,16 @@ export class EvidenceTrader {
   }
   async tick() {
     const s = this.state, api = this.session.derivAPI;
-    if (this.busy || this.destroyed || (!s.config.enabled && !s.pending.length && !this.range.state.positions.length) || Date.now() - this.lastPoll < 5000) return;
+    if (this.busy || this.destroyed || (!s.config.enabled && !s.pending.length && !this.range.state.positions.length && !this.options.state.positions.length) || Date.now() - this.lastPoll < 5000) return;
     if (!api.connected || !api.authorized) { s.status = 'Aguardando conexão Deriv'; return; }
     this.busy = true; this.lastPoll = Date.now(); const mode = this.session.activeMode;
     const valid = () => !this.destroyed && this.session.activeMode === mode;
     try {
       if (this.session.accountCurrency && this.session.accountCurrency !== 'USD') throw Error('Propostas requerem USD.');
-      await this.range.tick(() => s.config.enabled, valid);
+      // Range Break and the first evidence arms are retired. Existing positions/results are preserved and settled.
+      await this.range.tick(() => false, valid);
+      if (!valid()) return;
+      await this.options.tick(() => s.config.enabled, valid);
       if (!valid()) return;
       // Settle before all risk gates, pauses and day boundaries.
       for (const p of [...s.pending]) {
@@ -84,7 +90,7 @@ export class EvidenceTrader {
         if (entry.epoch - p.anchor > 5 || (p.unit === 't' ? exit.epoch - entry.epoch > 5 : exit.epoch - entry.epoch - p.duration * 60 > 5)) { this.exclude(p, 'lacuna nos ticks'); continue; }
         this.settle(p, entry, exit);
       }
-      if (s.config.enabled) {
+      if (!s.retiredAt && s.config.enabled) {
         if (!Object.keys(this.metadata).length) {
           const r = await api.sendRequest({ active_symbols: 'brief' }); if (!valid()) return;
           for (const asset of r.active_symbols || []) {
@@ -126,7 +132,7 @@ export class EvidenceTrader {
             duration: arm.duration, precision, stake, payout, createdAt, anchor: createdAt / 1000 + 1, allocated, evidence });
         }
       }
-      s.lastScan = Date.now(); s.errors = 0; s.status = s.config.enabled ? 'Pesquisa ativa · quatro hipóteses · sem compras' : 'Pausado';
+      s.lastScan = Date.now(); s.errors = 0; s.status = s.config.enabled ? 'Nova fase ativa · Forex e Accumulator · sem compras' : 'Pausado';
     } catch (e) {
       s.errors++; s.status = `Falha na pesquisa: ${e.message}`; this.event(s.status);
       if (s.errors >= 5) s.config.enabled = false;

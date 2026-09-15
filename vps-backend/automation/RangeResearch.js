@@ -9,7 +9,7 @@ export class RangeResearch {
       version: RANGE_VERSION, startedAt: Date.now(), trades: [], positions: [], ledgers: {}, seen: {}, status: 'Aguardando canal confirmado', scans: {}, costs: {}, events: []
     };
   }
-  snapshot() { return { ...this.state, seen: undefined, arms: RANGE_ARMS, rules: RANGE_RULES, simulationOnly: true }; }
+  snapshot() { return { ...this.state, seen: undefined, arms: RANGE_ARMS, rules: RANGE_RULES, simulationOnly: true, retired: true }; }
   ledger(arm) { return this.state.ledgers[arm] ||= { bank: 100, peak: 100, drawdown: 0, day: '', dayLoss: 0, count: 0, reserved: 0 }; }
   event(message) { this.state.events = [...this.state.events, { time: Date.now(), message }].slice(-30); }
   close(p, tick, reason) {

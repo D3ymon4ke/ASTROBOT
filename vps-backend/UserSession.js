@@ -866,7 +866,7 @@ export class UserSession {
   updateSettings(newSettings) {
     const continuous = this.continuous.state;
     if ((newSettings.isDemo !== undefined && newSettings.isDemo !== this.settings.isDemo || newSettings.token !== undefined && newSettings.token !== this.settings.token || newSettings.appId !== undefined && newSettings.appId !== this.settings.appId)
-      && (continuous.config.enabled || continuous.position || continuous.shadows.length || this.continuous.busy || this.research.state.enabled || this.research.busy || this.fakegale.state.config.enabled || this.fakegale.state.pending.length || this.fakegale.busy || this.digitLab.state.config.enabled || this.digitLab.state.pending.length || this.digitLab.range.state.positions.length || this.digitLab.busy || this.activeContractId || this.modeStates[this.activeMode].legacyOrder)) {
+      && (continuous.config.enabled || continuous.position || continuous.shadows.length || this.continuous.busy || this.research.state.enabled || this.research.busy || this.fakegale.state.config.enabled || this.fakegale.state.pending.length || this.fakegale.busy || this.digitLab.state.config.enabled || this.digitLab.state.pending.length || this.digitLab.range.state.positions.length || this.digitLab.options.state.positions.length || this.digitLab.busy || this.activeContractId || this.modeStates[this.activeMode].legacyOrder)) {
       this.addLog({ message: 'Pause o Trader Contínuo e o gravador, e aguarde as operações antes de trocar a conta ou credenciais.', type: 'warning' });
       return;
     }
