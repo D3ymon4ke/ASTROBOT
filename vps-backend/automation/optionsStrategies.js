@@ -2,6 +2,7 @@ export const OPTIONS_VERSION = 'forex-accumulator-v1';
 export const OPTIONS_ARMS = [
   { id: 'forex_pullback', name: 'Forex · retomada', family: 'forex', stake: .5 },
   { id: 'forex_control', name: 'Forex · tendência sem recuo', family: 'forex', stake: .5 },
+  { id: 'forex_adaptive', name: 'Forex · rede adaptativa', family: 'forex', stake: .5 },
   { id: 'accu_3', name: 'Accumulator · 3 ticks', family: 'accu', stake: 1, ticks: 3 },
   { id: 'accu_5', name: 'Accumulator · 5 ticks', family: 'accu', stake: 1, ticks: 5 }
 ];
@@ -14,6 +15,20 @@ export function forexWindow(now) {
   const d = new Date(now * 1000);
   return d.getUTCDay() >= 1 && d.getUTCDay() <= 5 && d.getUTCHours() >= 7 && d.getUTCHours() < 17;
 }
+const utcEpoch = (date, hour) => Date.UTC(date.getUTCFullYear(),date.getUTCMonth(),date.getUTCDate(),hour)/1000;
+export function forexSchedule(now) {
+  const date=new Date(now*1000), open=forexWindow(now);
+  let nextOpen=null;
+  for(let offset=0;offset<8;offset++) {
+    const day=new Date((now+offset*86400)*1000), candidate=utcEpoch(day,7), weekday=day.getUTCDay();
+    if(weekday>=1&&weekday<=5&&candidate>now){nextOpen=candidate;break;}
+  }
+  const closesAt=open?utcEpoch(date,17):null;
+  const boundary=Math.floor(now/300)*300+300;
+  const nextScan=open&&boundary<closesAt?boundary:nextOpen;
+  return { open, nextOpen, closesAt, nextScan };
+}
+export const nextAccumulatorScan = now => Math.floor(now/60)*60+60;
 export function forexSignal(m15, m5, now) {
   if (!forexWindow(now)) return null;
   const trend = closedBars(m15,900,now,60), entry = closedBars(m5,300,now,30);
@@ -24,7 +39,16 @@ export function forexSignal(m15, m5, now) {
   const filtered = direction === 1
     ? previous.low <= local.at(-2) && previous.close < previous.open && last.close > previous.high && last.close > last.open
     : previous.high >= local.at(-2) && previous.close > previous.open && last.close < previous.low && last.close < last.open;
-  return { direction, filtered, key: last.epoch, signalEpoch: last.epoch + 300, contractType: direction === 1 ? 'CALL' : 'PUT' };
+  const scale=Math.max(1e-8,trend.slice(-20).reduce((sum,c)=>sum+c.high-c.low,0)/20);
+  const localScale=Math.max(1e-8,entry.slice(-20).reduce((sum,c)=>sum+c.high-c.low,0)/20);
+  const features=[
+    direction*(fast.at(-1)-slow.at(-1))/scale,
+    direction*(fast.at(-1)-fast.at(-5))/scale,
+    direction*(last.close-fast.at(-1))/scale,
+    direction*(last.close-last.open)/localScale,
+    direction*(local.at(-2)-(direction===1?previous.low:previous.high))/localScale
+  ].map(value=>Math.max(-3,Math.min(3,value)));
+  return { direction, filtered, features, key: last.epoch, signalEpoch: last.epoch + 300, contractType: direction === 1 ? 'CALL' : 'PUT' };
 }
 export function accumulatorTerms(q) {
   const d = q?.contract_details, ratio = Number(d?.tick_size_barrier), spot = Number(q?.spot);

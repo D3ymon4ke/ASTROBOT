@@ -1,15 +1,17 @@
 import { OPTIONS_VERSION, OPTIONS_ARMS, forexWindow, forexSignal, accumulatorTerms, accumulatorStep, accuProfit } from './optionsStrategies.js';
 import { assetPrecision, validTicks } from './evidenceStrategies.js';
+import { ensureAdaptiveNetwork, adaptivePredict, trainAdaptiveNetwork, adaptiveDecision, adaptiveQuality } from './adaptiveNetwork.js';
 const round = value => Math.round(value * 100) / 100;
 export class OptionsResearch {
   constructor(owner) { this.owner = owner; this.lastPoll = 0; this.metadata = {}; }
   get state() {
-    return this.owner.session.modeStates[this.owner.session.activeMode].optionsResearch ||= {
+    const state=this.owner.session.modeStates[this.owner.session.activeMode].optionsResearch ||= {
       version: OPTIONS_VERSION, startedAt: Date.now(), positions: [], trades: [], ledgers: {}, seen: {}, scans: {}, events: [], lastScan: 0
     };
+    state.learning=ensureAdaptiveNetwork(state.learning); return state;
   }
-  snapshot() { return { ...this.state, seen: undefined, simulationOnly: true, arms: OPTIONS_ARMS,
-    trades: OPTIONS_ARMS.flatMap(a => this.state.trades.filter(r => r.arm === a.id).slice(-300)) }; }
+  snapshot() { const state=this.state, quality=adaptiveQuality(state.learning); return { ...state, seen: undefined, learning:{...quality,lastPrediction:state.learning.lastPrediction,lastTrainedAt:state.learning.lastTrainedAt,version:state.learning.version}, simulationOnly: true, arms: OPTIONS_ARMS,
+    trades: OPTIONS_ARMS.flatMap(a => state.trades.filter(r => r.arm === a.id).slice(-300)) }; }
   event(message) { this.state.events = [...this.state.events, { time: Date.now(), message }].slice(-30); }
   ledger(arm) { return this.state.ledgers[arm] ||= { bank: 100, peak: 100, drawdown: 0, count: 0, day: '', dayLoss: 0, reserved: 0 }; }
   reserve(arm, stake) {
@@ -46,6 +48,10 @@ export class OptionsResearch {
       if (!exit) { p.blocked = 'Ticks de vencimento ausentes; risco reservado'; return; }
       const win = p.direction * (exit.price-p.entry) > 0;
       for (const leg of p.legs) this.record(p,leg,win ? p.payout-p.stake : -p.stake,exit,{ payout:p.payout,expiry:p.expiry,contractType:p.contractType });
+      if (!p.learningTrained && Array.isArray(p.features)) {
+        trainAdaptiveNetwork(this.state.learning,p.features,win,p.prediction);
+        p.learningTrained=true;
+      }
       return;
     }
     const future = ticks.filter(t => t.epoch > (p.lastEpoch ?? p.anchor));
@@ -105,10 +111,12 @@ export class OptionsResearch {
       if (!valid() || !enabled()) return;
       const q = r.proposal, createdAt = Date.now(), payout = Number(q?.payout);
       if (!this.fresh(q,.5,createdAt/1000,30) || !(payout>.5) || Number(q.date_expiry)!==expiry || createdAt/1000-signal.signalEpoch>45 || !forexWindow(createdAt/1000)) { s.scans[symbol] = 'Proposta inválida ou sinal vencido'; continue; }
+      const prediction=adaptivePredict(s.learning,signal.features), decision=adaptiveDecision(s.learning,prediction.probability,.5,payout);
       const arms = signal.filtered ? ['forex_control','forex_pullback'] : ['forex_control'];
+      if(decision.qualified) arms.push('forex_adaptive');
       s.positions.push({ id:`forex:${symbol}:${slot}`,family:'forex',symbol,precision,stake:.5,payout,expiry,contractType:signal.contractType,direction:signal.direction,
-        createdAt,anchor:createdAt/1000+1,legs:arms.map(arm=>({arm,allocated:this.reserve(arm,.5)})) });
-      s.scans[symbol] = signal.filtered ? 'Retomada e controle simulados na mesma entrada' : 'Referência de tendência; filtro de retomada não passou';
+        createdAt,anchor:createdAt/1000+1,features:signal.features,prediction:prediction.probability,hidden:prediction.hidden,adaptiveReason:decision.reason,legs:arms.map(arm=>({arm,allocated:this.reserve(arm,.5)})) });
+      s.scans[symbol] = `${signal.filtered?'Retomada + controle':'Controle sem retomada'} · rede ${(prediction.probability*100).toFixed(1)}% · ${decision.reason}`;
     }
   }
   async tick(enabled, valid) {

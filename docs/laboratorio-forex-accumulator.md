@@ -1,6 +1,6 @@
 # Laboratório Forex e Accumulator — fase prospectiva 2
 
-Implementado em 15/09/2026. Quatro variantes exclusivamente simuladas substituem a coleta dos experimentos anteriores. Não há chamadas `buy` ou `sell`, promoção automática para conta real, martingale ou alteração da linha do tempo e do Trader Contínuo.
+Implementado em 15/09/2026. Cinco variantes exclusivamente simuladas substituem a coleta dos experimentos anteriores. Não há chamadas `buy` ou `sell`, promoção automática para conta real, martingale ou alteração da linha do tempo e do Trader Contínuo.
 
 Os resultados de Evidência V1, Range Break, Quântico e Fakegale foram preservados para exportação e auditoria, mas deixaram de gerar sinais. Uma pendência anterior é apurada normalmente antes de o experimento ser encerrado. Range Break deixa de abrir posições; uma posição já existente, se houver, continua sendo apurada.
 
@@ -16,6 +16,20 @@ Ativos EUR/USD e GBP/USD. A API confirmou Rise/Fall com duração mínima de 15 
 - Entrada: primeiro tick depois da proposta + um segundo. Vencimento: último tick válido no intervalo de 30 segundos terminado no tempo explícito. Tick posterior ao vencimento nunca altera o resultado.
 
 Não são usados sinais fora da janela, candles em formação, séries com gaps, proposta stale ou payout inválido. Forex não funciona 24/7; essa limitação é exibida no painel.
+
+### Rede adaptativa online
+
+A terceira variante Forex é uma rede neural local 5→4→1, pequena o suficiente para ser auditada e persistida junto ao estado da conta. Não usa serviço externo nem modelo de linguagem. Os cinco atributos são calculados somente com candles já fechados: separação EMA 20/50, inclinação da EMA 20, distância do fechamento à EMA, força direcional do candle M5 e profundidade do recuo.
+
+A previsão é salva antes da entrada. Somente após o vencimento ela recebe o rótulo win/loss e atualiza os pesos por gradiente com regularização e limites numéricos. Esse desenho impede que o próprio resultado entre nas variáveis de entrada. O treinamento usa todas as oportunidades do controle, inclusive quando a carteira adaptativa ainda não pode operar.
+
+A variante adaptativa permanece em observação por pelo menos 100 resultados. Depois disso, ela só simula uma entrada se o erro Brier prequential dos 100 casos mais recentes superar uma referência de frequência histórica por margem de 0,005 e se a probabilidade prevista superar a taxa de equilíbrio do payout em quatro pontos percentuais. A qualificação pode voltar a ser bloqueada quando a qualidade piora. Essa barreira reduz decisões por sobreconfiança, mas não demonstra vantagem econômica.
+
+## Relógios e visualização ao vivo
+
+O painel calcula a abertura/fechamento Forex em UTC, incluindo a passagem do fim de semana, e mostra a próxima fronteira M5 elegível. Para Accumulator, mostra a próxima coleta de um minuto e explicita que o mercado é 24/7. Os contadores indicam varreduras prováveis; uma entrada só aparece se dados, sinal e proposta passarem pelos filtros.
+
+A visualização da rede mostra o fluxo dos cinco atributos pelos quatro neurônios até a probabilidade, seguido por simulação, encerramento e feedback. A animação respeita `prefers-reduced-motion`. Métricas exibidas: amostra, acerto observado, erro Brier e erro da referência.
 
 ## Accumulator: 3 e 5 ticks
 
@@ -37,7 +51,7 @@ Até 1.500 registros por variante permanecem no backend e 300 por variante são 
 
 ## Validação
 
-102 testes passaram, incluindo causalidade M15/M5, janela Forex, controle pareado, proposta do Accumulator, barreira móvel, arredondamento ambíguo, entrada futura, knockout após a saída nominal, atraso de um tick, vencimento Forex, gaps, pausa, orçamento e isolamento entre contas. Build Vite concluído. A interface foi verificada no Edge headless em desktop e mobile, com rede externa interceptada e confirmação de que nenhum comando real foi enviado.
+104 testes passaram, incluindo causalidade M15/M5, relógio até segunda-feira, previsão anterior ao rótulo, treinamento único após vencimento, trava adaptativa, proposta do Accumulator, barreira móvel, arredondamento ambíguo, entrada futura, knockout após a saída nominal, atraso de um tick, gaps, pausa, orçamento e isolamento entre contas. Build Vite concluído. A interface foi verificada no Edge headless em desktop e mobile, com rede externa interceptada e confirmação de que nenhum comando real foi enviado.
 
 Testes de software não demonstram rentabilidade. O objetivo desta fase é medir lucro líquido, drawdown e estabilidade com regras congeladas antes da coleta.
 

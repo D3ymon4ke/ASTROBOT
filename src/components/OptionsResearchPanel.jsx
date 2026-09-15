@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { OPTIONS_ARMS } from '../../vps-backend/automation/optionsStrategies.js';
 import { metrics } from '../../vps-backend/automation/evidenceStrategies.js';
+import ResearchPulse from './ResearchPulse.jsx';
+import LiveLearningNetwork from './LiveLearningNetwork.jsx';
 const money = value => Number(value || 0).toLocaleString('en-US',{style:'currency',currency:'USD'});
-const colors = ['#71d5c2','#baacff'];
+const colors = ['#71d5c2','#baacff','#67a7ff'];
 function Curves({ arms, rows, title }) {
   const series = arms.map(a=>{
     let sum=0;
@@ -21,16 +23,17 @@ function Curves({ arms, rows, title }) {
 export default function OptionsResearchPanel({ state }) {
   const [scope,setScope]=useState('research'),[scenario,setScenario]=useState('delay');
   const all=state?.trades||[], rows=all.filter(r=>scope==='research'||r.allocated);
-  return <section className="aut-card">
-    <span className="workspace-eyebrow">NOVOS TESTES · FOREX + ACCUMULATOR</span><h2>Retomada de tendência e saídas curtas</h2>
-    <p>Somente simulação, sem martingale. Iniciam e pausam pelo botão do laboratório. {state?.lastScan?`Última coleta: ${new Date(state.lastScan).toLocaleTimeString()}`:'Aguardando primeira coleta na VPS.'}</p>
+  return <section className="aut-card options-workspace">
+    <div className="options-intro"><div><span className="workspace-eyebrow">MESA DE PESQUISA · AO VIVO</span><h2>Mercados, sinais e aprendizado adaptativo</h2><p>Somente simulação, sem martingale. {state?.lastScan?`Última coleta: ${new Date(state.lastScan).toLocaleTimeString()}`:'Aguardando primeira coleta na VPS.'}</p></div><span className="simulation-seal">SIMULAÇÃO<br/>SEM COMPRAS</span></div>
+    <ResearchPulse state={state}/>
+    <LiveLearningNetwork state={state}/>
     <div className="evidence-filters"><label>Escopo dos novos testes<select aria-label="Escopo dos novos testes" value={scope} onChange={e=>setScope(e.target.value)}><option value="research">Pesquisa · todos os sinais</option><option value="wallet">Carteiras · com orçamento de risco</option></select></label><label>Apuração do Accumulator<select aria-label="Apuração do Accumulator" value={scenario} onChange={e=>setScenario(e.target.value)}><option value="delay">Saída com atraso de 1 tick</option><option value="nominal">Saída no tick planejado</option></select></label></div>
     <p className="evidence-note">Carteiras independentes de $100, perda bruta diária de $3 e drawdown máximo de $15. A pesquisa continua coletando quando o orçamento de uma carteira bloqueia alocações. Até 300 registros por variante no painel; saldos são cumulativos. Nenhum teste comprova rentabilidade.</p>
     {['forex','accu'].map(family=>{
       const arms=OPTIONS_ARMS.filter(a=>a.family===family);
       const selected=rows.filter(r=>arms.some(a=>a.id===r.arm)).map(r=>family==='accu'&&scenario==='nominal'?{...r,profit:r.nominalProfit}:r);
       return <div key={family} style={{marginTop:24}}><h3>{family==='forex'?'Forex · EUR/USD e GBP/USD':'Accumulator · R_100 e 1HZ50V'}</h3>
-        <p>{family==='forex'?'Tendência por EMA 20/50 em M15; recuo e retomada em M5. Rise/Fall de 15 minutos, entrada de $0.50. Segunda a sexta, 07–17 UTC (04–14 em Brasília). O controle segue a tendência sem exigir recuo.':'Crescimento de 1%, entrada de $1. Saídas após 3 e 5 ticks sobrevividos, partindo da mesma entrada. Barreiras recalculadas a cada tick com o parâmetro da proposta. Knockout perde a entrada inteira.'}</p>
+        <p>{family==='forex'?'Tendência por EMA 20/50 em M15; recuo e retomada em M5. Rise/Fall de 15 minutos, entrada de $0.50. Segunda a sexta, 07–17 UTC (04–14 em Brasília). A terceira variante aprende com todos os resultados do controle e precisa provar melhora antes de simular entradas próprias.':'Crescimento de 1%, entrada de $1. Saídas após 3 e 5 ticks sobrevividos, partindo da mesma entrada. Barreiras recalculadas a cada tick com o parâmetro da proposta. Knockout perde a entrada inteira.'}</p>
         <div className="evidence-cards">{arms.map((a,i)=>{
           const m=metrics(selected.filter(r=>r.arm===a.id)),l=state?.ledgers?.[a.id];
           return <article key={a.id} style={{borderTop:`2px solid ${colors[i]}`,paddingTop:12}}><h3 style={{color:colors[i]}}>{a.name}</h3><div className="evidence-pair"><span>Resultado da seleção<strong className={m.net<0?'negative':'positive'}>{money(m.net)}</strong><small>{m.count} operações · {m.winRate==null?'—':m.winRate.toFixed(1)+'%'} acerto</small></span><span>Carteira acumulada<strong>{money(l?.bank??100)}</strong><small>{l?.count||0} alocações · queda {money(l?.drawdown)}</small></span></div></article>;
