@@ -94,7 +94,7 @@ export default function AutomationWorkspace({ children, continuous, research, fa
   };
   return <div className="aut-workspace">
     <nav className="aut-tabs" aria-label="Áreas de automação">{[
-      ['timeline', Calendar, 'Linha do tempo'], ['continuous', Activity, 'Trader contínuo'], ['fakegale', FlaskConical, 'Fakegale V2 · histórico'], ['digitlab', Cpu, 'Laboratório de Evidência'], ['lab', FlaskConical, 'Pesquisa & Replay']
+      ['timeline', Calendar, 'Linha do tempo'], ['continuous', Activity, 'Trader contínuo'], ['fakegale', FlaskConical, 'Fakegale Regime V3'], ['digitlab', Cpu, 'Laboratório de Evidência'], ['lab', FlaskConical, 'Pesquisa & Replay']
     ].map(([id, Icon, label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}<span className="aut-account">{accountMode === 'demo' ? 'CONTA DEMO' : 'CONTA REAL'}</span></nav>
     {notice && <p className="aut-notice" role="status">{notice}</p>}
     {tab === 'timeline' && children}
@@ -132,7 +132,7 @@ export default function AutomationWorkspace({ children, continuous, research, fa
     </>}
     {tab === 'lab' && <>
       <div className="aut-columns">
-        <section className="aut-card"><h2>Fakegale V2 · laboratório ao vivo</h2><p>{fakegale?.status || 'Aguardando VPS'} · modalidade MHI independente, somente simulada.</p><button className="workspace-button" onClick={() => setTab('fakegale')}>Abrir gráfico do Fakegale V2</button></section>
+        <section className="aut-card"><h2>Fakegale Regime V3 · laboratório ao vivo</h2><p>{fakegale?.status || 'Aguardando VPS'} · reversão contra continuação após sequências M1, somente simulado.</p><button className="workspace-button" onClick={() => setTab('fakegale')}>Abrir comparação do Fakegale V3</button></section>
         <section className="aut-card"><h2>Laboratório de Evidência</h2><p>{digitLab?.status || 'Aguardando VPS'} · quatro experimentos prospectivos, carteiras simuladas e controle de dígitos.</p><button className="workspace-button" onClick={() => setTab('digitlab')}>Comparar experimentos</button></section>
       </div>
 

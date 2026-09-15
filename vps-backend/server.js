@@ -499,7 +499,7 @@ wss.on('connection', (ws) => {
         session.startBot();
       } else if (type === 'fakegale_config') {
         session.fakegale.configure(payload.config);
-        ws.send(JSON.stringify({ type: 'automation_result', message: 'Fakegale V2 atualizado: somente simulação.' }));
+        ws.send(JSON.stringify({ type: 'automation_result', message: 'Fakegale Regime V3 atualizado: somente simulação.' }));
       } else if (type === 'digit_config') {
         session.digitLab.configure(payload.config);
         ws.send(JSON.stringify({ type: 'automation_result', message: 'Laboratório de Dígitos atualizado: somente simulação.' }));
