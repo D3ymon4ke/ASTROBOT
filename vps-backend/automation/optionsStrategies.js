@@ -1,10 +1,12 @@
-export const OPTIONS_VERSION = 'forex-accumulator-v1';
+export const OPTIONS_VERSION = 'forex-reset-v2';
 export const OPTIONS_ARMS = [
   { id: 'forex_pullback', name: 'Forex · retomada', family: 'forex', stake: .5 },
   { id: 'forex_control', name: 'Forex · tendência sem recuo', family: 'forex', stake: .5 },
   { id: 'forex_adaptive', name: 'Forex · rede adaptativa', family: 'forex', stake: .5 },
-  { id: 'accu_3', name: 'Accumulator · 3 ticks', family: 'accu', stake: 1, ticks: 3 },
-  { id: 'accu_5', name: 'Accumulator · 5 ticks', family: 'accu', stake: 1, ticks: 5 }
+  { id: 'reset_bias', name: 'Daily Reset · viés', family: 'reset', stake: .5 },
+  { id: 'reset_contra', name: 'Daily Reset · controle oposto', family: 'reset', stake: .5 },
+  { id: 'accu_3', name: 'Accumulator · 3 ticks (encerrado)', family: 'accu', stake: 1, ticks: 3, retired: true },
+  { id: 'accu_5', name: 'Accumulator · 5 ticks (encerrado)', family: 'accu', stake: 1, ticks: 5, retired: true }
 ];
 export function closedBars(input, interval, now, count) {
   const rows = (input || []).map(c => Object.fromEntries(['epoch','open','high','low','close'].map(k => [k, Number(c[k])]))).filter(c => c.epoch + interval <= now).slice(-count);
@@ -29,27 +31,33 @@ export function forexSchedule(now) {
   return { open, nextOpen, closesAt, nextScan };
 }
 export const nextAccumulatorScan = now => Math.floor(now/60)*60+60;
-export function forexSignal(m15, m5, now) {
-  if (!forexWindow(now)) return null;
-  const trend = closedBars(m15,900,now,60), entry = closedBars(m5,300,now,30);
-  if (!trend.length || !entry.length || now - entry.at(-1).epoch - 300 > 45 || now - trend.at(-1).epoch - 900 >= 900) return null;
-  const fast = ema(trend,20), slow = ema(trend,50), direction = Math.sign(fast.at(-1) - slow.at(-1));
-  if (!direction || direction * (fast.at(-1) - fast.at(-5)) <= 0 || direction * (trend.at(-1).close - fast.at(-1)) <= 0) return null;
-  const local = ema(entry,20), previous = entry.at(-2), last = entry.at(-1);
+export function forexEvaluation(m15, m5, now) {
+  if (!forexWindow(now)) return { reason: 'Forex fechado' };
+  const trend = closedBars(m15,900,now,24), entry = closedBars(m5,300,now,15);
+  if (!trend.length) return { reason: 'Histórico M15 insuficiente ou descontínuo (24 velas)' };
+  if (!entry.length) return { reason: 'Histórico M5 insuficiente ou descontínuo (15 velas)' };
+  const age = now - entry.at(-1).epoch - 300;
+  if (age < 0 || age > 75 || now - trend.at(-1).epoch - 900 >= 900) return { reason: `Candle fechado antigo (${Math.round(age)}s)` };
+  const fast = ema(trend,8), slow = ema(trend,20), direction = Math.sign(fast.at(-1) - slow.at(-1));
+  if (!direction || direction * (fast.at(-1) - fast.at(-4)) <= 0 || direction * (trend.at(-1).close - fast.at(-1)) <= 0) return { reason: 'Tendência M15 não confirmada' };
+  const local = ema(entry,10), previous = entry.at(-2), last = entry.at(-1);
   const filtered = direction === 1
     ? previous.low <= local.at(-2) && previous.close < previous.open && last.close > previous.high && last.close > last.open
     : previous.high >= local.at(-2) && previous.close > previous.open && last.close < previous.low && last.close < last.open;
   const scale=Math.max(1e-8,trend.slice(-20).reduce((sum,c)=>sum+c.high-c.low,0)/20);
-  const localScale=Math.max(1e-8,entry.slice(-20).reduce((sum,c)=>sum+c.high-c.low,0)/20);
+  const localScale=Math.max(1e-8,entry.reduce((sum,c)=>sum+c.high-c.low,0)/entry.length);
   const features=[
     direction*(fast.at(-1)-slow.at(-1))/scale,
-    direction*(fast.at(-1)-fast.at(-5))/scale,
+    direction*(fast.at(-1)-fast.at(-4))/scale,
     direction*(last.close-fast.at(-1))/scale,
     direction*(last.close-last.open)/localScale,
     direction*(local.at(-2)-(direction===1?previous.low:previous.high))/localScale
   ].map(value=>Math.max(-3,Math.min(3,value)));
-  return { direction, filtered, features, key: last.epoch, signalEpoch: last.epoch + 300, contractType: direction === 1 ? 'CALL' : 'PUT' };
+  return { signal: { direction, filtered, features, key: last.epoch, signalEpoch: last.epoch + 300, contractType: direction === 1 ? 'CALL' : 'PUT' }, reason: filtered ? 'Retomada M5' : 'Controle de tendência M15' };
 }
+export const forexSignal = (m15,m5,now) => forexEvaluation(m15,m5,now).signal || null;
+export const nextResetScan = now => Math.floor(now/900)*900+900;
+export function resetWindow(now) { return new Date(now*1000).getUTCHours() !== 23 || new Date(now*1000).getUTCMinutes() < 40; }
 export function accumulatorTerms(q) {
   const d = q?.contract_details, ratio = Number(d?.tick_size_barrier), spot = Number(q?.spot);
   const distance = Number(d?.barrier_spot_distance), unit = 10 ** -(String(d?.barrier_spot_distance).split('.')[1]?.length || 0);

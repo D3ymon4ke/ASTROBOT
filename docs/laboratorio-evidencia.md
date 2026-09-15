@@ -1,5 +1,15 @@
 # Laboratório de Evidência · protocolo v1
 
+## Estado atual · revisão Forex/Daily Reset de 15/09/2026
+
+Os quatro braços descritos abaixo foram encerrados antes desta revisão e são mantidos como histórico. O Accumulator, que sucedeu esses braços, também deixou de coletar após 1.384 contratos simulados / −US$31,80. Fakegale Regime V3 foi pausado após 1.162 alternativas / −US$68,79. Nenhum desses valores é perda de dinheiro real.
+
+O Forex da fase seguinte tinha zero contratos por proposta CALL/PUT com `barrier:'+0'` rejeitada (`Invalid barrier`) e exigência de 60 M15 contíguos. A proposta aceita pela conta é Rise/Fall com `duration:15,duration_unit:'m'`, sem barreira. O motor atual utiliza 24 candles M15 e 15 M5 fechados e contíguos, EMA 8/20, filtro de retomada M5 e informa a razão concreta de cada recusa. Ainda é preciso acumular resultados fora da amostra antes de considerar qualquer vantagem.
+
+O teste adicional 24/7 utiliza índices Daily Reset RDBULL/RDBEAR, disponíveis na conta: `reset_bias` segue o viés Bull CALL/Bear PUT e `reset_contra` usa a direção oposta como referência. Ambos são simulados com stake fixa US$0,50, cotações e payouts individuais, entrada futura comum, último tick antes de cada vencimento de 15 minutos e pausa perto do reset UTC. O payout já reflete o viés; a hipótese de lucro líquido continua não demonstrada. Nenhum `buy`/`sell` foi acrescentado. O arquivo Accumulator permanece visível no painel.
+
+Fontes: [Deriv Synthetic Indices](https://deriv.com/markets/derived-indices/synthetic-indices), [Deriv Trading Terms](https://deriv.com/terms-and-conditions/trading-terms), [Deriv API](https://developers.deriv.com/docs/workflows/). É essencial evitar escolha retrospectiva de um ativo ou variante; comparações múltiplas devem ser validadas em um período novo antes de qualquer promoção.
+
 Implementado em 14/09/2026. Substitui a execução do antigo Quântico no workspace; os dados legados `digitLab` e `fakegale` permanecem preservados. O novo motor ocupa `modeStates[accountMode].evidenceLab` e nunca chama `buy` ou `sell`. O endpoint existente `digit_config` controla somente a nova pesquisa.
 
 ## Hipóteses congeladas

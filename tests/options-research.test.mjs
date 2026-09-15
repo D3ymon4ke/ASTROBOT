@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EvidenceTrader } from '../vps-backend/automation/EvidenceTrader.js';
-import { forexSignal,forexWindow,forexSchedule,nextAccumulatorScan,closedBars,accumulatorTerms,accumulatorStep,accuProfit } from '../vps-backend/automation/optionsStrategies.js';
+import { forexSignal,forexEvaluation,forexWindow,forexSchedule,nextAccumulatorScan,nextResetScan,resetWindow,closedBars,accumulatorTerms,accumulatorStep,accuProfit } from '../vps-backend/automation/optionsStrategies.js';
 import { createAdaptiveNetwork,adaptivePredict,trainAdaptiveNetwork,adaptiveDecision,adaptiveQuality } from '../vps-backend/automation/adaptiveNetwork.js';
 const now=Date.UTC(2026,8,14,10,0,5)/1000;
 function bars() {
@@ -18,8 +18,8 @@ function accu(anchor) {return {id:'pair',family:'accu',symbol:'R_100',precision:
 test('forex signal is causal across M15/M5 and requires the declared weekday session',()=>{
   const {m15,m5}=bars();const signal=forexSignal(m15,m5,now);assert.equal(signal.direction,1);assert.equal(signal.filtered,true);
   assert.deepEqual(forexSignal([...m15,{epoch:now-5,open:2,close:1,low:1,high:2}],m5,now),signal);
-  assert.equal(forexSignal(m15,m5.slice(1),now),null);assert.equal(closedBars(m15.filter((_,i)=>i!==20),900,now,60).length,0);
-  assert.equal(forexSignal(m15,m5,now+50),null);assert.equal(forexWindow(Date.UTC(2026,8,19,10)/1000),false);
+  assert.equal(forexSignal(m15,m5.slice(16),now),null);assert.equal(closedBars(m15.filter((_,i)=>i!==50),900,now,24).length,0);
+  assert.equal(forexSignal(m15,m5,now+80),null);assert.equal(forexWindow(Date.UTC(2026,8,19,10)/1000),false);
   assert.equal(forexWindow(Date.UTC(2026,8,14,21)/1000),false);
 });
 test('forex control keeps a trend even when the pullback condition fails',()=>{
@@ -31,6 +31,7 @@ test('market clocks distinguish sessions from scans across the weekend',()=>{
   assert.equal(open.open,true);assert.equal(open.nextScan,Date.UTC(2026,8,21,7)/1000);assert.equal(open.closesAt,Date.UTC(2026,8,18,17)/1000);
   const closed=forexSchedule(Date.UTC(2026,8,18,18)/1000);assert.equal(closed.open,false);assert.equal(closed.nextOpen,Date.UTC(2026,8,21,7)/1000);assert.equal(closed.nextScan,closed.nextOpen);
   assert.equal(nextAccumulatorScan(125),180);
+  assert.equal(nextResetScan(125),900);assert.equal(resetWindow(Date.UTC(2026,8,14,23,45)/1000),false);
 });
 test('adaptive network predicts before labels, learns online and stays gated without evidence',()=>{
   const model=createAdaptiveNetwork(),features=[1,.4,.2,.8,-.3],before=adaptivePredict(model,features).probability;
@@ -83,6 +84,37 @@ test('forex expiry uses the last tick at or before explicit expiry, never a late
   engine.state.positions=[{id:'fx',family:'forex',symbol:'frxEURUSD',precision:5,stake:.5,payout:.95,entry:100,entryEpoch:expiry-900,expiry,direction:1,features:[1,.5,.2,.1,0],prediction:.6,legs:[{arm:'forex_control',allocated:true}]}];
   assert.equal(engine.state.learning.samples,0);await engine.tick(()=>false,()=>true);assert.equal(engine.state.trades[0].profit,-.5);assert.equal(engine.state.trades[0].exitEpoch,expiry-1);assert.equal(session.balance,25);
   assert.equal(engine.state.learning.samples,1);assert.equal(engine.state.learning.wins,0);engine.lastPoll=0;await engine.tick(()=>false,()=>true);assert.equal(engine.state.learning.samples,1);
+});
+test('forex uses Deriv Rise/Fall duration without a barrier and reports the candle gate',async()=>{
+  const original=Date.now;Date.now=()=>now*1000;
+  try{
+    const {engine,calls,session}=fixture(async req=>({proposal:{id:'quote',spot:1.07,spot_time:now,ask_price:.5,payout:.94,date_expiry:now+900}}));
+    const {m15,m5}=bars();engine.metadata={frxEURUSD:5,frxGBPUSD:5};session.derivAPI.fetchCandleHistory=async(_,granularity)=>granularity===900?m15:m5;
+    await engine.scanForex(()=>true,()=>true);
+    assert.equal(engine.state.positions.length,2);
+    assert.ok(calls.every(req=>req.contract_type==='CALL'&&req.duration===15&&req.duration_unit==='m'&&!('barrier'in req)&&!('buy'in req)));
+    assert.equal(forexEvaluation(m15.slice(40),m5,now).reason,'Histórico M15 insuficiente ou descontínuo (24 velas)');
+  }finally{Date.now=original;}
+});
+test('Daily Reset quotes both directions with separate payouts and settles paired outcomes',async()=>{
+  const original=Date.now;Date.now=()=>now*1000;
+  try{
+    const {engine,calls}=fixture(async req=>({proposal:{id:req.contract_type,spot:100,spot_time:now,ask_price:.5,payout:req.contract_type==='CALL'?.89:1.04,date_expiry:now+900}}));
+    engine.metadata={RDBULL:2,RDBEAR:2};await engine.scanReset(()=>true,()=>true);
+    assert.equal(engine.state.positions.length,2);assert.equal(calls.length,4);
+    assert.deepEqual(engine.state.positions[0].legs.map(l=>[l.arm,l.direction,l.payout]),[['reset_bias',1,.89],['reset_contra',-1,1.04]]);
+  }finally{Date.now=original;}
+  const expiry=Math.floor(Date.now()/1000)-10;
+  const {engine}=fixture(async()=>({history:{times:[expiry-1],prices:[101]}}));
+  engine.state.positions=[{id:'reset',family:'reset',symbol:'RDBULL',precision:2,stake:.5,entry:100,entryEpoch:expiry-900,expiry,
+    legs:[{arm:'reset_bias',direction:1,payout:.89,stake:.5,allocated:true,expiry},{arm:'reset_contra',direction:-1,payout:1.04,stake:.5,allocated:true,expiry}]}];
+  await engine.tick(()=>false,()=>true);
+  assert.deepEqual(engine.state.trades.map(r=>r.profit),[.39,-.5]);assert.equal(engine.state.positions.length,0);
+});
+test('retired Accumulator remains in the audit but cannot scan for new proposals',async()=>{
+  const {engine,calls}=fixture();engine.metadata={RDBULL:2,RDBEAR:2};engine.scanForex=async()=>{};engine.scanReset=async()=>{};engine.scanAccumulator=async()=>{throw Error('retired scanner invoked');};
+  engine.state.version='forex-accumulator-v1';engine.state.trades=[{arm:'accu_3',profit:-1}];await engine.tick(()=>true,()=>true);
+  assert.equal(engine.state.version,'forex-reset-v2');assert.ok(engine.state.retiredAccumulatorAt);assert.equal(engine.state.trades.length,1);assert.equal(calls.length,0);
 });
 test('risk reserve survives pause and daily gains do not replenish the loss budget',async()=>{
   const {engine,owner,session}=fixture();assert.equal(engine.reserve('accu_3',1),true);assert.equal(engine.reserve('accu_3',1),false);

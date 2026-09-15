@@ -1,4 +1,4 @@
-import { OPTIONS_VERSION, OPTIONS_ARMS, forexWindow, forexSignal, accumulatorTerms, accumulatorStep, accuProfit } from './optionsStrategies.js';
+import { OPTIONS_VERSION, OPTIONS_ARMS, forexWindow, forexEvaluation, resetWindow, accumulatorTerms, accumulatorStep, accuProfit } from './optionsStrategies.js';
 import { assetPrecision, validTicks } from './evidenceStrategies.js';
 import { ensureAdaptiveNetwork, adaptivePredict, trainAdaptiveNetwork, adaptiveDecision, adaptiveQuality } from './adaptiveNetwork.js';
 const round = value => Math.round(value * 100) / 100;
@@ -8,7 +8,9 @@ export class OptionsResearch {
     const state=this.owner.session.modeStates[this.owner.session.activeMode].optionsResearch ||= {
       version: OPTIONS_VERSION, startedAt: Date.now(), positions: [], trades: [], ledgers: {}, seen: {}, scans: {}, events: [], lastScan: 0
     };
-    state.learning=ensureAdaptiveNetwork(state.learning); return state;
+    state.learning=ensureAdaptiveNetwork(state.learning);
+    if(state.version!==OPTIONS_VERSION){state.version=OPTIONS_VERSION;state.retiredAccumulatorAt ||= Date.now();state.scans.accu='Encerrado após resultado líquido negativo; histórico preservado';}
+    return state;
   }
   snapshot() { const state=this.state, quality=adaptiveQuality(state.learning); return { ...state, seen: undefined, learning:{...quality,lastPrediction:state.learning.lastPrediction,lastTrainedAt:state.learning.lastTrainedAt,version:state.learning.version}, simulationOnly: true, arms: OPTIONS_ARMS,
     trades: OPTIONS_ARMS.flatMap(a => state.trades.filter(r => r.arm === a.id).slice(-300)) }; }
@@ -21,7 +23,7 @@ export class OptionsResearch {
     l.reserved = stake; return true;
   }
   record(p, leg, profit, tick, extra = {}) {
-    const row = { id: `${p.id}:${leg.arm}`, pairId: p.id, arm: leg.arm, symbol: p.symbol, stake: p.stake, profit: round(profit),
+    const row = { id: `${p.id}:${leg.arm}`, pairId: p.id, arm: leg.arm, symbol: p.symbol, stake: leg.stake ?? p.stake, profit: round(profit),
       timestamp: tick.epoch * 1000, entry: p.entry, entryEpoch: p.entryEpoch, exitPrice: tick.price, exitEpoch: tick.epoch,
       allocated: leg.allocated, execution: 'simulation', indicative: true, version: OPTIONS_VERSION, ...extra };
     const s = this.state;
@@ -37,28 +39,33 @@ export class OptionsResearch {
   async settle(p, valid) {
     if (p.blocked?.startsWith('Barreira')) return;
     const api = this.owner.session.derivAPI, now = Math.floor(Date.now()/1000);
-    if (p.family === 'forex' && p.entry && now < p.expiry + 3) return;
-    const start = p.family === 'forex' && p.entry ? p.expiry - 30 : p.lastEpoch ?? Math.floor(p.anchor);
-    const end = p.family === 'forex' && p.entry ? p.expiry : Math.min(now,start+30);
+    const binary = p.family === 'forex' || p.family === 'reset';
+    const lastExpiry = Math.max(p.expiry || 0,...p.legs.map(l=>l.expiry||0));
+    if (binary && p.entry && now < lastExpiry + 3) return;
+    const start = binary && p.entry ? Math.min(p.expiry || lastExpiry,...p.legs.map(l=>l.expiry||lastExpiry)) - 30 : p.lastEpoch ?? Math.floor(p.anchor);
+    const end = binary && p.entry ? lastExpiry : Math.min(now,start+30);
     if (end <= start) return;
     const response = await api.sendRequest({ ticks_history:p.symbol,style:'ticks',start,end,count:1000 }); if (!valid()) return;
     const ticks = validTicks(response.history,p.precision);
-    if (p.family === 'forex' && p.entry) {
-      const exit = ticks.filter(t => t.epoch <= p.expiry && t.epoch >= p.expiry-30).at(-1);
-      if (!exit) { p.blocked = 'Ticks de vencimento ausentes; risco reservado'; return; }
-      const win = p.direction * (exit.price-p.entry) > 0;
-      for (const leg of p.legs) this.record(p,leg,win ? p.payout-p.stake : -p.stake,exit,{ payout:p.payout,expiry:p.expiry,contractType:p.contractType });
-      if (!p.learningTrained && Array.isArray(p.features)) {
-        trainAdaptiveNetwork(this.state.learning,p.features,win,p.prediction);
-        p.learningTrained=true;
+    if (binary && p.entry) {
+      for (const leg of p.legs.filter(l=>!l.done)) {
+        const expiry=leg.expiry||p.expiry,exit=ticks.filter(t=>t.epoch<=expiry&&t.epoch>=expiry-30).at(-1);
+        if(!exit){p.blocked='Ticks de vencimento ausentes; risco reservado';return;}
+        const direction=leg.direction||p.direction,stake=leg.stake??p.stake,payout=leg.payout??p.payout;
+        const win=direction*(exit.price-p.entry)>0;
+        this.record(p,leg,win?payout-stake:-stake,exit,{payout,expiry,contractType:leg.contractType||p.contractType});
+        if(leg.arm==='forex_control'&&!p.learningTrained&&Array.isArray(p.features)){
+          trainAdaptiveNetwork(this.state.learning,p.features,win,p.prediction);
+          p.learningTrained=true;
+        }
       }
       return;
     }
     const future = ticks.filter(t => t.epoch > (p.lastEpoch ?? p.anchor));
     for (const t of future) {
-      if (t.epoch - (p.lastEpoch ?? p.anchor) > (p.family === 'forex' ? 30 : 5)) { p.blocked = 'Lacuna de ticks; risco reservado'; return; }
+      if (t.epoch - (p.lastEpoch ?? p.anchor) > (binary ? 30 : 5)) { p.blocked = 'Lacuna de ticks; risco reservado'; return; }
       p.blocked = null;
-      if (p.entry == null) { p.entry = t.price; p.entryEpoch = t.epoch; p.lastPrice = t.price; p.lastEpoch = t.epoch; if (p.family === 'forex') return; continue; }
+      if (p.entry == null) { p.entry = t.price; p.entryEpoch = t.epoch; p.lastPrice = t.price; p.lastEpoch = t.epoch; if (binary) return; continue; }
       const outcome = accumulatorStep(p.lastPrice,t.price,p.terms);
       if (outcome === 'ambiguous') { p.blocked = 'Barreira com arredondamento ambíguo; resultado não contabilizado e risco reservado'; this.event(`${p.symbol}: ${p.blocked}`); return; }
       p.tickCount++; p.lastEpoch = t.epoch; p.lastPrice = t.price;
@@ -72,7 +79,7 @@ export class OptionsResearch {
       }
       if (p.legs.every(l => l.done)) return;
     }
-    if (!future.length && now-start > (p.family === 'forex' ? 30 : 5)) p.blocked = 'Aguardando ticks históricos; risco reservado';
+    if (!future.length && now-start > (binary ? 30 : 5)) p.blocked = 'Aguardando ticks históricos; risco reservado';
   }
   fresh(q, stake, now, maxAge = 5) {
     return q?.id && q.spot != null && Number.isFinite(Number(q.spot)) && Number(q.spot) > 0 && Number(q.ask_price) === stake &&
@@ -102,21 +109,51 @@ export class OptionsResearch {
       s.seen[symbol] = slot;
       const precision = this.metadata[symbol];
       if (!Number.isInteger(precision)) { s.scans[symbol] = 'Ativo indisponível'; continue; }
-      const m15 = await api.fetchCandleHistory(symbol,900,65); if (!valid() || !enabled()) return;
-      const m5 = await api.fetchCandleHistory(symbol,300,35); if (!valid() || !enabled()) return;
-      const signal = forexSignal(m15,m5,Date.now()/1000);
-      if (!signal) { s.scans[symbol] = 'Aguardando tendência M15 e candle M5 recente'; continue; }
-      const expiry = Math.floor(Date.now()/1000)+900;
-      const r = await api.sendRequest({ proposal:1,amount:.5,basis:'stake',currency:'USD',underlying_symbol:symbol,contract_type:signal.contractType,barrier:'+0',date_expiry:expiry });
+      const m15 = await api.fetchCandleHistory(symbol,900,30); if (!valid() || !enabled()) return;
+      const m5 = await api.fetchCandleHistory(symbol,300,20); if (!valid() || !enabled()) return;
+      const evaluation = forexEvaluation(m15,m5,Date.now()/1000),signal=evaluation.signal;
+      if (!signal) { s.scans[symbol] = evaluation.reason; continue; }
+      const r = await api.sendRequest({ proposal:1,amount:.5,basis:'stake',currency:'USD',underlying_symbol:symbol,contract_type:signal.contractType,duration:15,duration_unit:'m' });
       if (!valid() || !enabled()) return;
       const q = r.proposal, createdAt = Date.now(), payout = Number(q?.payout);
-      if (!this.fresh(q,.5,createdAt/1000,30) || !(payout>.5) || Number(q.date_expiry)!==expiry || createdAt/1000-signal.signalEpoch>45 || !forexWindow(createdAt/1000)) { s.scans[symbol] = 'Proposta inválida ou sinal vencido'; continue; }
+      const expiry=Number(q?.date_expiry),duration=expiry-createdAt/1000;
+      if (!this.fresh(q,.5,createdAt/1000,30) || !(payout>.5) || !(duration>=870&&duration<=930) || createdAt/1000-signal.signalEpoch>75 || !forexWindow(createdAt/1000)) { s.scans[symbol] = 'Proposta inválida ou sinal vencido'; continue; }
       const prediction=adaptivePredict(s.learning,signal.features), decision=adaptiveDecision(s.learning,prediction.probability,.5,payout);
       const arms = signal.filtered ? ['forex_control','forex_pullback'] : ['forex_control'];
       if(decision.qualified) arms.push('forex_adaptive');
       s.positions.push({ id:`forex:${symbol}:${slot}`,family:'forex',symbol,precision,stake:.5,payout,expiry,contractType:signal.contractType,direction:signal.direction,
         createdAt,anchor:createdAt/1000+1,features:signal.features,prediction:prediction.probability,hidden:prediction.hidden,adaptiveReason:decision.reason,legs:arms.map(arm=>({arm,allocated:this.reserve(arm,.5)})) });
       s.scans[symbol] = `${signal.filtered?'Retomada + controle':'Controle sem retomada'} · rede ${(prediction.probability*100).toFixed(1)}% · ${decision.reason}`;
+    }
+  }
+  async scanReset(enabled,valid) {
+    const s=this.state,api=this.owner.session.derivAPI,now=Date.now()/1000,slot=Math.floor(now/900);
+    if(!resetWindow(now)){s.scans.reset='Pausa antes do reset diário UTC; evita vencimento atravessando a mudança de base';return;}
+    for(const symbol of ['RDBULL','RDBEAR']){
+      if(!valid()||!enabled())return;
+      const key=`reset:${symbol}`;
+      if(s.seen[key]===slot||s.positions.some(p=>p.family==='reset'&&p.symbol===symbol))continue;
+      s.seen[key]=slot;
+      const precision=this.metadata[symbol];
+      if(!Number.isInteger(precision)){s.scans[key]='Ativo indisponível nesta conta';continue;}
+      const biasDirection=symbol==='RDBULL'?1:-1;
+      const arms=[{arm:'reset_bias',direction:biasDirection,contractType:biasDirection===1?'CALL':'PUT'},
+        {arm:'reset_contra',direction:-biasDirection,contractType:biasDirection===1?'PUT':'CALL'}];
+      const quotes=[];
+      for(const arm of arms){
+        const r=await api.sendRequest({proposal:1,amount:.5,basis:'stake',currency:'USD',underlying_symbol:symbol,contract_type:arm.contractType,duration:15,duration_unit:'m'});
+        if(!valid()||!enabled())return;
+        const q=r.proposal,stamp=Date.now()/1000,expiry=Number(q?.date_expiry);
+        if(!this.fresh(q,.5,stamp,10)||!(Number(q.payout)>.5)||!(expiry-stamp>=870&&expiry-stamp<=930)){
+          s.scans[key]=`${arm.contractType}: cotação ausente ou vencida`;quotes.length=0;break;
+        }
+        quotes.push({...arm,stake:.5,payout:Number(q.payout),expiry,spotTime:Number(q.spot_time)});
+      }
+      if(quotes.length!==2)continue;
+      const createdAt=Date.now(),anchor=Math.max(createdAt/1000+1,...quotes.map(q=>q.spotTime+1));
+      s.positions.push({id:`reset:${symbol}:${slot}`,family:'reset',symbol,precision,stake:.5,createdAt,anchor,expiry:Math.max(...quotes.map(q=>q.expiry)),
+        legs:quotes.map(q=>({...q,allocated:this.reserve(q.arm,.5)}))});
+      s.scans[key]=`${symbol}: viés × direção oposta · 15 min · payouts ${quotes.map(q=>q.payout.toFixed(2)).join('/')}`;
     }
   }
   async tick(enabled, valid) {
@@ -133,7 +170,7 @@ export class OptionsResearch {
         const r=await api.sendRequest({active_symbols:'brief'}); if(!valid()||!enabled())return;
         for(const a of r.active_symbols||[])this.metadata[a.underlying_symbol||a.symbol]=assetPrecision(a);
       }
-      for (const [family,scan] of [['accu',()=>this.scanAccumulator(enabled,valid)],['forex',()=>this.scanForex(enabled,valid)]]) {
+      for (const [family,scan] of [['forex',()=>this.scanForex(enabled,valid)],['reset',()=>this.scanReset(enabled,valid)]]) {
         try { await scan(); } catch(e) { if(valid())s.scans[family]='Indisponível: '+e.message; }
         if(!valid()||!enabled())return;
       }

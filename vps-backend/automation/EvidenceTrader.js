@@ -27,7 +27,7 @@ export class EvidenceTrader {
     if (Object.keys(patch || {}).some(k => k !== 'enabled') && (s.trades.length || s.pending.length || this.busy)) throw Error('Parâmetros congelados após o início para preservar a comparação.');
     s.config = validateLabConfig(patch, s.config);
     if (s.config.enabled && !this.session.derivAPI.connected) this.session.connectDeriv();
-    s.status = s.config.enabled ? 'Nova fase ativa · Forex e Accumulator · somente simulação' : 'Pausado · pendências serão apuradas'; this.save();
+    s.status = s.config.enabled ? 'Pesquisa ativa · Forex e Daily Reset · somente simulação' : 'Pausado · pendências serão apuradas'; this.save();
   }
   ledger(arm) {
     const s = this.state;
@@ -132,7 +132,7 @@ export class EvidenceTrader {
             duration: arm.duration, precision, stake, payout, createdAt, anchor: createdAt / 1000 + 1, allocated, evidence });
         }
       }
-      s.lastScan = Date.now(); s.errors = 0; s.status = s.config.enabled ? 'Nova fase ativa · Forex e Accumulator · sem compras' : 'Pausado';
+      s.lastScan = Date.now(); s.errors = 0; s.status = s.config.enabled ? 'Pesquisa ativa · Forex e Daily Reset · sem compras' : 'Pausado';
     } catch (e) {
       s.errors++; s.status = `Falha na pesquisa: ${e.message}`; this.event(s.status);
       if (s.errors >= 5) s.config.enabled = false;

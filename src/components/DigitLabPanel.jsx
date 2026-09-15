@@ -13,7 +13,7 @@ export default function DigitLabPanel({ state, available, pending, onConfigure }
     const a = document.createElement('a'); a.href = url; a.download = 'astrobot-laboratorio-evidencia.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return <div className="evidence-lab">
-    <div className="workspace-heading"><div><span className="workspace-eyebrow">PESQUISA PROSPECTIVA</span><h1>Laboratório de Evidência<span>.</span></h1><p>Forex e Accumulator ativos. Experimentos anteriores preservados no arquivo.</p></div><div className="evidence-actions">
+    <div className="workspace-heading"><div><span className="workspace-eyebrow">PESQUISA PROSPECTIVA</span><h1>Laboratório de Evidência<span>.</span></h1><p>Forex corrigido e Daily Reset Bull/Bear em simulação. Testes negativos preservados no arquivo.</p></div><div className="evidence-actions">
       <button className="workspace-button" disabled={!ready} onClick={download}><Download size={16}/>Exportar evidências</button>
       <button className="workspace-button primary" disabled={!ready || !available || pending} onClick={() => onConfigure({ enabled: !config.enabled })}>{config.enabled ? <Pause size={16}/> : <Play size={16}/>} {config.enabled ? 'Pausar pesquisa' : 'Iniciar pesquisa simulada'}</button>
     </div></div>
