@@ -62,3 +62,20 @@ Snapshot público, exclusivamente de simulação, em /root/astrobot-backend/down
 Publicação isolada: scripts/deploy-crypto-paper.mjs exige ASTROBOT_VPS_PASSWORD, valida chave SSH contra known_hosts, envia apenas código e preserva data/. Usa pm2 startOrRestart somente no processo próprio e pm2 save. O segredo não é gravado pelo script. Remoção de senha do código anterior não revoga a senha que esteve no Git.
 
 Validação: 124 testes passaram, incluindo bootstrap sem preenchimento histórico, restart/deduplicação, lacunas, dados inválidos, saída atrasada com custos e status stale da API. Build e lint direcionado passaram. Na primeira coleta os três pares estavam sem posição, sem erros, com US$1.000 cada. Nenhum resultado comprova rentabilidade.
+
+
+## Scalping M5 prospectivo — 2026-09-16
+
+Hipótese spot-pullback-m5-v1, somente simulação em BTC/ETH/SOL. Não se trata de estratégia comprovadamente lucrativa. Capital virtual total US$1.000, dividido em três carteiras iguais; uma posição comprada por par, sem alavancagem ou martingale. Capital e resultados separados do H1.
+
+Sinal congelado: EMA9 > EMA21, EMA21 ascendente comparada a três velas atrás, vela anterior toca EMA9 e fecha acima de EMA21, vela atual fecha positiva acima da máxima anterior, volume ao menos igual à média das 20 velas anteriores. Indicadores somente com velas M5 encerradas, série contígua e pelo menos 60 barras; ATR14 por média de true range. Entrada no ask observado após novo fechamento, acrescido de 0,05% de impacto e 0,10% de taxa. Stop virtual 1,5 ATR abaixo do ask, alvo 3 ATR acima e saída por prazo em 20 minutos. Saídas verificadas com bid observado a cada aproximadamente 10s, cobrando os mesmos custos. Não assume execução no preço do stop nem reconstrói intrabar entre amostras.
+
+Exige recompensa líquida >=1,2 vezes o risco líquido e >=2 vezes a fricção estimada de ida e volta; spread <=0,05%, ATR/preço <=2%. Alocação <=25% do caixa do par e risco planejado <=US$1, com orçamento disponível descontando perdas brutas e risco reservado nas posições de todos os ativos. Valor mínimo simulado US$5. Intervalo de dez minutos após saída. Bootstrap não abre posição; atraso >45s do fechamento, interrupção >30s, cotação >15s ou falha de qualquer ativo bloqueiam entradas. Saídas por cotação continuam mesmo quando faltam velas.
+
+Meta diária conjunta: US$5 líquidos REALIZADOS. Ao atingir, pausa novas entradas até próximo dia UTC, mantendo acompanhamento de posições abertas. A meta não é promessa e o resultado final pode diferir se posições ainda abertas fecharem depois. Orçamento diário: US$5 de perdas brutas, sem reposição por ganhos, com reserva antecipada. Risco planejado/limite não garantem teto realizado diante de gaps ou interrupções. Bloqueia entradas se o patrimônio total marcado cair abaixo de US$975. Contadores diários viram às 00:00 UTC (21h de São Paulo); posições e histórico permanecem.
+
+PM2 astrobot-crypto-scalp isolado em /root/astrobot-crypto-scalp; estado data/scalp-state.json com escrita atômica, fsync, sem zerar em erro de leitura. Até 300 trades e 1.500 pontos M5 por ativo, totais cumulativos preservados. Snapshot público exclusivamente de simulação crypto-scalp.json na rota downloads existente; api/okx?kind=research&strategy=scalp verifica versão e marca stale após30s. Sem chave privada, ordem Demo/Real, nova porta ou restart H1/Deriv. Script scripts/deploy-crypto-scalp.mjs exige senha via ambiente e valida host SSH conhecido.
+
+Painel CryptoPaperMonitor reutilizado com modo scalping: meta conjunta, perdas, saldo individual, benchmark25%, estado de entrada, curva M5, stop/alvo/prazo de posição. 132 testes, build e lint aprovados; cobertura de bootstrap, causalidade, orçamento reservado, reinício, saída sem velas, gap sem cap artificial, meta persistente, rollover UTC, spread/cotação e snapshot independente.
+
+Fonte de integração: https://www.okx.com/docs-v5/en/ — candles 5m confirmados e ticker público bid/ask. Esses endpoints viabilizam a simulação, mas não demonstram vantagem da hipótese.
