@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 
 export const DEMO_SYMBOLS = new Set(['BTC-USDT', 'ETH-USDT', 'SOL-USDT']);
 export const DEMO_MAX_NOTIONAL = 25;
@@ -64,8 +64,9 @@ export function isStepAligned(value, step) {
 }
 
 export async function validateDemoLimitOrder(client, input) {
-  const { symbol, side, price, quantity } = input || {};
+  const { symbol, side, price, quantity, clientId } = input || {};
   if (!DEMO_SYMBOLS.has(symbol) || !['buy', 'sell'].includes(side)) throw new Error('Par ou direção inválidos');
+  if (!/^AstroD[0-9a-f]{20}$/.test(clientId || '')) throw new Error('Identificador da intenção Demo inválido');
   if (!/^(?:0|[1-9]\d*)(?:\.\d{1,10})?$/.test(String(price)) || !/^(?:0|[1-9]\d*)(?:\.\d{1,12})?$/.test(String(quantity))) throw new Error('Use preço e quantidade decimais válidos');
   if (!Number.isFinite(Number(price)) || !Number.isFinite(Number(quantity)) || Number(price) <= 0 || Number(quantity) <= 0) throw new Error('Preço ou quantidade inválidos');
   const notional = Number(price) * Number(quantity);
@@ -83,5 +84,5 @@ export async function validateDemoLimitOrder(client, input) {
   const available = getAvailable(balances, side === 'buy' ? 'USDT' : base);
   if (side === 'buy' && available < notional * 1.002) throw new Error('USDT disponível insuficiente para ordem e taxa');
   if (side === 'sell' && available < Number(quantity)) throw new Error(`${base} disponível insuficiente`);
-  return { instId: symbol, tdMode: 'cash', side, ordType: 'limit', px: String(price), sz: String(quantity), clOrdId: `AstroD${randomBytes(10).toString('hex')}` };
+  return { instId: symbol, tdMode: 'cash', side, ordType: 'limit', px: String(price), sz: String(quantity), clOrdId: clientId };
 }

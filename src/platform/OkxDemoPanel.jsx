@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, CircleHelp, ExternalLink, LockKeyhole, RefreshCw, ShieldCheck, Wallet } from 'lucide-react';
 import OkxDemoHistory from './OkxDemoHistory.jsx';
+import { demoIntentKey, newDemoClientId, readDemoIntent, unresolvedDemoIntent, writeDemoIntent } from './demoIntent.js';
 
 const money = (value) => Number.isFinite(Number(value)) ? `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
@@ -21,6 +22,22 @@ export default function OkxDemoPanel({ symbol }) {
   const [price, setPrice] = useState('');
   const [quantity, setQuantity] = useState('');
   const [lastOrder, setLastOrder] = useState(null);
+  const accountRef = connection?.accountRef;
+
+  useEffect(() => {
+    if (!accountRef) return;
+    setLastOrder(readDemoIntent(localStorage, accountRef));
+    const onStorage = (event) => {
+      if (event.key === demoIntentKey(accountRef)) setLastOrder(readDemoIntent(localStorage, accountRef));
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [accountRef]);
+
+  function rememberOrder(order) {
+    if (accountRef) writeDemoIntent(localStorage, accountRef, order);
+    setLastOrder(order);
+  }
 
   const refresh = useCallback(async () => {
     try {
@@ -53,32 +70,47 @@ export default function OkxDemoPanel({ symbol }) {
   }
 
   async function place(event) {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault();
+    if (!accountRef || unresolvedDemoIntent(lastOrder) || unresolvedDemoIntent(readDemoIntent(localStorage, accountRef))) {
+      setError('Consulte e resolva a intenção anterior antes de enviar outra ordem Demo.'); return;
+    }
+    let intent;
     try {
-      const result = await requestDemo('POST', { action: 'order', symbol, side, price, quantity }, symbol);
-      setLastOrder({ ...result, symbol });
+      intent = { clientId: newDemoClientId(), symbol, side, price, quantity, status: 'prepared', createdAt: Date.now() };
+      rememberOrder(intent);
+    } catch { setError('Não foi possível registrar a intenção neste navegador. A ordem não foi enviada.'); return; }
+    setBusy(true); setError('');
+    try {
+      const result = await requestDemo('POST', { action: 'order', symbol, side, price, quantity, clientId: intent.clientId }, symbol);
+      rememberOrder({ ...intent, ...result });
       await refresh();
     } catch (failure) {
       setError(failure.message);
-      if (failure.payload?.clientId) setLastOrder({ ...failure.payload, symbol });
+      rememberOrder({ ...intent, ...failure.payload, status: failure.payload?.status || 'unknown' });
     } finally { setBusy(false); }
   }
 
   async function lookup(clientId, orderSymbol = symbol) {
+    if (unresolvedDemoIntent(lastOrder) && lastOrder.clientId !== clientId) {
+      setError('Resolva primeiro a intenção anterior, que ainda não tem estado final.'); return;
+    }
     setBusy(true); setError('');
     try {
       const result = await requestDemo('POST', { action: 'lookup', symbol: orderSymbol, clientId }, orderSymbol);
-      setLastOrder({ ...result, symbol: orderSymbol });
+      rememberOrder({ ...(lastOrder?.clientId === clientId ? lastOrder : { clientId, symbol: orderSymbol }), ...result, symbol: orderSymbol });
       await refresh();
     } catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
   }
 
   async function cancel(clientId, orderSymbol = symbol) {
+    if (unresolvedDemoIntent(lastOrder) && lastOrder.clientId !== clientId) {
+      setError('Resolva primeiro a intenção anterior, que ainda não tem estado final.'); return;
+    }
     setBusy(true); setError('');
     try {
       const result = await requestDemo('POST', { action: 'cancel', symbol: orderSymbol, clientId }, orderSymbol);
-      setLastOrder({ ...result, symbol: orderSymbol });
+      rememberOrder({ ...(lastOrder?.clientId === clientId ? lastOrder : { clientId, symbol: orderSymbol }), ...result, symbol: orderSymbol });
       await refresh();
     } catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
@@ -100,7 +132,7 @@ export default function OkxDemoPanel({ symbol }) {
     </div> : <>
       <div className="crypto-demo-head"><span><ShieldCheck size={17} /> {connection.canTrade ? 'Demo OKX · Read + Trade' : 'Demo OKX · somente leitura'}</span><button onClick={refresh} disabled={busy}><RefreshCw size={15} /> Atualizar</button><button onClick={disconnect} disabled={busy}>Desconectar</button></div>
       <div className="crypto-demo-grid"><article className="crypto-analysis-card"><h4>Saldo disponível</h4><div className="crypto-list-row"><span>USDT</span><b>{money(usdt?.available)}</b></div><div className="crypto-list-row"><span>{base}</span><b>{asset?.available ?? '0'}</b></div><small>Saldo da conta Demo da OKX, atualizado pela API privada.</small></article><article className="crypto-analysis-card"><h4>Cotação do mercado Demo</h4><strong>{money(quote?.last)}</strong><div className="crypto-list-row"><span>Bid / ask Demo</span><b>{money(quote?.bid)} / {money(quote?.ask)}</b></div><small>Incrementos: lote {connection.instrument?.lotSize || '—'}, preço {connection.instrument?.tickSize || '—'} · mínimo {connection.instrument?.minSize || '—'}</small></article></div>
-      <div className="crypto-demo-grid"><form className="crypto-demo-order crypto-analysis-card" onSubmit={place}><h4>Ordem limite spot · Demo</h4><p>Valor de $1 a $25, uma ordem pendente por par. Compra e venda apenas de ativos disponíveis; sem market order nem margem.</p><div className="crypto-side-toggle"><button type="button" className={side === 'buy' ? 'selected' : ''} onClick={() => setSide('buy')}>Comprar</button><button type="button" className={side === 'sell' ? 'selected' : ''} onClick={() => setSide('sell')}>Vender</button></div><label htmlFor="okx-demo-price">Preço limite (USDT)</label><input id="okx-demo-price" required inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} placeholder={String(quote?.last || '')} /><label htmlFor="okx-demo-qty">Quantidade ({base})</label><input id="okx-demo-qty" required inputMode="decimal" value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder={connection.instrument?.minSize || ''} /><div className="crypto-order-estimate"><span>Valor estimado</span><b>{money(Number(price) * Number(quantity))}</b></div><button className="crypto-submit" disabled={busy || !connection.canTrade || !validQuote} type="submit">{busy ? 'Consultando…' : 'Enviar ordem limite Demo'} <ArrowRight size={17} /></button></form><article className="crypto-analysis-card"><h4>Ordens do par</h4>{connection.orders?.length ? connection.orders.map((order) => <div className="crypto-demo-order-row" key={order.clientId || order.brokerId}><b>{order.side === 'buy' ? 'Compra' : 'Venda'} · {order.state}</b><small>{order.quantity} {base} @ {money(order.price)} · preenchido {order.filled || 0}</small>{/^AstroD[0-9a-f]{20}$/.test(order.clientId || '') && <div><button onClick={() => lookup(order.clientId, order.symbol)} disabled={busy}>Consultar</button><button onClick={() => cancel(order.clientId, order.symbol)} disabled={busy}>Cancelar</button></div>}</div>) : <p>Sem ordens pendentes neste par.</p>}{lastOrder && <div className="crypto-demo-last-order" role="status"><b>Última ordem: {lastOrder.status}</b><small>ID {lastOrder.clientId}</small><button onClick={() => lookup(lastOrder.clientId, lastOrder.symbol)} disabled={busy}>Consultar estado na OKX</button></div>}</article></div>
+      <div className="crypto-demo-grid"><form className="crypto-demo-order crypto-analysis-card" onSubmit={place}><h4>Ordem limite spot · Demo</h4><p>Valor de $1 a $25, uma ordem pendente por par. Compra e venda apenas de ativos disponíveis; sem market order nem margem. A intenção fica registrada neste navegador antes do envio.</p><div className="crypto-side-toggle"><button type="button" className={side === 'buy' ? 'selected' : ''} onClick={() => setSide('buy')}>Comprar</button><button type="button" className={side === 'sell' ? 'selected' : ''} onClick={() => setSide('sell')}>Vender</button></div><label htmlFor="okx-demo-price">Preço limite (USDT)</label><input id="okx-demo-price" required inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} placeholder={String(quote?.last || '')} /><label htmlFor="okx-demo-qty">Quantidade ({base})</label><input id="okx-demo-qty" required inputMode="decimal" value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder={connection.instrument?.minSize || ''} /><div className="crypto-order-estimate"><span>Valor estimado</span><b>{money(Number(price) * Number(quantity))}</b></div>{unresolvedDemoIntent(lastOrder) && <div className="crypto-demo-intent-warning">Há uma ordem ou intenção sem estado final. Consulte-a antes de enviar outra.</div>}<button className="crypto-submit" disabled={busy || !connection.canTrade || !validQuote || unresolvedDemoIntent(lastOrder)} type="submit">{busy ? 'Consultando…' : 'Enviar ordem limite Demo'} <ArrowRight size={17} /></button></form><article className="crypto-analysis-card"><h4>Ordens do par</h4>{connection.orders?.length ? connection.orders.map((order) => <div className="crypto-demo-order-row" key={order.clientId || order.brokerId}><b>{order.side === 'buy' ? 'Compra' : 'Venda'} · {order.state}</b><small>{order.quantity} {base} @ {money(order.price)} · preenchido {order.filled || 0}</small>{/^AstroD[0-9a-f]{20}$/.test(order.clientId || '') && <div><button onClick={() => lookup(order.clientId, order.symbol)} disabled={busy}>Consultar</button><button onClick={() => cancel(order.clientId, order.symbol)} disabled={busy}>Cancelar</button></div>}</div>) : <p>Sem ordens pendentes neste par.</p>}{lastOrder && <div className="crypto-demo-last-order" role="status"><b>Última intenção: {lastOrder.status}</b><small>ID {lastOrder.clientId} · {lastOrder.symbol}</small><button onClick={() => lookup(lastOrder.clientId, lastOrder.symbol)} disabled={busy}>Consultar estado na OKX</button></div>}</article></div>
       <OkxDemoHistory key={symbol} symbol={symbol} />
     </>}
     {error && <div className="crypto-alert" role="alert"><CircleHelp size={17} /> {error}</div>}

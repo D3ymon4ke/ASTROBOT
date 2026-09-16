@@ -4,6 +4,7 @@ import { createHmac } from 'node:crypto';
 import { OkxDemoClient, validateDemoLimitOrder } from '../server/okxDemoClient.js';
 import { openDemoCredentials, sealDemoCredentials } from '../server/okxDemoCookie.js';
 import { createOkxDemoHandler } from '../server/okxDemo.js';
+import { demoIntentKey, newDemoClientId, readDemoIntent, unresolvedDemoIntent, writeDemoIntent } from '../src/platform/demoIntent.js';
 
 const originalKey = process.env.OKX_DEMO_COOKIE_KEY;
 process.env.OKX_DEMO_COOKIE_KEY = '19'.repeat(32);
@@ -46,10 +47,11 @@ function fakeRiskClient(overrides = {}) {
 }
 
 test('server demo risk validates price/lot increments, notional, availability and pending orders', async () => {
-  const valid = { symbol: 'BTC-USDT', side: 'buy', price: '100.0', quantity: '0.1000' };
+  const valid = { symbol: 'BTC-USDT', side: 'buy', price: '100.0', quantity: '0.1000', clientId: `AstroD${'a'.repeat(20)}` };
   const order = await validateDemoLimitOrder(fakeRiskClient(), valid);
   assert.equal(order.tdMode, 'cash'); assert.equal(order.ordType, 'limit');
   assert.match(order.clOrdId, /^AstroD[0-9a-f]{20}$/);
+  await assert.rejects(validateDemoLimitOrder(fakeRiskClient(), { ...valid, clientId: undefined }), /intenção/);
   await assert.rejects(validateDemoLimitOrder(fakeRiskClient(), { ...valid, quantity: '0.3000' }), /permitido/);
   await assert.rejects(validateDemoLimitOrder(fakeRiskClient(), { ...valid, price: '100.05' }), /incrementos/);
   await assert.rejects(validateDemoLimitOrder(fakeRiskClient({ pending: async () => [{ ordId: '1' }] }), valid), /pendente/);
@@ -107,6 +109,7 @@ test('official demo connector isolates cookie, rejects withdrawal keys and never
   assert.equal(connected.statusCode, 200);
   assert.ok(connected.headers['set-cookie'].includes('HttpOnly'));
   assert.equal(connected.body.environment, 'okx-demo');
+  assert.match(connected.body.accountRef, /^[0-9a-f]{16}$/);
   const cookie = connected.headers['set-cookie'].split(';')[0];
   const state = response();
   await handler({ method: 'GET', headers: { cookie }, query: { symbol: 'BTC-USDT' } }, state);
@@ -122,6 +125,12 @@ test('official demo connector isolates cookie, rejects withdrawal keys and never
   const acknowledged = response();
   await handler({ method: 'POST', headers: { ...baseHeaders, cookie }, body: { action: 'order', symbol: 'BTC-USDT' } }, acknowledged);
   assert.equal(acknowledged.body.status, 'acknowledged');
+  const invalidOrderHandler = createOkxDemoHandler({ Client: MockClient, validateOrder: async () => { throw new Error('Valor permitido: $1 a $25'); } });
+  const invalid = response();
+  await invalidOrderHandler({ method: 'POST', headers: { ...baseHeaders, cookie }, body: { action: 'order', symbol: 'BTC-USDT', clientId: `AstroD${'b'.repeat(20)}` } }, invalid);
+  assert.equal(invalid.statusCode, 400);
+  assert.equal(invalid.body.status, 'not_submitted');
+  assert.equal(placementCount, 1);
   simulateTimeout = true;
   const uncertain = response();
   await handler({ method: 'POST', headers: { ...baseHeaders, cookie }, body: { action: 'order', symbol: 'BTC-USDT' } }, uncertain);
@@ -133,4 +142,22 @@ test('official demo connector isolates cookie, rejects withdrawal keys and never
   assert.equal(cancellation.statusCode, 202);
   assert.equal(cancellation.body.status, 'unknown');
   assert.equal(cancelCount, 1);
+});
+
+test('Demo intent is created before transmission, scoped to account and survives a browser reload without credentials', () => {
+  const ref = 'a'.repeat(16);
+  const map = new Map();
+  const storage = { getItem: (key) => map.get(key) || null, setItem: (key, value) => map.set(key, value) };
+  const id = newDemoClientId({ getRandomValues: (bytes) => bytes.fill(0x1a) });
+  assert.equal(id, `AstroD${'1a'.repeat(10)}`);
+  writeDemoIntent(storage, ref, { clientId: id, symbol: 'BTC-USDT', side: 'buy', price: '100', quantity: '0.01', status: 'prepared', createdAt: 1, secret: 'must-not-persist' });
+  const saved = readDemoIntent(storage, ref);
+  assert.equal(saved.clientId, id);
+  assert.equal(unresolvedDemoIntent(saved), true);
+  assert.equal(JSON.stringify(saved).includes('must-not-persist'), false);
+  assert.equal(readDemoIntent(storage, 'b'.repeat(16)), null);
+  assert.ok(map.has(demoIntentKey(ref)));
+  writeDemoIntent(storage, ref, { ...saved, status: 'filled' });
+  assert.equal(unresolvedDemoIntent(readDemoIntent(storage, ref)), false);
+  assert.equal(unresolvedDemoIntent({ ...saved, status: 'not_submitted' }), false);
 });

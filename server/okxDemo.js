@@ -1,5 +1,8 @@
 import { OkxDemoClient, DEMO_SYMBOLS, validateDemoLimitOrder } from './okxDemoClient.js';
 import { clearDemoCookie, demoCookieReady, readDemoCookie, sealDemoCredentials, setDemoCookie } from './okxDemoCookie.js';
+import { createHash } from 'node:crypto';
+
+const accountRef = (key) => createHash('sha256').update(key).digest('hex').slice(0, 16);
 
 function sameOrigin(req) {
   const origin = req.headers?.origin;
@@ -15,11 +18,11 @@ function validCredentials(input) {
   return ['key', 'secret', 'passphrase'].every((name) => typeof input?.[name] === 'string' && input[name].length >= 6 && input[name].length <= 200 && !/[\r\n]/.test(input[name]));
 }
 
-function safeAccount(balance, orders, symbol, instrument, ticker, canTrade) {
+function safeAccount(balance, orders, symbol, instrument, ticker, canTrade, ref) {
   const permitted = new Set(['USDT', 'BTC', 'ETH', 'SOL']);
   const balances = (balance[0]?.details || []).filter((row) => permitted.has(row.ccy)).map((row) => ({ ccy: row.ccy, cash: Number(row.cashBal), available: Number(row.availBal), frozen: Number(row.frozenBal) }));
   return {
-    connected: true, environment: 'okx-demo', canTrade, symbol,
+    connected: true, environment: 'okx-demo', canTrade, accountRef: ref, symbol,
     balances, orders: orders.filter((row) => DEMO_SYMBOLS.has(row.instId)).map((row) => ({ clientId: row.clOrdId, brokerId: row.ordId, symbol: row.instId, side: row.side, price: row.px, quantity: row.sz, filled: row.accFillSz, state: row.state })),
     instrument: { minSize: instrument?.minSz, lotSize: instrument?.lotSz, tickSize: instrument?.tickSz, state: instrument?.state },
     ticker: { last: Number(ticker?.last), bid: Number(ticker?.bidPx), ask: Number(ticker?.askPx), quoteTime: Number(ticker?.ts) }
@@ -64,7 +67,7 @@ return async function handler(req, res) {
       if (!permissions.includes('read_only') || permissions.some((value) => !['read_only', 'trade'].includes(value))) return res.status(400).json({ error: 'Use uma chave Demo apenas com permissões Read e, opcionalmente, Trade' });
       const canTrade = permissions.includes('trade');
       setDemoCookie(req, res, sealDemoCredentials({ ...credentials, canTrade }));
-      return res.status(200).json({ connected: true, canTrade, environment: 'okx-demo', balances: safeAccount(balances, [], 'BTC-USDT', null, null, canTrade).balances });
+      return res.status(200).json({ connected: true, canTrade, accountRef: accountRef(credentials.key), environment: 'okx-demo', balances: safeAccount(balances, [], 'BTC-USDT', null, null, canTrade).balances });
     } catch { return res.status(401).json({ error: 'Credenciais rejeitadas pela Demo OKX. Crie a chave em Trade → Demo Trading → Demo Trading API e confira a passphrase.' }); }
   }
 
@@ -86,11 +89,17 @@ return async function handler(req, res) {
       const [balance, orders, instruments, tickers] = await Promise.all([
         client.balance(), client.pending(symbol), client.instrument(symbol), client.ticker(symbol)
       ]);
-      return res.status(200).json(safeAccount(balance, orders, symbol, instruments[0], tickers[0], credentials.canTrade));
+      return res.status(200).json(safeAccount(balance, orders, symbol, instruments[0], tickers[0], credentials.canTrade, accountRef(credentials.key)));
     }
     if (action === 'order') {
       if (!credentials.canTrade) return res.status(403).json({ error: 'Chave Demo sem permissão Trade' });
-      const order = await validateOrder(client, req.body);
+      let order;
+      try { order = await validateOrder(client, req.body); }
+      catch (error) {
+        const brokerUnavailable = /^OKX (HTTP|recusou)/.test(error.message || '') || error.name === 'AbortError';
+        return res.status(brokerUnavailable ? 502 : 400).json({ status: 'not_submitted', clientId: req.body?.clientId,
+          error: brokerUnavailable ? 'Validação Demo indisponível; nenhuma ordem foi enviada' : error.message });
+      }
       try {
         const rows = await client.placeLimitOrder(order);
         const ack = rows[0];

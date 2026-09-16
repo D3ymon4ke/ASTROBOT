@@ -1,5 +1,7 @@
 import { Client } from 'ssh2';
 
+if (!process.env.ASTROBOT_VPS_PASSWORD) throw new Error('Defina ASTROBOT_VPS_PASSWORD antes de conectar à VPS.');
+
 const conn = new Client();
 
 conn.on('ready', () => {
@@ -17,5 +19,5 @@ conn.on('ready', () => {
   host: '187.127.40.228',
   port: 22,
   username: 'root',
-  password: 'E08059900pe@'
+  password: process.env.ASTROBOT_VPS_PASSWORD
 });
