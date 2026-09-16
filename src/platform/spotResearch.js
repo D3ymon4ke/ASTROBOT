@@ -50,6 +50,23 @@ function exitSignal(data, signal, index, position) {
     || index - position.entryIndex >= MAX_HOLD_BARS;
 }
 
+// Mesmas regras do estudo, avaliadas exclusivamente sobre velas encerradas.
+export function currentSpotSignal(data, position, now) {
+  if (data.length < 100) throw new Error('Aquecimento H1 insuficiente');
+  for (let i = 0; i < data.length; i++) {
+    const b = data[i];
+    if (!b.closed || !Number.isFinite(b.time) || b.time + 3600000 > now
+      || ![b.open, b.high, b.low, b.close].every(v => Number.isFinite(v) && v > 0)
+      || b.high < Math.max(b.open, b.close) || b.low > Math.min(b.open, b.close)
+      || (i && b.time - data[i - 1].time !== 3600000)) throw new Error('Velas H1 inválidas ou descontínuas');
+  }
+  const signal = indicators(data);
+  const index = data.length - 1;
+  return { time: data[index].time, atr: signal.atr[index], entry: entrySignal(data, signal, index),
+    exit: !!position && (data[index].close < signal.fast[index] || data[index].close < position.stop
+      || data[index].time + 3600000 - position.entryTime >= MAX_HOLD_BARS * 3600000) };
+}
+
 function studyWindow(data, signal, start, end) {
   let cash = CAPITAL;
   let quantity = 0;

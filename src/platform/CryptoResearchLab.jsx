@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, CircleHelp, Clock3, ShieldCheck } from 'lucide-react';
 import { runSpotTrendStudy, SPOT_STUDY_COST } from './spotResearch.js';
+import CryptoPaperMonitor from './CryptoPaperMonitor.jsx';
 
 const SYMBOLS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
 const pct = (value) => Number.isFinite(value) ? `${value >= 0 ? '+' : ''}${value.toFixed(2)}%` : '—';
@@ -68,6 +69,7 @@ export default function CryptoResearchLab({ selectedSymbol }) {
   return <section className="crypto-study">
     <div className="crypto-study-head"><div><span className="crypto-panel-label">HIPÓTESE CONGELADA · MONITORAMENTO SEM ORDENS</span><h3>Tendência + rompimento H1</h3><p>Spot comprado, BTC/ETH/SOL, uma posição por par e 25% do capital hipotético por entrada. Exige tendência EMA 24/72, rompimento de 20 velas e volatilidade controlada. Saída quando uma vela fecha abaixo da EMA 24 ou do limite de 2 ATR, ou após 72 horas; não há stop enviado à corretora. Sinais usam somente velas encerradas e preço hipotético na abertura seguinte.</p></div><span className="crypto-study-live"><Activity size={15} /> {busy ? 'Atualizando' : 'Varredura ativa na página'}</span></div>
     <div className="crypto-study-tabs" role="group" aria-label="Ativo do estudo">{SYMBOLS.map((id) => <button key={id} className={symbol === id ? 'active' : ''} onClick={() => setSymbol(id)}>{id.replace('-', ' / ')}<small>{studies[id]?.status || errors[id] || 'Coletando'}</small></button>)}</div>
+    <CryptoPaperMonitor symbol={symbol} />
     {errors[symbol] && <div className="crypto-alert"><CircleHelp size={17} /> {errors[symbol]}. Resultado antigo, se houver, pode estar desatualizado.</div>}
     {study ? <>
       <div className="crypto-study-current"><div><small>LEITURA DA ÚLTIMA VELA ENCERRADA</small><strong>{study.latest}</strong><span><Clock3 size={14} /> {new Date(study.latestClosedAt).toLocaleString('pt-BR')} · atualização {updatedAt ? new Date(updatedAt).toLocaleTimeString('pt-BR') : '—'}</span></div><span className="crypto-study-verdict">{study.status}</span></div>
