@@ -307,7 +307,7 @@ const LiveSimulatedChart = () => {
   );
 };
 
-export default function App() {
+export default function App({ onPlatformPortal }) {
   const isOverlayMode = window.location.search.includes('overlay=true');
   const isElectron = typeof window !== 'undefined' && window.process && window.process.type === 'renderer';
 
@@ -2866,6 +2866,7 @@ export default function App() {
 
         {/* Navigation Bar */}
         <header className="premium-navbar">
+          <button type="button" className="platform-return-button" onClick={onPlatformPortal}><Layers size={15} /> Plataformas</button>
           {/* Brand Block */}
           <div className="navbar-brand-container">
             <img src={logoImg} alt="ASTROBOT Logo" className="navbar-logo-img" />
@@ -3629,6 +3630,7 @@ export default function App() {
   if (!userEmail) {
     return (
       <div className="login-split-page-wrapper">
+        <button type="button" className="platform-return-button platform-return-floating" onClick={onPlatformPortal}><Layers size={15} /> Plataformas</button>
         
         {/* Left Column (60%) */}
         <div className="login-left-column" style={{ overflow: 'hidden' }}>
@@ -4771,6 +4773,7 @@ export default function App() {
         zIndex: 1000,
         height: '64px'
       }}>
+        <button type="button" className="platform-return-button" onClick={onPlatformPortal}><Layers size={15} /><span>Plataformas</span></button>
         {/* Left: Logo & Nav Links */}
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.75rem' : '2rem' }}>
           {/* Mobile Drawer Toggle Button */}

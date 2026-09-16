@@ -45,3 +45,4 @@ scratch/
 !.oxlintrc.json
 
 .vercel
+.env*
